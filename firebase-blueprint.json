@@ -1,0 +1,61 @@
+{
+  "entities": {
+    "PrintOrder": {
+      "title": "Print Order",
+      "description": "Physical photo print order placed by booth customers",
+      "type": "object",
+      "properties": {
+        "customerName": { "type": "string", "maxLength": 100 },
+        "phone": { "type": "string", "maxLength": 30 },
+        "address": { "type": "string", "maxLength": 300 },
+        "paperType": { "type": "string", "maxLength": 100 },
+        "totalPrice": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "printing", "ready", "shipped"] },
+        "createdAt": { "type": "string" },
+        "thumbnail": { "type": "string" }
+      },
+      "required": ["customerName", "phone", "address", "paperType", "totalPrice", "status"]
+    },
+    "StudioConfig": {
+      "title": "Studio Configuration",
+      "description": "Studio settings for pricing, QRIS and customized frame palettes",
+      "type": "object",
+      "properties": {
+        "price": { "type": "number" },
+        "qrisUrl": { "type": "string" },
+        "customFrames": { "type": "array" },
+        "customFilters": { "type": "array" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["price"]
+    },
+    "PhotostripSession": {
+      "title": "Photostrip Session",
+      "description": "Saved customer photostrip sessions for sharing and viewing",
+      "type": "object",
+      "properties": {
+        "sessionId": { "type": "string", "maxLength": 50 },
+        "userName": { "type": "string", "maxLength": 100 },
+        "customText": { "type": "string", "maxLength": 100 },
+        "frameColor": { "type": "string", "maxLength": 30 },
+        "layout": { "type": "string", "maxLength": 20 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["userName", "layout"]
+    }
+  },
+  "firestore": {
+    "/print_orders/{orderId}": {
+      "schema": "PrintOrder",
+      "description": "Collection of physical photo print orders"
+    },
+    "/studio_config/{configId}": {
+      "schema": "StudioConfig",
+      "description": "Studio configuration settings"
+    },
+    "/photostrips/{sessionId}": {
+      "schema": "PhotostripSession",
+      "description": "Saved photostrip gallery items"
+    }
+  }
+}

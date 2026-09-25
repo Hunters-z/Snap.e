@@ -1,0 +1,81 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == '0601randikurnia.s@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    // Validation for Print Orders
+    function isValidPrintOrder(data) {
+      return data.keys().hasAll(['customerName', 'phone', 'address', 'paperType', 'totalPrice', 'status'])
+        && data.customerName is string && data.customerName.size() > 0 && data.customerName.size() <= 100
+        && data.phone is string && data.phone.size() > 0 && data.phone.size() <= 30
+        && data.address is string && data.address.size() > 0 && data.address.size() <= 300
+        && data.paperType is string && data.paperType.size() <= 100
+        && data.totalPrice is number && data.totalPrice >= 0
+        && data.status in ['pending', 'printing', 'ready', 'shipped'];
+    }
+
+    // Validation for Studio Config
+    function isValidStudioConfig(data) {
+      return data.keys().hasAll(['price'])
+        && data.price is number && data.price >= 0;
+    }
+
+    // Validation for Photostrip Sessions
+    function isValidPhotostrip(data) {
+      return data.keys().hasAll(['userName', 'layout'])
+        && data.userName is string && data.userName.size() <= 100
+        && data.layout is string && data.layout.size() <= 20;
+    }
+
+    // 1. Print Orders Collection
+    match /print_orders/{orderId} {
+      allow get, list: if true;
+      allow create: if isValidId(orderId) && isValidPrintOrder(incoming());
+      allow update: if isValidId(orderId) && isValidPrintOrder(incoming());
+      allow delete: if isValidId(orderId);
+    }
+
+    // 2. Studio Config Collection
+    match /studio_config/{configId} {
+      allow get, list: if true;
+      allow create, update: if isValidId(configId) && isValidStudioConfig(incoming());
+      allow delete: if isValidId(configId);
+    }
+
+    // 3. Photostrip Shared Sessions
+    match /photostrips/{sessionId} {
+      allow get, list: if true;
+      allow create: if isValidId(sessionId) && isValidPhotostrip(incoming());
+      allow update: if isValidId(sessionId) && isValidPhotostrip(incoming());
+      allow delete: if isValidId(sessionId);
+    }
+  }
+}
