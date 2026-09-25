@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import Topbar from '../components/Topbar';
-import { Download, Copy, Printer, RotateCcw, Crop } from 'lucide-react';
+import { Download, Printer, RotateCcw, Crop } from 'lucide-react';
 
 export default function EditorPhotostrip() {
   const [frameColor, setFrameColor] = useState('Cream');

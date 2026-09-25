@@ -1,4 +1,4 @@
-import { LayoutDashboard, Users, CreditCard, LayoutTemplate, Printer, Plus, ExternalLink, RefreshCw, Smartphone, Printer as PrinterIcon, Settings, MessageSquare, ToggleLeft, ToggleRight } from 'lucide-react';
+import { LayoutDashboard, Users, CreditCard, LayoutTemplate, Printer, Plus, ExternalLink, RefreshCw, Smartphone, Printer as PrinterIcon, MessageSquare } from 'lucide-react';
 
 export default function AdminDashboard() {
   return (
