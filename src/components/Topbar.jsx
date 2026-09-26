@@ -1,11 +1,16 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Camera, Menu, X } from 'lucide-react';
+import { Camera, Menu, X, LogIn, LogOut, ShieldCheck, User } from 'lucide-react';
 import { useBooth } from '../context/BoothContext';
 
 export default function Topbar() {
   const location = useLocation();
-  const { userName } = useBooth();
+  const { 
+    currentUser, 
+    isAdmin, 
+    openAuthModal, 
+    logout 
+  } = useBooth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const links = [
@@ -19,7 +24,7 @@ export default function Topbar() {
       <div className="max-w-7xl mx-auto flex items-center justify-between px-4 sm:px-6 py-3.5">
         {/* Brand Logo */}
         <Link to="/" className="flex items-center gap-2.5 group">
-          <div className="w-8 h-8 rounded-full overflow-hidden border border-gray-200 shadow-sm flex items-center justify-center bg-gray-900 group-hover:scale-105 transition-transform">
+          <div className="w-8 h-8 rounded-full overflow-hidden border border-gray-200 shadow-xs flex items-center justify-center bg-gray-900 group-hover:scale-105 transition-transform">
             <img src="/logo.jpeg" alt="snap.e logo" className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
           </div>
           <div className="flex flex-col">
@@ -29,7 +34,7 @@ export default function Topbar() {
           </div>
         </Link>
 
-        {/* Desktop Navigation - Strictly Public Only */}
+        {/* Desktop Navigation */}
         <nav className="hidden md:flex items-center gap-2">
           {links.map((link) => {
             const isActive = location.pathname === link.path;
@@ -39,7 +44,7 @@ export default function Topbar() {
                 to={link.path}
                 className={`text-xs font-semibold px-4 py-2 rounded-full transition-all ${
                   isActive
-                    ? 'bg-gray-900 text-white shadow-sm'
+                    ? 'bg-gray-900 text-white shadow-xs'
                     : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100/70'
                 }`}
               >
@@ -47,10 +52,21 @@ export default function Topbar() {
               </Link>
             );
           })}
+
+          {/* Admin shortcut if logged in as Admin */}
+          {isAdmin && (
+            <Link
+              to="/admin"
+              className="text-xs font-bold px-3.5 py-1.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 flex items-center gap-1.5 transition-colors"
+            >
+              <ShieldCheck size={13} className="text-amber-600" />
+              <span>Admin Studio</span>
+            </Link>
+          )}
         </nav>
 
-        {/* Right side CTA */}
-        <div className="hidden sm:flex items-center gap-3">
+        {/* Right side Auth & CTA */}
+        <div className="hidden sm:flex items-center gap-2.5">
           <Link
             to="/capture"
             className="flex items-center gap-1.5 text-xs font-semibold px-3.5 py-1.5 rounded-full bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
@@ -58,10 +74,39 @@ export default function Topbar() {
             <Camera size={14} />
             Buka Booth
           </Link>
-          <div className="text-xs font-medium text-gray-600 bg-gray-100 px-3 py-1.5 rounded-full flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-            <span className="max-w-[100px] truncate">{userName}</span>
-          </div>
+
+          {currentUser ? (
+            <div className="flex items-center gap-2">
+              <div className="text-xs font-semibold text-gray-700 bg-gray-100 px-3 py-1.5 rounded-full flex items-center gap-2 border border-gray-200/60">
+                {currentUser.photoURL ? (
+                  <img src={currentUser.photoURL} alt="" className="w-4 h-4 rounded-full object-cover" />
+                ) : (
+                  <User size={13} className="text-gray-500" />
+                )}
+                <span className="max-w-[110px] truncate">{currentUser.displayName || currentUser.email}</span>
+                {isAdmin && (
+                  <span className="text-[9px] bg-amber-500 text-white font-extrabold px-1.5 py-0.2 rounded-full">
+                    ADMIN
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={logout}
+                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors"
+                title="Keluar / Logout"
+              >
+                <LogOut size={16} />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => openAuthModal()}
+              className="flex items-center gap-1.5 text-xs font-bold px-4 py-1.5 rounded-full bg-gray-900 text-white hover:bg-black transition-colors shadow-xs"
+            >
+              <LogIn size={13} />
+              <span>Masuk / Login</span>
+            </button>
+          )}
         </div>
 
         {/* Mobile Hamburger Toggle */}
@@ -94,18 +139,49 @@ export default function Topbar() {
               </Link>
             );
           })}
-          <div className="pt-2 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500 px-2">
-            <span>Sesi: {userName}</span>
+
+          {isAdmin && (
             <Link
-              to="/capture"
+              to="/admin"
               onClick={() => setMobileMenuOpen(false)}
-              className="font-bold text-red-600 flex items-center gap-1"
+              className="block text-sm font-bold px-4 py-2.5 rounded-lg text-amber-800 bg-amber-50 border border-amber-200 transition-colors"
             >
-              <Camera size={14} /> Jepret Sekarang
+              🛡️ Dashboard Admin Studio
             </Link>
+          )}
+
+          <div className="pt-2 border-t border-gray-100 flex items-center justify-between text-xs px-2">
+            {currentUser ? (
+              <>
+                <div className="flex items-center gap-1.5 truncate max-w-[180px]">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                  <span className="font-medium text-gray-700 truncate">{currentUser.displayName || currentUser.email}</span>
+                </div>
+                <button
+                  onClick={() => {
+                    logout();
+                    setMobileMenuOpen(false);
+                  }}
+                  className="font-bold text-red-600 hover:text-red-700 flex items-center gap-1"
+                >
+                  <LogOut size={13} /> Keluar
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  openAuthModal();
+                }}
+                className="w-full py-2 bg-gray-900 text-white font-bold rounded-lg text-center flex items-center justify-center gap-1.5"
+              >
+                <LogIn size={14} /> Masuk / Login
+              </button>
+            )}
           </div>
         </div>
       )}
     </header>
   );
 }
+

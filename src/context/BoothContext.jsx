@@ -8,8 +8,31 @@ import {
   updateDoc, 
   deleteDoc 
 } from 'firebase/firestore';
-import { db, handleFirestoreError } from '../firebase';
+import { 
+  signInWithPopup, 
+  GoogleAuthProvider, 
+  signOut, 
+  onAuthStateChanged 
+} from 'firebase/auth';
+import { auth, db, handleFirestoreError } from '../firebase';
 import { CAMERA_PRESETS } from '../data/cameraPresets';
+import { DEFAULT_FRAMES } from '../data/defaultFrames';
+
+export const ADMIN_EMAILS = [
+  '0601randikurnia.s@gmail.com',
+  'admin@snape.studio'
+];
+
+export function isUserAdmin(user) {
+  if (!user) return false;
+  if (user.email && ADMIN_EMAILS.some(e => e.toLowerCase() === user.email.toLowerCase())) {
+    return true;
+  }
+  if (user.isAdmin === true || user.role === 'admin') {
+    return true;
+  }
+  return false;
+}
 
 const BoothContext = createContext(null);
 
@@ -20,15 +43,7 @@ const DEFAULT_CONFIG = {
     price: 15000,
     qrisUrl: 'https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=00020101021126570014ID.LINKAJA.WWW01189360091100000000005204581253033605802ID5906SNAP_E6007JAKARTA5405150005802ID63041234',
   },
-  customFrames: [
-    { id: 'cream', name: 'Cream Warm', bg: '#F9F6F0', text: '#2A2521' },
-    { id: 'noir', name: 'Noir Dark', bg: '#111827', text: '#FFFFFF' },
-    { id: 'minimal', name: 'Pure White', bg: '#FFFFFF', text: '#111827' },
-    { id: 'pastel', name: 'Rose Pastel', bg: '#FDF2F8', text: '#831843' },
-    { id: 'sepia', name: 'Vintage Sepia', bg: '#FEF3C7', text: '#78350F' },
-    { id: 'sage', name: 'Sage Green', bg: '#F0FDF4', text: '#14532D' },
-    { id: 'lavender', name: 'Lavender Haze', bg: '#F5F3FF', text: '#4C1D95' },
-  ],
+  customFrames: DEFAULT_FRAMES,
   customFilters: CAMERA_PRESETS
 };
 
@@ -79,7 +94,30 @@ export function BoothProvider({ children }) {
   });
 
   // Current user & session
-  const [userName, setUserName] = useState(() => localStorage.getItem('snape_user_name') || 'Tamu');
+  const [currentUser, setCurrentUser] = useState(() => {
+    try {
+      const saved = localStorage.getItem('snape_current_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [authLoading, setAuthLoading] = useState(true);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authRedirectUrl, setAuthRedirectUrl] = useState(null);
+
+  const [userName, setUserName] = useState(() => {
+    try {
+      const savedUser = localStorage.getItem('snape_current_user');
+      if (savedUser) {
+        const parsed = JSON.parse(savedUser);
+        if (parsed?.displayName) return parsed.displayName;
+      }
+    } catch {
+      // ignore
+    }
+    return localStorage.getItem('snape_user_name') || 'Tamu';
+  });
   const [mode, setMode] = useState('solo'); // 'solo' | 'ldr'
   const [layout, setLayout] = useState('strip'); // 'strip' (3 shots) | 'grid' (4 shots)
   
@@ -103,8 +141,62 @@ export function BoothProvider({ children }) {
 
   // Admin authentication state
   const [isAdminAuth, setIsAdminAuth] = useState(() => {
+    try {
+      const savedUser = localStorage.getItem('snape_current_user');
+      if (savedUser) {
+        const parsed = JSON.parse(savedUser);
+        if (isUserAdmin(parsed)) return true;
+      }
+    } catch {
+      // ignore
+    }
     return localStorage.getItem('snape_admin_authenticated') === 'true';
   });
+
+  // Synchronize Firebase Auth changes
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      if (firebaseUser) {
+        const admin = isUserAdmin(firebaseUser);
+        const userData = {
+          uid: firebaseUser.uid,
+          email: firebaseUser.email,
+          displayName: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
+          photoURL: firebaseUser.photoURL || null,
+          isAdmin: admin
+        };
+        setCurrentUser(userData);
+        setUserName(userData.displayName);
+        localStorage.setItem('snape_current_user', JSON.stringify(userData));
+        if (admin) {
+          setIsAdminAuth(true);
+          localStorage.setItem('snape_admin_authenticated', 'true');
+        }
+      } else {
+        // If not firebase user, check if we have an active demo session
+        const saved = localStorage.getItem('snape_current_user');
+        if (saved) {
+          try {
+            const parsed = JSON.parse(saved);
+            setCurrentUser(parsed);
+            if (parsed.isAdmin) {
+              setIsAdminAuth(true);
+              localStorage.setItem('snape_admin_authenticated', 'true');
+            }
+          } catch {
+            setCurrentUser(null);
+          }
+        } else {
+          setCurrentUser(null);
+          setIsAdminAuth(false);
+          localStorage.removeItem('snape_admin_authenticated');
+        }
+      }
+      setAuthLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   // 1. Synchronize Studio Config with Firestore
   useEffect(() => {
@@ -122,6 +214,13 @@ export function BoothProvider({ children }) {
             mergedFilters = [...CAMERA_PRESETS, ...additional];
           }
 
+          let mergedFrames = DEFAULT_FRAMES;
+          if (Array.isArray(remoteData.customFrames) && remoteData.customFrames.length > 0) {
+            const defaultFrameIds = new Set(DEFAULT_FRAMES.map(f => f.id));
+            const customOnly = remoteData.customFrames.filter(f => !defaultFrameIds.has(f.id));
+            mergedFrames = [...DEFAULT_FRAMES, ...customOnly];
+          }
+
           setAppConfig((prev) => ({
             ...prev,
             ...remoteData,
@@ -130,7 +229,7 @@ export function BoothProvider({ children }) {
               price: remoteData.price ?? prev.payment.price,
               qrisUrl: remoteData.qrisUrl ?? prev.payment.qrisUrl,
             },
-            customFrames: remoteData.customFrames || prev.customFrames,
+            customFrames: mergedFrames,
             customFilters: mergedFilters,
           }));
           setIsFirebaseConnected(true);
@@ -283,7 +382,141 @@ export function BoothProvider({ children }) {
     }
   };
 
-  // Admin Login / Logout
+  // Authentication handlers
+  const loginWithGoogle = async () => {
+    try {
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: 'select_account' });
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
+      const admin = isUserAdmin(user);
+      const userData = {
+        uid: user.uid,
+        email: user.email,
+        displayName: user.displayName || user.email?.split('@')[0] || 'User',
+        photoURL: user.photoURL || null,
+        isAdmin: admin
+      };
+      setCurrentUser(userData);
+      localStorage.setItem('snape_current_user', JSON.stringify(userData));
+      setUserName(userData.displayName);
+      if (admin) {
+        setIsAdminAuth(true);
+        localStorage.setItem('snape_admin_authenticated', 'true');
+      }
+      return { success: true, user: userData, isAdmin: admin };
+    } catch (error) {
+      console.error('Google sign-in error:', error);
+      throw error;
+    }
+  };
+
+  const loginWithDemo = (role = 'user') => {
+    const admin = role === 'admin';
+    const demoUser = {
+      uid: admin ? 'admin_0601randikurnia' : `user_${Date.now()}`,
+      email: admin ? '0601randikurnia.s@gmail.com' : 'pengguna@snap.e',
+      displayName: admin ? 'Randi Kurnia (Admin)' : 'Pengguna Photobooth',
+      photoURL: null,
+      isAdmin: admin,
+      isDemo: true
+    };
+    setCurrentUser(demoUser);
+    localStorage.setItem('snape_current_user', JSON.stringify(demoUser));
+    setUserName(demoUser.displayName);
+    if (admin) {
+      setIsAdminAuth(true);
+      localStorage.setItem('snape_admin_authenticated', 'true');
+    }
+    return { success: true, user: demoUser, isAdmin: admin };
+  };
+
+  const logout = async () => {
+    try {
+      await signOut(auth);
+    } catch (err) {
+      console.warn('Sign out error:', err);
+    }
+    setCurrentUser(null);
+    setIsAdminAuth(false);
+    localStorage.removeItem('snape_current_user');
+    localStorage.removeItem('snape_admin_authenticated');
+  };
+
+  const openAuthModal = (redirectPath = null) => {
+    setAuthRedirectUrl(redirectPath);
+    setShowAuthModal(true);
+  };
+
+  const closeAuthModal = () => {
+    setShowAuthModal(false);
+    setAuthRedirectUrl(null);
+  };
+
+  // Custom Frames Management (Manual Frame Addition)
+  const addCustomFrame = async (frameData) => {
+    const frameId = `frame_${Date.now()}`;
+    const newFrame = {
+      id: frameId,
+      name: frameData.name || 'Frame Kustom',
+      category: frameData.category || (frameData.imageUrl ? 'graphic' : 'solid'),
+      badge: frameData.badge || (frameData.imageUrl ? 'CUSTOM' : 'SOLID'),
+      bg: frameData.bg || '#F9F6F0',
+      text: frameData.text || '#111827',
+      imageUrl: frameData.imageUrl || null,
+      overlayType: frameData.overlayType || null,
+      description: frameData.description || 'Frame kustom buatan studio.',
+      createdAt: new Date().toISOString()
+    };
+
+    const nextFrames = [...(appConfig.customFrames || []), newFrame];
+    const updated = {
+      ...appConfig,
+      customFrames: nextFrames
+    };
+
+    setAppConfig(updated);
+    try {
+      localStorage.setItem('snape_app_config', JSON.stringify(updated));
+    } catch {
+      // ignore
+    }
+
+    try {
+      await updateDoc(doc(db, 'studio_config', 'main'), {
+        customFrames: nextFrames,
+        updatedAt: new Date().toISOString()
+      });
+    } catch (err) {
+      console.warn('Could not update Firestore customFrames:', err);
+    }
+
+    return newFrame;
+  };
+
+  const deleteCustomFrame = async (frameId) => {
+    const nextFrames = (appConfig.customFrames || []).filter(f => f.id !== frameId);
+    const updated = {
+      ...appConfig,
+      customFrames: nextFrames
+    };
+    setAppConfig(updated);
+    try {
+      localStorage.setItem('snape_app_config', JSON.stringify(updated));
+    } catch {
+      // ignore
+    }
+    try {
+      await updateDoc(doc(db, 'studio_config', 'main'), {
+        customFrames: nextFrames,
+        updatedAt: new Date().toISOString()
+      });
+    } catch (err) {
+      console.warn('Could not delete frame in Firestore:', err);
+    }
+  };
+
+  // Admin PIN Login / Logout (legacy / fallback support)
   const adminLogin = (password) => {
     if (password === 'admin123' || password === 'snape2024' || password === 'admin') {
       setIsAdminAuth(true);
@@ -294,8 +527,7 @@ export function BoothProvider({ children }) {
   };
 
   const adminLogout = () => {
-    setIsAdminAuth(false);
-    localStorage.removeItem('snape_admin_authenticated');
+    logout();
   };
 
   useEffect(() => {
@@ -319,7 +551,19 @@ export function BoothProvider({ children }) {
         addOrder,
         updateOrderStatus,
         deleteOrder,
-        isAdminAuth,
+        addCustomFrame,
+        deleteCustomFrame,
+        currentUser,
+        authLoading,
+        isAdminAuth: Boolean(currentUser?.isAdmin || isAdminAuth),
+        isAdmin: Boolean(currentUser?.isAdmin || isAdminAuth),
+        showAuthModal,
+        authRedirectUrl,
+        openAuthModal,
+        closeAuthModal,
+        loginWithGoogle,
+        loginWithDemo,
+        logout,
         adminLogin,
         adminLogout,
         isFirebaseConnected,

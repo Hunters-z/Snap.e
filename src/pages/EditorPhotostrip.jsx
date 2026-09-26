@@ -11,17 +11,43 @@ import {
   CheckCircle2, 
   X,
   Camera,
-  Calendar
+  Calendar,
+  Move,
+  ArrowUp,
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight,
+  RotateCcw,
+  ZoomIn,
+  Plus,
+  BookOpen
 } from 'lucide-react';
 import { FILTER_CATEGORIES, CAMERA_PRESETS } from '../data/cameraPresets';
+import { drawFrameGraphicDecorations } from '../data/defaultFrames';
+import FrameGuideModal from '../components/FrameGuideModal';
+import AddFrameModal from '../components/AddFrameModal';
 
 export default function EditorPhotostrip() {
-  const { appConfig, userName, capturedPhotos, updateCapturedPhotos, layout, addOrder } = useBooth();
+  const { 
+    appConfig, 
+    userName, 
+    currentUser, 
+    capturedPhotos, 
+    updateCapturedPhotos, 
+    layout, 
+    addOrder,
+    deleteCustomFrame 
+  } = useBooth();
 
   // Selected frame
   const frames = appConfig.customFrames || [];
   const [selectedFrameId, setSelectedFrameId] = useState(frames[0]?.id || 'cream');
   const activeFrame = frames.find(f => f.id === selectedFrameId) || frames[0] || { bg: '#F9F6F0', text: '#2A2521' };
+
+  // Frame Modals & Categories
+  const [showGuideModal, setShowGuideModal] = useState(false);
+  const [showAddFrameModal, setShowAddFrameModal] = useState(false);
+  const [frameCategory, setFrameCategory] = useState('all'); // 'all' | 'graphic' | 'solid'
 
   // Bottom text & styling
   const [customText, setCustomText] = useState('Long Distance Soulmate');
@@ -48,7 +74,7 @@ export default function EditorPhotostrip() {
   const [orderConfirmed, setOrderConfirmed] = useState(null);
 
   // Print order form
-  const [customerName, setCustomerName] = useState(userName);
+  const [customerName, setCustomerName] = useState(currentUser?.displayName || userName);
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerAddress, setCustomerAddress] = useState('');
   const [paperType, setPaperType] = useState('Glossy 3R Extended');
@@ -59,6 +85,13 @@ export default function EditorPhotostrip() {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 2500);
   };
+
+  // Sync customerName when currentUser updates
+  useEffect(() => {
+    if (currentUser?.displayName && (!customerName || customerName === 'Tamu')) {
+      setCustomerName(currentUser.displayName);
+    }
+  }, [currentUser, customerName]);
 
   // Sync photos to context
   useEffect(() => {
@@ -110,12 +143,140 @@ export default function EditorPhotostrip() {
     }
   };
 
+  // Direct mouse & touch dragging on photo
+  const [dragState, setDragState] = useState(null);
+
+  // Drag start handler on photo in preview
+  const handlePhotoDragStart = (e, idx) => {
+    if (e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
+
+    setActivePhotoIdx(idx);
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    const container = e.currentTarget.getBoundingClientRect();
+
+    const currentPhoto = photos[idx];
+    setDragState({
+      idx,
+      startX: clientX,
+      startY: clientY,
+      initOffsetX: currentPhoto?.offsetX || 0,
+      initOffsetY: currentPhoto?.offsetY || 0,
+      containerW: container.width || 250,
+      containerH: container.height || 180
+    });
+  };
+
+  // Window listeners for smooth dragging
+  useEffect(() => {
+    if (!dragState) return;
+
+    const handleMove = (e) => {
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+      const deltaX = clientX - dragState.startX;
+      const deltaY = clientY - dragState.startY;
+
+      const deltaPercentX = (deltaX / dragState.containerW) * 100;
+      const deltaPercentY = (deltaY / dragState.containerH) * 100;
+
+      const newOffsetX = Math.max(-50, Math.min(50, Math.round((dragState.initOffsetX + deltaPercentX) * 10) / 10));
+      const newOffsetY = Math.max(-50, Math.min(50, Math.round((dragState.initOffsetY + deltaPercentY) * 10) / 10));
+
+      setPhotos((prev) => {
+        const next = [...prev];
+        if (next[dragState.idx]) {
+          next[dragState.idx] = {
+            ...next[dragState.idx],
+            offsetX: newOffsetX,
+            offsetY: newOffsetY
+          };
+        }
+        return next;
+      });
+    };
+
+    const handleEnd = () => {
+      setDragState(null);
+    };
+
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('mouseup', handleEnd);
+    window.addEventListener('touchmove', handleMove, { passive: true });
+    window.addEventListener('touchend', handleEnd);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('mouseup', handleEnd);
+      window.removeEventListener('touchmove', handleMove);
+      window.removeEventListener('touchend', handleEnd);
+    };
+  }, [dragState]);
+
   // Adjust active photo zoom
-  const handleZoomChange = (val) => {
+  const handleZoomChange = (val, idx = activePhotoIdx) => {
     const next = [...photos];
-    if (next[activePhotoIdx]) {
-      next[activePhotoIdx].zoom = parseFloat(val);
+    if (next[idx]) {
+      next[idx] = {
+        ...next[idx],
+        zoom: parseFloat(val)
+      };
       setPhotos(next);
+    }
+  };
+
+  // Adjust horizontal offset X (-50% to +50%)
+  const handleOffsetXChange = (val, idx = activePhotoIdx) => {
+    const next = [...photos];
+    if (next[idx]) {
+      next[idx] = {
+        ...next[idx],
+        offsetX: parseFloat(val) || 0
+      };
+      setPhotos(next);
+    }
+  };
+
+  // Adjust vertical offset Y (-50% to +50%)
+  const handleOffsetYChange = (val, idx = activePhotoIdx) => {
+    const next = [...photos];
+    if (next[idx]) {
+      next[idx] = {
+        ...next[idx],
+        offsetY: parseFloat(val) || 0
+      };
+      setPhotos(next);
+    }
+  };
+
+  // Nudge step for D-pad
+  const handleNudge = (deltaX, deltaY, idx = activePhotoIdx) => {
+    const next = [...photos];
+    if (next[idx]) {
+      const curX = next[idx].offsetX || 0;
+      const curY = next[idx].offsetY || 0;
+      next[idx] = {
+        ...next[idx],
+        offsetX: Math.max(-50, Math.min(50, Math.round((curX + deltaX) * 10) / 10)),
+        offsetY: Math.max(-50, Math.min(50, Math.round((curY + deltaY) * 10) / 10))
+      };
+      setPhotos(next);
+    }
+  };
+
+  // Reset offset and zoom to center
+  const handleResetPosition = (idx = activePhotoIdx) => {
+    const next = [...photos];
+    if (next[idx]) {
+      next[idx] = {
+        ...next[idx],
+        offsetX: 0,
+        offsetY: 0,
+        zoom: 1.0
+      };
+      setPhotos(next);
+      showToast(`Posisi & zoom Foto #${idx + 1} dikembalikan ke tengah`);
     }
   };
 
@@ -247,9 +408,12 @@ export default function EditorPhotostrip() {
       // Apply analog filter simulation to high-res canvas
       ctx.filter = p?.filterCss || 'none';
 
-      // Apply zoom & center
+      // Apply zoom, pan offset & center
       const zoom = p?.zoom || 1.0;
-      ctx.translate(rect.x + rect.w / 2, rect.y + rect.h / 2);
+      const shiftX = ((p?.offsetX || 0) / 100) * rect.w;
+      const shiftY = ((p?.offsetY || 0) / 100) * rect.h;
+
+      ctx.translate(rect.x + rect.w / 2 + shiftX, rect.y + rect.h / 2 + shiftY);
       ctx.scale(zoom, zoom);
       ctx.translate(-(rect.x + rect.w / 2), -(rect.y + rect.h / 2));
 
@@ -289,6 +453,23 @@ export default function EditorPhotostrip() {
         });
         ctx.restore();
       }
+    }
+
+    // Draw Frame Graphic Decorations (film sprockets, sakura, Y2K stars, cat cafe, etc.)
+    drawFrameGraphicDecorations(ctx, activeFrame, canvas.width, canvas.height, photoRects);
+
+    // If frame has custom uploaded overlay image (PNG / JPG)
+    if (activeFrame.imageUrl) {
+      await new Promise((resolve) => {
+        const frameImg = new Image();
+        frameImg.crossOrigin = 'anonymous';
+        frameImg.onload = () => {
+          ctx.drawImage(frameImg, 0, 0, canvas.width, canvas.height);
+          resolve();
+        };
+        frameImg.onerror = () => resolve();
+        frameImg.src = activeFrame.imageUrl;
+      });
     }
 
     // Draw Footer Typography
@@ -434,33 +615,153 @@ export default function EditorPhotostrip() {
             
             {/* Section 1: Frame Selection */}
             {activeTab === 'frame' && (
-              <div>
-                <div className="mb-4">
-                  <h3 className="font-bold text-sm text-gray-900">Pilih Warna Frame</h3>
-                  <p className="text-xs text-gray-500 mt-0.5">Palet estetik minimalis photostrip Anda</p>
+              <div className="space-y-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <h3 className="font-bold text-sm text-gray-900">Pilih Desain Frame</h3>
+                    <p className="text-xs text-gray-500 mt-0.5">Bingkai bergambar, film analog & kustom</p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowGuideModal(true)}
+                    className="flex items-center gap-1 px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 text-[11px] font-bold rounded-lg border border-amber-200 transition-colors shrink-0"
+                    title="Buka Panduan & Spesifikasi Frame Manual"
+                  >
+                    <BookOpen size={13} className="text-amber-600" />
+                    <span>Panduan Frame</span>
+                  </button>
                 </div>
 
-                <div className="grid grid-cols-4 gap-2.5">
-                  {frames.map((f) => {
-                    const isSelected = selectedFrameId === f.id;
-                    return (
-                      <button
-                        key={f.id}
-                        onClick={() => setSelectedFrameId(f.id)}
-                        className="flex flex-col items-center gap-1.5 p-1.5 rounded-xl hover:bg-gray-50 transition-all text-center"
-                      >
+                {/* Quick Add Custom Frame CTA */}
+                <button
+                  type="button"
+                  onClick={() => setShowAddFrameModal(true)}
+                  className="w-full py-2.5 px-3 bg-red-50 hover:bg-red-100 border border-dashed border-red-300 text-red-700 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-colors shadow-xs"
+                >
+                  <Plus size={15} className="text-red-600" />
+                  <span>+ Tambah Frame Manual / Unggah Gambar</span>
+                </button>
+
+                {/* Category Filter Chips */}
+                <div className="flex gap-1 overflow-x-auto hide-scrollbar pb-1 border-b border-gray-100 text-[11px]">
+                  {[
+                    { id: 'all', label: 'Semua' },
+                    { id: 'graphic', label: '🎨 Bergambar' },
+                    { id: 'solid', label: '⬛ Solid' },
+                    { id: 'custom', label: '⭐ Kustom' }
+                  ].map((cat) => (
+                    <button
+                      key={cat.id}
+                      onClick={() => setFrameCategory(cat.id)}
+                      className={`px-2.5 py-1 rounded-md font-semibold whitespace-nowrap transition-colors ${
+                        frameCategory === cat.id
+                          ? 'bg-gray-900 text-white shadow-xs'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                    >
+                      {cat.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Frames Grid */}
+                <div className="grid grid-cols-2 gap-2 max-h-[380px] overflow-y-auto pr-1">
+                  {frames
+                    .filter((f) => {
+                      if (frameCategory === 'graphic') return f.category === 'graphic' || f.overlayType || f.imageUrl;
+                      if (frameCategory === 'solid') return f.category === 'solid' && !f.imageUrl && !f.overlayType;
+                      if (frameCategory === 'custom') return f.id.startsWith('frame_') || f.isCustom;
+                      return true;
+                    })
+                    .map((f) => {
+                      const isSelected = selectedFrameId === f.id;
+                      const isCustom = f.id.startsWith('frame_') || f.isCustom;
+
+                      return (
                         <div
-                          className={`w-9 h-9 rounded-full border-2 transition-all ${
-                            isSelected ? 'border-gray-900 scale-110 shadow-sm' : 'border-gray-200'
+                          key={f.id}
+                          onClick={() => setSelectedFrameId(f.id)}
+                          className={`relative group p-2 rounded-xl border text-left cursor-pointer transition-all flex flex-col justify-between ${
+                            isSelected
+                              ? 'border-gray-900 ring-2 ring-gray-900/20 bg-gray-50/80 shadow-xs'
+                              : 'border-gray-200 hover:border-gray-300 bg-white'
                           }`}
-                          style={{ backgroundColor: f.bg }}
-                        />
-                        <span className="text-[10px] font-semibold text-gray-700 truncate w-full">
-                          {f.name}
-                        </span>
-                      </button>
-                    );
-                  })}
+                        >
+                          {/* Top Thumbnail Preview */}
+                          <div
+                            className="w-full h-11 rounded-lg border border-black/10 overflow-hidden relative flex items-center justify-center text-xs shadow-inner"
+                            style={{
+                              backgroundColor: f.bg,
+                              color: f.text,
+                              backgroundImage: f.imageUrl ? `url(${f.imageUrl})` : undefined,
+                              backgroundSize: 'cover',
+                              backgroundPosition: 'center'
+                            }}
+                          >
+                            {!f.imageUrl && (
+                              <>
+                                {f.overlayType === 'sakura' && <span className="text-base">🌸 Sakura</span>}
+                                {f.overlayType === 'film' && <span className="font-mono text-[10px] tracking-widest bg-black/60 px-1 py-0.5 rounded text-amber-400">🎞️ 35MM</span>}
+                                {f.overlayType === 'y2k' && <span className="text-sm">✦ Y2K</span>}
+                                {f.overlayType === 'cat_cafe' && <span className="text-sm">🐱 Cat Cafe</span>}
+                                {f.overlayType === 'botanical' && <span className="text-sm">🌿 Flora</span>}
+                                {f.overlayType === 'party' && <span className="text-sm">🎈 Party</span>}
+                                {f.overlayType === 'coquette' && <span className="text-sm">🎀 Bow</span>}
+                                {f.overlayType === 'doodle' && <span className="text-sm">☕ Cafe</span>}
+                                {f.overlayType === 'newspaper' && <span className="font-serif text-[10px] font-bold">📰 TIMES</span>}
+                                {!f.overlayType && (
+                                  <div
+                                    className="w-5 h-5 rounded-full border border-black/20 shadow-xs"
+                                    style={{ backgroundColor: f.bg }}
+                                  />
+                                )}
+                              </>
+                            )}
+
+                            {/* Selection check */}
+                            {isSelected && (
+                              <div className="absolute top-1 right-1 bg-gray-900 text-white p-0.5 rounded-full shadow-xs">
+                                <CheckCircle2 size={11} className="text-emerald-400" />
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Info bottom */}
+                          <div className="mt-1.5 flex items-center justify-between">
+                            <div className="truncate pr-1">
+                              <p className="text-[11px] font-bold text-gray-800 truncate leading-tight">
+                                {f.name}
+                              </p>
+                              <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider">
+                                {f.badge || (f.imageUrl ? 'KUSTOM' : f.category)}
+                              </span>
+                            </div>
+
+                            {/* Delete custom frame button */}
+                            {isCustom && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (window.confirm(`Hapus frame kustom "${f.name}"?`)) {
+                                    deleteCustomFrame(f.id);
+                                    if (selectedFrameId === f.id) {
+                                      setSelectedFrameId('film_35mm_sprocket');
+                                    }
+                                    showToast(`Frame "${f.name}" berhasil dihapus.`);
+                                  }
+                                }}
+                                className="text-gray-400 hover:text-red-600 p-1 rounded-md hover:bg-red-50 transition-colors"
+                                title="Hapus frame kustom"
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
                 </div>
               </div>
             )}
@@ -646,42 +947,193 @@ export default function EditorPhotostrip() {
               </div>
             )}
 
-            {/* Section 4: Photo Adjustments (Zoom / Replace) */}
+            {/* Section 4: Photo Adjustments (Pan / Zoom / Replace) */}
             {activeTab === 'adjust' && (
-              <div>
-                <div className="mb-3">
-                  <h3 className="font-bold text-sm text-gray-900">Sesuaikan Foto #{activePhotoIdx + 1}</h3>
-                  <p className="text-xs text-gray-500">Zoom atau ganti gambar dari perangkat</p>
+              <div className="space-y-4">
+                <div>
+                  <h3 className="font-bold text-sm text-gray-900">Sesuaikan Posisi & Zoom</h3>
+                  <p className="text-xs text-gray-500">Geser ke arah manapun atau perbesar foto agar pas di bingkai</p>
                 </div>
 
-                <div className="space-y-3">
-                  <div>
-                    <div className="flex justify-between text-xs text-gray-500 mb-1">
-                      <span>Zoom Level</span>
-                      <span className="font-mono">{photos[activePhotoIdx]?.zoom?.toFixed(1) || 1.0}x</span>
-                    </div>
-                    <input
-                      type="range"
-                      min="0.8"
-                      max="2.2"
-                      step="0.1"
-                      value={photos[activePhotoIdx]?.zoom || 1.0}
-                      onChange={(e) => handleZoomChange(e.target.value)}
-                      className="w-full accent-gray-900 cursor-pointer"
-                    />
+                {/* Photo selector indicator */}
+                <div className="flex gap-1.5">
+                  {photos.slice(0, layout === 'grid' ? 4 : 3).map((_, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setActivePhotoIdx(i)}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        activePhotoIdx === i
+                          ? 'bg-gray-900 text-white shadow-xs'
+                          : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-100'
+                      }`}
+                    >
+                      Foto {i + 1}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Pan Directional Controls (D-Pad) */}
+                <div className="bg-gray-50 border border-gray-200/80 rounded-2xl p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-xs font-bold text-gray-700 flex items-center gap-1.5">
+                      <Move size={14} className="text-red-500" />
+                      Kontrol Geser Posisi
+                    </span>
+                    <button
+                      onClick={() => handleResetPosition(activePhotoIdx)}
+                      className="text-[10px] font-bold text-gray-500 hover:text-red-600 flex items-center gap-1"
+                      title="Kembalikan posisi & zoom ke tengah"
+                    >
+                      <RotateCcw size={11} />
+                      Reset Posisi
+                    </button>
                   </div>
 
-                  <label className="flex items-center justify-center gap-2 w-full py-2 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg text-xs font-semibold text-gray-700 cursor-pointer transition-colors">
-                    <Upload size={14} />
-                    Ganti Foto #{activePhotoIdx + 1}
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => handleFileUpload(e, activePhotoIdx)}
-                      className="hidden"
-                    />
-                  </label>
+                  {/* D-Pad Buttons */}
+                  <div className="flex flex-col items-center gap-1.5 max-w-[170px] mx-auto">
+                    <button
+                      type="button"
+                      onClick={() => handleNudge(0, -6)}
+                      className="w-10 h-9 bg-white hover:bg-gray-100 border border-gray-200 rounded-lg flex items-center justify-center text-gray-700 active:scale-95 shadow-xs transition-transform"
+                      title="Geser ke Atas"
+                    >
+                      <ArrowUp size={16} />
+                    </button>
+                    <div className="flex items-center gap-1.5 w-full justify-center">
+                      <button
+                        type="button"
+                        onClick={() => handleNudge(-6, 0)}
+                        className="w-10 h-9 bg-white hover:bg-gray-100 border border-gray-200 rounded-lg flex items-center justify-center text-gray-700 active:scale-95 shadow-xs transition-transform"
+                        title="Geser ke Kiri"
+                      >
+                        <ArrowLeft size={16} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleResetPosition(activePhotoIdx)}
+                        className="w-10 h-9 bg-gray-900 hover:bg-black text-white rounded-lg flex items-center justify-center text-[10px] font-bold active:scale-95 shadow-xs transition-transform"
+                        title="Tengah (0, 0)"
+                      >
+                        ●
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleNudge(6, 0)}
+                        className="w-10 h-9 bg-white hover:bg-gray-100 border border-gray-200 rounded-lg flex items-center justify-center text-gray-700 active:scale-95 shadow-xs transition-transform"
+                        title="Geser ke Kanan"
+                      >
+                        <ArrowRight size={16} />
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleNudge(0, 6)}
+                      className="w-10 h-9 bg-white hover:bg-gray-100 border border-gray-200 rounded-lg flex items-center justify-center text-gray-700 active:scale-95 shadow-xs transition-transform"
+                      title="Geser ke Bawah"
+                    >
+                      <ArrowDown size={16} />
+                    </button>
+                  </div>
+
+                  {/* Sliders for fine-tuning */}
+                  <div className="space-y-3 mt-4 pt-3 border-t border-gray-200/60">
+                    <div>
+                      <div className="flex justify-between text-[11px] text-gray-600 mb-1">
+                        <span>Geser Horizontal (Sumbu X)</span>
+                        <span className="font-mono font-bold">
+                          {photos[activePhotoIdx]?.offsetX ? `${photos[activePhotoIdx].offsetX > 0 ? '+' : ''}${Math.round(photos[activePhotoIdx].offsetX)}%` : '0% (Tengah)'}
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min="-50"
+                        max="50"
+                        step="1"
+                        value={photos[activePhotoIdx]?.offsetX || 0}
+                        onChange={(e) => handleOffsetXChange(e.target.value)}
+                        className="w-full accent-gray-900 cursor-pointer h-1.5 bg-gray-200 rounded-lg"
+                      />
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between text-[11px] text-gray-600 mb-1">
+                        <span>Geser Vertikal (Sumbu Y)</span>
+                        <span className="font-mono font-bold">
+                          {photos[activePhotoIdx]?.offsetY ? `${photos[activePhotoIdx].offsetY > 0 ? '+' : ''}${Math.round(photos[activePhotoIdx].offsetY)}%` : '0% (Tengah)'}
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min="-50"
+                        max="50"
+                        step="1"
+                        value={photos[activePhotoIdx]?.offsetY || 0}
+                        onChange={(e) => handleOffsetYChange(e.target.value)}
+                        className="w-full accent-gray-900 cursor-pointer h-1.5 bg-gray-200 rounded-lg"
+                      />
+                    </div>
+                  </div>
                 </div>
+
+                {/* Zoom Control Card */}
+                <div className="bg-gray-50 border border-gray-200/80 rounded-2xl p-4 space-y-3">
+                  <div className="flex items-center justify-between text-xs font-bold text-gray-700">
+                    <span className="flex items-center gap-1.5">
+                      <ZoomIn size={14} className="text-red-500" />
+                      Perbesar / Zoom Foto
+                    </span>
+                    <span className="font-mono font-bold text-gray-900">
+                      {photos[activePhotoIdx]?.zoom?.toFixed(2) || '1.00'}x
+                    </span>
+                  </div>
+
+                  <input
+                    type="range"
+                    min="0.8"
+                    max="2.5"
+                    step="0.05"
+                    value={photos[activePhotoIdx]?.zoom || 1.0}
+                    onChange={(e) => handleZoomChange(e.target.value)}
+                    className="w-full accent-gray-900 cursor-pointer h-1.5 bg-gray-200 rounded-lg"
+                  />
+
+                  <div className="flex gap-1.5 pt-1">
+                    {[1.0, 1.2, 1.5, 2.0].map((zVal) => (
+                      <button
+                        key={zVal}
+                        type="button"
+                        onClick={() => handleZoomChange(zVal)}
+                        className={`flex-1 py-1 text-[11px] font-bold rounded-md border transition-colors ${
+                          Math.abs((photos[activePhotoIdx]?.zoom || 1.0) - zVal) < 0.04
+                            ? 'bg-gray-900 text-white border-gray-900'
+                            : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-100'
+                        }`}
+                      >
+                        {zVal.toFixed(1)}x
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Hint drag & drop note */}
+                <div className="p-3 bg-red-50/70 border border-red-100 rounded-xl text-[11px] text-red-900 leading-relaxed flex items-start gap-2">
+                  <Move size={14} className="text-red-500 shrink-0 mt-0.5" />
+                  <span>
+                    <strong>Bisa Geser Langsung:</strong> Anda juga dapat mengklik & menahan (atau menyentuh) foto langsung di bingkai strip untuk menggesernya secara bebas ke segala arah.
+                  </span>
+                </div>
+
+                {/* Replace Photo File Upload */}
+                <label className="flex items-center justify-center gap-2 w-full py-2.5 bg-white hover:bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 cursor-pointer transition-colors shadow-xs">
+                  <Upload size={14} className="text-gray-500" />
+                  Ganti Foto #{activePhotoIdx + 1} dari Perangkat
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handleFileUpload(e, activePhotoIdx)}
+                    className="hidden"
+                  />
+                </label>
               </div>
             )}
 
@@ -732,14 +1184,92 @@ export default function EditorPhotostrip() {
           {/* Photostrip Card Container */}
           <div
             ref={stripPreviewRef}
-            className={`shadow-2xl rounded-sm p-4 sm:p-5 relative transition-all duration-300 max-w-full ${
+            className={`shadow-2xl rounded-sm p-4 sm:p-5 relative transition-all duration-300 max-w-full overflow-hidden ${
               layout === 'grid' ? 'w-[320px] sm:w-[380px]' : 'w-[280px] sm:w-[320px]'
             }`}
-            style={{ backgroundColor: activeFrame.bg, color: activeFrame.text }}
+            style={{ 
+              backgroundColor: activeFrame.bg, 
+              color: activeFrame.text,
+              backgroundImage: activeFrame.imageUrl && !activeFrame.overlayType ? `url(${activeFrame.imageUrl})` : undefined,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center'
+            }}
           >
+            {/* Custom Overlay Image if present */}
+            {activeFrame.imageUrl && (
+              <img
+                src={activeFrame.imageUrl}
+                alt="Frame Overlay"
+                className="absolute inset-0 w-full h-full object-fill pointer-events-none z-20 opacity-95"
+              />
+            )}
+
+            {/* 35mm Film Sprockets live decoration */}
+            {activeFrame.overlayType === 'film' && (
+              <>
+                <div className="absolute inset-y-0 left-0 w-3 sm:w-4 bg-[#08080A] flex flex-col justify-around py-3 pointer-events-none z-10">
+                  {[...Array(12)].map((_, i) => (
+                    <div key={i} className="w-1.5 sm:w-2 h-2.5 bg-white/90 mx-auto rounded-xs shadow-xs" />
+                  ))}
+                </div>
+                <div className="absolute inset-y-0 right-0 w-3 sm:w-4 bg-[#08080A] flex flex-col justify-around py-3 pointer-events-none z-10">
+                  {[...Array(12)].map((_, i) => (
+                    <div key={i} className="w-1.5 sm:w-2 h-2.5 bg-white/90 mx-auto rounded-xs shadow-xs" />
+                  ))}
+                </div>
+              </>
+            )}
+
+            {/* Sakura blossom corner icons */}
+            {activeFrame.overlayType === 'sakura' && (
+              <>
+                <span className="absolute top-1.5 left-2.5 text-base sm:text-lg pointer-events-none z-10 animate-pulse">🌸</span>
+                <span className="absolute top-1.5 right-2.5 text-base sm:text-lg pointer-events-none z-10 animate-pulse">🌸</span>
+              </>
+            )}
+
+            {/* Y2K Stars */}
+            {activeFrame.overlayType === 'y2k' && (
+              <>
+                <span className="absolute top-1.5 left-2 text-sm sm:text-base pointer-events-none z-10 text-purple-600">✦</span>
+                <span className="absolute top-1.5 right-2 text-sm sm:text-base pointer-events-none z-10 text-purple-600">✦</span>
+                <span className="absolute bottom-16 right-2 text-xs pointer-events-none z-10 text-purple-500">✨</span>
+              </>
+            )}
+
+            {/* Cat Cafe */}
+            {activeFrame.overlayType === 'cat_cafe' && (
+              <>
+                <span className="absolute top-1 left-2 text-base pointer-events-none z-10">🐱</span>
+                <span className="absolute top-1 right-2 text-sm pointer-events-none z-10">🐾</span>
+                <span className="absolute bottom-16 right-2 text-xs pointer-events-none z-10">☕</span>
+              </>
+            )}
+
+            {/* Botanical */}
+            {activeFrame.overlayType === 'botanical' && (
+              <>
+                <span className="absolute top-1.5 left-2 text-base pointer-events-none z-10">🌿</span>
+                <span className="absolute top-1.5 right-2 text-base pointer-events-none z-10">🌿</span>
+              </>
+            )}
+
+            {/* Party Celebration */}
+            {activeFrame.overlayType === 'party' && (
+              <>
+                <span className="absolute top-1 left-2 text-base pointer-events-none z-10">🎈</span>
+                <span className="absolute top-1 right-2 text-base pointer-events-none z-10">🎉</span>
+              </>
+            )}
+
+            {/* Coquette Bow */}
+            {activeFrame.overlayType === 'coquette' && (
+              <span className="absolute top-1 left-1/2 -translate-x-1/2 text-base sm:text-lg pointer-events-none z-10">🎀</span>
+            )}
+
             {/* Strip Header */}
             <div className="flex justify-between items-center mb-3 sm:mb-4 px-1 text-[9px] font-bold tracking-widest opacity-70">
-              <span>SNAP.E MEMORIES</span>
+              <span>{activeFrame.overlayType === 'film' ? '► KODAK 400 35MM' : 'SNAP.E MEMORIES'}</span>
               <span className="font-mono">#SNP-{Math.floor(1000 + Math.random() * 9000)}</span>
             </div>
 
@@ -751,22 +1281,40 @@ export default function EditorPhotostrip() {
                   <div
                     key={idx}
                     onClick={() => setActivePhotoIdx(idx)}
-                    className={`aspect-[4/3] bg-gray-200 rounded-xs overflow-hidden relative group cursor-pointer border-2 transition-all ${
+                    onMouseDown={(e) => handlePhotoDragStart(e, idx)}
+                    onTouchStart={(e) => handlePhotoDragStart(e, idx)}
+                    className={`aspect-[4/3] bg-gray-200 rounded-xs overflow-hidden relative group border-2 transition-colors select-none ${
                       isActive ? 'border-red-500 shadow-md ring-2 ring-red-500/20' : 'border-transparent'
-                    }`}
+                    } ${dragState?.idx === idx ? 'cursor-grabbing' : 'cursor-grab'}`}
+                    title="Klik & seret untuk memposisikan foto dalam bingkai"
                   >
-                    <img
-                      src={p.dataUrl}
-                      alt={`Photo ${idx + 1}`}
-                      className="w-full h-full object-cover transition-transform duration-200"
+                    <div 
+                      className="w-full h-full relative overflow-hidden"
                       style={{
-                        transform: `scale(${p.zoom || 1.0}) translate(${p.offsetX || 0}px, ${p.offsetY || 0}px)`,
-                        filter: p.filterCss || 'none'
+                        transform: `translate(${p.offsetX || 0}%, ${p.offsetY || 0}%) scale(${p.zoom || 1.0})`,
+                        transformOrigin: 'center center',
+                        transition: dragState?.idx === idx ? 'none' : 'transform 0.1s ease-out'
                       }}
-                    />
+                    >
+                      <img
+                        src={p.dataUrl}
+                        alt={`Photo ${idx + 1}`}
+                        className="w-full h-full object-cover pointer-events-none select-none"
+                        style={{
+                          filter: p.filterCss || 'none'
+                        }}
+                        draggable={false}
+                      />
+                    </div>
+
+                    {/* Move drag badge indicator */}
+                    <div className="absolute top-1.5 left-1.5 bg-black/60 backdrop-blur-xs text-white text-[8px] font-medium px-1.5 py-0.5 rounded-full flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                      <Move size={10} />
+                      <span>Geser</span>
+                    </div>
 
                     {/* Pose index badge */}
-                    <span className="absolute bottom-1 right-1 bg-black/60 text-white text-[8px] font-mono px-1 rounded">
+                    <span className="absolute bottom-1 right-1 bg-black/60 text-white text-[8px] font-mono px-1 rounded pointer-events-none">
                       #{idx + 1}
                     </span>
 
@@ -1013,6 +1561,20 @@ export default function EditorPhotostrip() {
           </div>
         </div>
       )}
+
+      {/* Custom Frame Creation Modal */}
+      <AddFrameModal
+        isOpen={showAddFrameModal}
+        onClose={() => setShowAddFrameModal(false)}
+        onOpenGuide={() => setShowGuideModal(true)}
+      />
+
+      {/* Frame Design & Specifications Guide Modal */}
+      <FrameGuideModal
+        isOpen={showGuideModal}
+        onClose={() => setShowGuideModal(false)}
+        onOpenAddFrame={() => setShowAddFrameModal(true)}
+      />
 
       {/* Footer - Public Only */}
       <footer className="border-t border-gray-200 bg-white py-6 mt-auto">

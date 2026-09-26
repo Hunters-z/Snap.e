@@ -28,17 +28,27 @@ export default function BoothHome() {
     mode, 
     setMode, 
     layout, 
-    setLayout 
+    setLayout,
+    currentUser,
+    openAuthModal
   } = useBooth();
 
   // State for step modal or section
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showLdrModal, setShowLdrModal] = useState(false);
   const [paymentSuccess, setPaymentSuccess] = useState(false);
-  const [inputName, setInputName] = useState(userName);
+  const [inputName, setInputName] = useState(currentUser?.displayName || userName);
   const [partnerRoomCode, setPartnerRoomCode] = useState('');
   const [generatedRoomId, setGeneratedRoomId] = useState('');
   const [copySuccess, setCopySuccess] = useState(false);
+
+  // Sync inputName when currentUser loads
+  useEffect(() => {
+    if (currentUser?.displayName && (!inputName || inputName === 'Tamu')) {
+      setInputName(currentUser.displayName);
+      setUserName(currentUser.displayName);
+    }
+  }, [currentUser, inputName, setUserName]);
 
   // Check if joined via URL (?join=ROOM_ID)
   useEffect(() => {
@@ -59,7 +69,11 @@ export default function BoothHome() {
   }, [mode, generatedRoomId]);
 
   const handleStartBooth = () => {
-    setUserName(inputName || 'Tamu');
+    if (!currentUser) {
+      openAuthModal('/setup');
+      return;
+    }
+    setUserName(inputName || currentUser.displayName || 'Tamu');
     setShowPaymentModal(true);
   };
 
@@ -95,8 +109,12 @@ export default function BoothHome() {
   const handleJoinExistingRoom = (e) => {
     e.preventDefault();
     if (!partnerRoomCode.trim()) return;
+    if (!currentUser) {
+      openAuthModal(`/capture?room=${partnerRoomCode.trim()}&role=guest`);
+      return;
+    }
     setMode('ldr');
-    setUserName(inputName || 'Tamu');
+    setUserName(inputName || currentUser.displayName || 'Tamu');
     navigate(`/capture?room=${partnerRoomCode.trim()}&role=guest`);
   };
 
@@ -283,6 +301,23 @@ export default function BoothHome() {
                   Gabung Ruangan
                 </button>
               </form>
+            </div>
+          )}
+
+          {/* Login notice for guests */}
+          {!currentUser && (
+            <div className="p-3.5 bg-red-50/80 border border-red-200/80 rounded-xl flex items-center justify-between gap-3 text-xs text-red-800">
+              <div className="flex items-center gap-2">
+                <ShieldCheck size={18} className="text-red-600 shrink-0" />
+                <span>Silakan login terlebih dahulu untuk mengakses bilik kamera snap.e.</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => openAuthModal('/setup')}
+                className="font-bold underline text-red-900 hover:text-black shrink-0 px-2 py-1 bg-red-100/60 rounded-md"
+              >
+                Masuk / Login
+              </button>
             </div>
           )}
 
