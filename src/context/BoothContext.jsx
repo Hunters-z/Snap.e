@@ -82,6 +82,8 @@ const DEFAULT_SAMPLE_PHOTOS = [
   }
 ];
 
+const SESSION_MAX_SECONDS = 15 * 60; // 900s = 15 minutes
+
 export function BoothProvider({ children }) {
   // App configuration (pricing, frames, filters)
   const [appConfig, setAppConfig] = useState(() => {
@@ -121,6 +123,49 @@ export function BoothProvider({ children }) {
   const [mode, setMode] = useState('solo'); // 'solo' | 'ldr'
   const [layout, setLayout] = useState('strip'); // 'strip' (3 shots) | 'grid' (4 shots)
   
+  // Session timer (15 minutes overall session)
+  const [sessionStartTime, setSessionStartTime] = useState(() => {
+    try {
+      const saved = localStorage.getItem('snape_session_start_time');
+      return saved ? parseInt(saved, 10) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [sessionTimeRemaining, setSessionTimeRemaining] = useState(() => {
+    try {
+      const saved = localStorage.getItem('snape_session_start_time');
+      if (saved) {
+        const elapsed = Math.floor((Date.now() - parseInt(saved, 10)) / 1000);
+        return Math.max(0, SESSION_MAX_SECONDS - elapsed);
+      }
+    } catch {
+      // fallback
+    }
+    return SESSION_MAX_SECONDS;
+  });
+
+  // Session Album (temporary storage for all photos taken in session)
+  const [sessionAlbum, setSessionAlbum] = useState(() => {
+    try {
+      const saved = localStorage.getItem('snape_session_album');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {
+      // fallback
+    }
+    return DEFAULT_SAMPLE_PHOTOS.map((p, idx) => ({
+      id: `sample_${idx + 1}`,
+      ...p,
+      title: `Pose ${idx + 1}`,
+      capturedAt: '12:00',
+      liveVideoUrl: null,
+      gifUrl: null
+    }));
+  });
+
   // Photos captured in booth
   const [capturedPhotos, setCapturedPhotos] = useState(() => {
     try {
@@ -134,6 +179,89 @@ export function BoothProvider({ children }) {
     }
     return DEFAULT_SAMPLE_PHOTOS;
   });
+
+  // Session ticker timer effect
+  useEffect(() => {
+    if (!sessionStartTime) return;
+
+    const interval = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - sessionStartTime) / 1000);
+      const remaining = Math.max(0, SESSION_MAX_SECONDS - elapsed);
+      setSessionTimeRemaining(remaining);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [sessionStartTime]);
+
+  const startOrResumeSession = useCallback(() => {
+    let startTime = sessionStartTime;
+    if (!startTime) {
+      startTime = Date.now();
+      localStorage.setItem('snape_session_start_time', String(startTime));
+      setSessionStartTime(startTime);
+    }
+    const elapsed = Math.floor((Date.now() - startTime) / 1000);
+    setSessionTimeRemaining(Math.max(0, SESSION_MAX_SECONDS - elapsed));
+  }, [sessionStartTime]);
+
+  const resetSession = useCallback(() => {
+    const now = Date.now();
+    localStorage.setItem('snape_session_start_time', String(now));
+    setSessionStartTime(now);
+    setSessionTimeRemaining(SESSION_MAX_SECONDS);
+  }, []);
+
+  // Album actions
+  const addPhotoToAlbum = useCallback((newPhoto) => {
+    const photoWithId = {
+      id: newPhoto.id || `snap_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+      capturedAt: newPhoto.capturedAt || new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
+      ...newPhoto
+    };
+
+    setSessionAlbum(prev => {
+      const updated = [photoWithId, ...prev];
+      try {
+        localStorage.setItem('snape_session_album', JSON.stringify(updated.slice(0, 30)));
+      } catch (e) {
+        console.warn('Storage warning for album:', e);
+      }
+      return updated;
+    });
+
+    return photoWithId;
+  }, []);
+
+  const deletePhotoFromAlbum = useCallback((photoId) => {
+    setSessionAlbum(prev => {
+      const updated = prev.filter(p => p.id !== photoId);
+      try {
+        localStorage.setItem('snape_session_album', JSON.stringify(updated));
+      } catch (err) {
+        console.warn('Storage error:', err);
+      }
+      return updated;
+    });
+  }, []);
+
+  const selectPhotoForSlot = useCallback((slotIndex, photoItem) => {
+    setCapturedPhotos(prev => {
+      const next = [...prev];
+      next[slotIndex] = {
+        ...photoItem,
+        zoom: photoItem.zoom ?? 1.0,
+        offsetX: photoItem.offsetX ?? 0,
+        offsetY: photoItem.offsetY ?? 0,
+        stickers: photoItem.stickers || []
+      };
+      try {
+        localStorage.setItem('snape_captured_photos', JSON.stringify(next));
+      } catch (err) {
+        console.warn('Storage error:', err);
+      }
+      return next;
+    });
+  }, []);
 
   // Print orders list (for studio admin) - synced with Firestore
   const [orders, setOrders] = useState([]);
@@ -547,6 +675,13 @@ export function BoothProvider({ children }) {
         setLayout,
         capturedPhotos,
         updateCapturedPhotos,
+        sessionTimeRemaining,
+        startOrResumeSession,
+        resetSession,
+        sessionAlbum,
+        addPhotoToAlbum,
+        deletePhotoFromAlbum,
+        selectPhotoForSlot,
         orders,
         addOrder,
         updateOrderStatus,

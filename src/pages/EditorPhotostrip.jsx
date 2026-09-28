@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Topbar from '../components/Topbar';
 import { useBooth } from '../context/BoothContext';
 import { 
@@ -19,15 +20,19 @@ import {
   ArrowRight,
   RotateCcw,
   ZoomIn,
-  Plus,
-  BookOpen
+  BookOpen,
+  Image as ImageIcon,
+  Film,
+  Clock,
+  Play
 } from 'lucide-react';
 import { FILTER_CATEGORIES, CAMERA_PRESETS } from '../data/cameraPresets';
 import { drawFrameGraphicDecorations } from '../data/defaultFrames';
+import { drawCover, formatSessionTime, generateGifFromFrames } from '../utils/photoCaptureHelper';
 import FrameGuideModal from '../components/FrameGuideModal';
-import AddFrameModal from '../components/AddFrameModal';
 
 export default function EditorPhotostrip() {
+  const navigate = useNavigate();
   const { 
     appConfig, 
     userName, 
@@ -36,7 +41,10 @@ export default function EditorPhotostrip() {
     updateCapturedPhotos, 
     layout, 
     addOrder,
-    deleteCustomFrame 
+    sessionTimeRemaining,
+    sessionAlbum,
+    deletePhotoFromAlbum,
+    selectPhotoForSlot
   } = useBooth();
 
   // Selected frame
@@ -44,10 +52,13 @@ export default function EditorPhotostrip() {
   const [selectedFrameId, setSelectedFrameId] = useState(frames[0]?.id || 'cream');
   const activeFrame = frames.find(f => f.id === selectedFrameId) || frames[0] || { bg: '#F9F6F0', text: '#2A2521' };
 
-  // Frame Modals & Categories
+  // Frame Guide Modal
   const [showGuideModal, setShowGuideModal] = useState(false);
-  const [showAddFrameModal, setShowAddFrameModal] = useState(false);
-  const [frameCategory, setFrameCategory] = useState('all'); // 'all' | 'graphic' | 'solid'
+  const [frameCategory, setFrameCategory] = useState('all'); // 'all' | 'graphic' | 'solid' | 'custom'
+
+  // Live Photos / GIF Download Modal
+  const [showLiveDownloadModal, setShowLiveDownloadModal] = useState(false);
+  const [isGeneratingStripGif, setIsGeneratingStripGif] = useState(false);
 
   // Bottom text & styling
   const [customText, setCustomText] = useState('Long Distance Soulmate');
@@ -58,6 +69,13 @@ export default function EditorPhotostrip() {
   const [photos, setPhotos] = useState(capturedPhotos);
   const [activePhotoIdx, setActivePhotoIdx] = useState(0);
 
+  // Synchronize photos whenever capturedPhotos from context changes
+  useEffect(() => {
+    if (capturedPhotos && capturedPhotos.length > 0) {
+      setPhotos(capturedPhotos);
+    }
+  }, [capturedPhotos]);
+
   // Filter presets & category
   const availablePresets = appConfig.customFilters?.length > 0 ? appConfig.customFilters : CAMERA_PRESETS;
   const [filterCategory, setFilterCategory] = useState('all');
@@ -65,8 +83,8 @@ export default function EditorPhotostrip() {
   // Stickers library
   const stickerList = ['✨', '💖', '🎀', '⭐', '🍒', '🌸', '📸', '💌', '🧸', '🕊️'];
 
-  // Tab for sidebar
-  const [activeTab, setActiveTab] = useState('frame'); // 'frame' | 'filter' | 'sticker' | 'adjust' | 'text'
+  // Tab for sidebar ('album' | 'frame' | 'filter' | 'sticker' | 'adjust' | 'text')
+  const [activeTab, setActiveTab] = useState('album');
 
   // Toast & Modals
   const [toastMessage, setToastMessage] = useState(null);
@@ -326,14 +344,30 @@ export default function EditorPhotostrip() {
     reader.readAsDataURL(file);
   };
 
-  // Render high-res strip onto canvas and download
+  // Assign photo from session album into selected slot
+  const handleAssignPhotoToSlot = (photoItem, slotIdx) => {
+    selectPhotoForSlot(slotIdx, photoItem);
+    const next = [...photos];
+    next[slotIdx] = {
+      ...photoItem,
+      zoom: 1.0,
+      offsetX: 0,
+      offsetY: 0,
+      stickers: []
+    };
+    setPhotos(next);
+    showToast(`Foto berhasil dipasang pada Slot #${slotIdx + 1}`);
+  };
+
+  /**
+   * Render high-res strip onto canvas and download (100% un-stretched aspect ratio).
+   */
   const handleDownloadHD = async () => {
     showToast('Sedang membuat gambar resolusi tinggi (300 DPI)...');
 
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
 
-    // Strip dimensions: 1200 x 3600 (high res 2x6 photostrip)
     const isGrid = layout === 'grid';
     const cWidth = isGrid ? 1600 : 1200;
     const padding = 60;
@@ -343,7 +377,7 @@ export default function EditorPhotostrip() {
     let photoRects = [];
 
     if (!isGrid) {
-      // 3 cuts vertically
+      // 3 cuts vertically (4:3 aspect ratio each)
       const photoW = cWidth - padding * 2;
       const photoH = photoW * 0.75;
       const cHeight = padding * 2 + (photoH * 3) + (spacing * 2) + footerHeight;
@@ -360,7 +394,7 @@ export default function EditorPhotostrip() {
         });
       }
     } else {
-      // 2x2 grid
+      // 2x2 grid (4:3 aspect ratio each)
       const innerW = cWidth - padding * 2;
       const photoW = (innerW - spacing) / 2;
       const photoH = photoW * 0.75;
@@ -405,10 +439,10 @@ export default function EditorPhotostrip() {
       ctx.rect(rect.x, rect.y, rect.w, rect.h);
       ctx.clip();
 
-      // Apply analog filter simulation to high-res canvas
+      // Apply filter
       ctx.filter = p?.filterCss || 'none';
 
-      // Apply zoom, pan offset & center
+      // Apply zoom & translation
       const zoom = p?.zoom || 1.0;
       const shiftX = ((p?.offsetX || 0) / 100) * rect.w;
       const shiftY = ((p?.offsetY || 0) / 100) * rect.h;
@@ -417,14 +451,9 @@ export default function EditorPhotostrip() {
       ctx.scale(zoom, zoom);
       ctx.translate(-(rect.x + rect.w / 2), -(rect.y + rect.h / 2));
 
-      // Draw image to cover
-      const scale = Math.max(rect.w / img.width, rect.h / img.height);
-      const drawW = img.width * scale;
-      const drawH = img.height * scale;
-      const offX = rect.x + (rect.w - drawW) / 2;
-      const offY = rect.y + (rect.h - drawH) / 2;
+      // Draw using drawCover to guarantee aspect ratio is never stretched!
+      drawCover(ctx, img, rect.x, rect.y, rect.w, rect.h, false);
 
-      ctx.drawImage(img, offX, offY, drawW, drawH);
       ctx.filter = 'none';
       ctx.restore();
 
@@ -455,10 +484,10 @@ export default function EditorPhotostrip() {
       }
     }
 
-    // Draw Frame Graphic Decorations (film sprockets, sakura, Y2K stars, cat cafe, etc.)
+    // Draw Frame Graphic Decorations
     drawFrameGraphicDecorations(ctx, activeFrame, canvas.width, canvas.height, photoRects);
 
-    // If frame has custom uploaded overlay image (PNG / JPG)
+    // If frame has custom uploaded overlay image
     if (activeFrame.imageUrl) {
       await new Promise((resolve) => {
         const frameImg = new Image();
@@ -505,7 +534,6 @@ export default function EditorPhotostrip() {
       ctx.fillRect(qrX, qrY, qrSize, qrSize);
 
       ctx.fillStyle = activeFrame.text;
-      // Decorative barcode-like mini matrix
       for (let r = 0; r < 5; r++) {
         for (let c = 0; c < 5; c++) {
           if ((r + c) % 2 === 0 || r === 0 || c === 0 || r === 4 || c === 4) {
@@ -515,12 +543,117 @@ export default function EditorPhotostrip() {
       }
     }
 
-    // Trigger real download
+    // Trigger download
     const link = document.createElement('a');
     link.download = `snap_e_${Date.now()}.png`;
     link.href = canvas.toDataURL('image/png', 1.0);
     link.click();
     showToast('Foto HD berhasil diunduh ke perangkat Anda!');
+  };
+
+  /**
+   * Generates and downloads an Animated GIF of the Photostrip.
+   */
+  const handleDownloadAnimatedStripGif = async () => {
+    setIsGeneratingStripGif(true);
+    showToast('Sedang membuat Strip GIF bergerak...');
+
+    try {
+      const frames = [];
+
+      // Generate 4-6 frames of the photostrip with subtle animated motion & highlights
+      const gifWidth = layout === 'grid' ? 400 : 320;
+      const gifHeight = layout === 'grid' ? 520 : 640;
+
+      for (let f = 0; f < 5; f++) {
+        const canvas = document.createElement('canvas');
+        canvas.width = gifWidth;
+        canvas.height = gifHeight;
+        const ctx = canvas.getContext('2d');
+
+        // Background
+        ctx.fillStyle = activeFrame.bg;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Draw slots with subtle pulse/movement
+        const margin = 16;
+        const spacing = 10;
+        const footerH = 70;
+        const innerW = canvas.width - margin * 2;
+
+        if (layout !== 'grid') {
+          const itemH = (canvas.height - margin * 2 - footerH - spacing * 2) / 3;
+          for (let s = 0; s < 3; s++) {
+            const p = photos[s] || photos[0];
+            const y = margin + s * (itemH + spacing);
+
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(margin, y, innerW, itemH);
+            ctx.clip();
+
+            // Load and draw photo
+            const img = new Image();
+            img.src = (f % 2 === 1 && p?.gifUrl) ? p.gifUrl : p?.dataUrl;
+            await new Promise(res => { img.onload = res; img.onerror = res; });
+            drawCover(ctx, img, margin, y, innerW, itemH, false);
+
+            // Shimmer effect on active animated slot
+            if (f === s) {
+              ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+              ctx.fillRect(margin, y, innerW, itemH);
+            }
+            ctx.restore();
+          }
+        } else {
+          // 2x2 grid
+          const itemW = (innerW - spacing) / 2;
+          const itemH = itemW * 0.75;
+          for (let s = 0; s < 4; s++) {
+            const p = photos[s] || photos[0];
+            const col = s % 2;
+            const row = Math.floor(s / 2);
+            const x = margin + col * (itemW + spacing);
+            const y = margin + row * (itemH + spacing);
+
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(x, y, itemW, itemH);
+            ctx.clip();
+            const img = new Image();
+            img.src = p?.dataUrl;
+            await new Promise(res => { img.onload = res; img.onerror = res; });
+            drawCover(ctx, img, x, y, itemW, itemH, false);
+            ctx.restore();
+          }
+        }
+
+        // Mini footer
+        ctx.fillStyle = activeFrame.text;
+        ctx.font = "bold 13px 'Inter', sans-serif";
+        ctx.fillText('snap.e', margin + 4, canvas.height - 35);
+        ctx.font = "italic 11px 'Playfair Display', serif";
+        ctx.fillText(customText, margin + 4, canvas.height - 18);
+
+        frames.push(canvas.toDataURL('image/jpeg', 0.85));
+      }
+
+      const gifData = await generateGifFromFrames(frames, gifWidth, gifHeight, 0.25);
+      if (gifData) {
+        const link = document.createElement('a');
+        link.download = `snap_e_strip_${Date.now()}.gif`;
+        link.href = gifData;
+        link.click();
+        showToast('Strip GIF Bergerak berhasil diunduh!');
+      } else {
+        showToast('Gagal membuat GIF. Silakan coba kembali.');
+      }
+    } catch (e) {
+      console.warn('Strip GIF generation error:', e);
+      showToast('Gagal memproses GIF animasi.');
+    } finally {
+      setIsGeneratingStripGif(false);
+    }
   };
 
   // Copy share URL
@@ -553,9 +686,31 @@ export default function EditorPhotostrip() {
     <div className="min-h-screen flex flex-col bg-[#F8F9FA] text-gray-900 font-sans">
       <Topbar />
 
+      {/* 15-Minute Session Banner with Retake / Add Photo CTA */}
+      <div className="bg-gray-900 text-white px-4 py-2 border-b border-gray-800">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span className="font-semibold text-gray-300">Sesi Bilik Foto Berjalan</span>
+            <div className="flex items-center gap-1.5 font-mono font-bold bg-white/10 px-2.5 py-0.5 rounded-full text-amber-300 border border-white/10">
+              <Clock size={12} />
+              <span>Sisa: {formatSessionTime(sessionTimeRemaining)}</span>
+            </div>
+          </div>
+
+          <button
+            onClick={() => navigate('/capture')}
+            className="flex items-center gap-1.5 px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold text-xs transition-colors shadow-xs"
+          >
+            <Camera size={13} />
+            <span>📸 Ambil Foto Lagi / Retake Pose</span>
+          </button>
+        </div>
+      </div>
+
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50 bg-gray-900 text-white px-5 py-2.5 rounded-full text-xs font-semibold shadow-xl animate-fadeIn flex items-center gap-2">
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 bg-gray-900 text-white px-5 py-2.5 rounded-full text-xs font-semibold shadow-xl animate-fadeIn flex items-center gap-2">
           <Sparkles size={14} className="text-amber-400" />
           {toastMessage}
         </div>
@@ -569,6 +724,15 @@ export default function EditorPhotostrip() {
           {/* Tab Switcher */}
           <div className="flex bg-gray-100 p-1 rounded-xl gap-1 overflow-x-auto hide-scrollbar">
             <button
+              onClick={() => setActiveTab('album')}
+              className={`px-3 py-2 text-xs font-bold rounded-lg transition-colors whitespace-nowrap flex items-center gap-1 ${
+                activeTab === 'album' ? 'bg-white shadow-xs text-red-600' : 'text-gray-500 hover:text-gray-900'
+              }`}
+            >
+              <ImageIcon size={13} />
+              Album & Seleksi
+            </button>
+            <button
               onClick={() => setActiveTab('frame')}
               className={`px-3 py-2 text-xs font-bold rounded-lg transition-colors whitespace-nowrap ${
                 activeTab === 'frame' ? 'bg-white shadow-xs text-gray-900' : 'text-gray-500 hover:text-gray-900'
@@ -579,19 +743,11 @@ export default function EditorPhotostrip() {
             <button
               onClick={() => setActiveTab('filter')}
               className={`px-3 py-2 text-xs font-bold rounded-lg transition-colors whitespace-nowrap flex items-center gap-1 ${
-                activeTab === 'filter' ? 'bg-white shadow-xs text-red-600' : 'text-gray-500 hover:text-gray-900'
+                activeTab === 'filter' ? 'bg-white shadow-xs text-gray-900' : 'text-gray-500 hover:text-gray-900'
               }`}
             >
               <Camera size={13} />
-              Filter Analog
-            </button>
-            <button
-              onClick={() => setActiveTab('sticker')}
-              className={`px-3 py-2 text-xs font-bold rounded-lg transition-colors whitespace-nowrap ${
-                activeTab === 'sticker' ? 'bg-white shadow-xs text-gray-900' : 'text-gray-500 hover:text-gray-900'
-              }`}
-            >
-              Stiker
+              Filter
             </button>
             <button
               onClick={() => setActiveTab('adjust')}
@@ -600,6 +756,14 @@ export default function EditorPhotostrip() {
               }`}
             >
               Atur Foto
+            </button>
+            <button
+              onClick={() => setActiveTab('sticker')}
+              className={`px-3 py-2 text-xs font-bold rounded-lg transition-colors whitespace-nowrap ${
+                activeTab === 'sticker' ? 'bg-white shadow-xs text-gray-900' : 'text-gray-500 hover:text-gray-900'
+              }`}
+            >
+              Stiker
             </button>
             <button
               onClick={() => setActiveTab('text')}
@@ -613,35 +777,148 @@ export default function EditorPhotostrip() {
 
           <div className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-gray-100 space-y-6">
             
-            {/* Section 1: Frame Selection */}
+            {/* Section 0: TEMPORARY ALBUM & PHOTO SELECTION */}
+            {activeTab === 'album' && (
+              <div className="space-y-4">
+                <div className="flex items-start justify-between gap-2 border-b border-gray-100 pb-3">
+                  <div>
+                    <h3 className="font-bold text-sm text-gray-900 flex items-center gap-1.5">
+                      <ImageIcon size={15} className="text-red-600" />
+                      Pilih Foto dari Album Sesi
+                    </h3>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      Tersimpan {sessionAlbum?.length || 0} jepretan foto selama sesi ini.
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={() => navigate('/capture')}
+                    className="flex items-center gap-1 px-2.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 text-[11px] font-bold rounded-lg border border-red-200 transition-colors shrink-0"
+                    title="Buka kamera untuk mengambil pose tambahan"
+                  >
+                    <Camera size={13} />
+                    <span>+ Foto Baru</span>
+                  </button>
+                </div>
+
+                <div className="space-y-3 max-h-[380px] overflow-y-auto pr-1">
+                  {sessionAlbum?.length === 0 ? (
+                    <div className="text-center py-8 text-gray-400 space-y-2">
+                      <Camera size={28} className="mx-auto text-gray-300" />
+                      <p className="text-xs font-semibold">Belum ada foto yang tersimpan di album sesi.</p>
+                      <button
+                        onClick={() => navigate('/capture')}
+                        className="px-3 py-1.5 bg-red-600 text-white rounded-lg text-xs font-bold"
+                      >
+                        Buka Kamera Sekarang
+                      </button>
+                    </div>
+                  ) : (
+                    sessionAlbum.map((item, idx) => {
+                      const assignedSlot = photos.findIndex(p => p.dataUrl === item.dataUrl);
+
+                      return (
+                        <div
+                          key={item.id || idx}
+                          className={`p-2.5 rounded-xl border transition-all flex gap-3 ${
+                            assignedSlot !== -1
+                              ? 'border-red-500 bg-red-50/30 ring-1 ring-red-500/20'
+                              : 'border-gray-200 hover:border-gray-300 bg-gray-50/50'
+                          }`}
+                        >
+                          {/* Thumbnail */}
+                          <div className="w-18 h-20 rounded-lg overflow-hidden relative shrink-0 bg-gray-200 border border-gray-300">
+                            <img 
+                              src={item.dataUrl} 
+                              alt="Album Thumbnail" 
+                              className="w-full h-full object-cover" 
+                            />
+                            {item.gifUrl && (
+                              <span className="absolute bottom-1 left-1 bg-purple-600 text-white text-[8px] font-bold px-1 rounded">
+                                GIF
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Info and Slot Selection */}
+                          <div className="flex-1 flex flex-col justify-between min-w-0">
+                            <div className="flex items-start justify-between gap-1">
+                              <div>
+                                <span className="text-[10px] font-mono text-gray-400">
+                                  {item.capturedAt || `Foto #${idx + 1}`}
+                                </span>
+                                <p className="text-xs font-bold text-gray-800 truncate">
+                                  {item.filterName || 'Analog Real'}
+                                </p>
+                              </div>
+
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                {assignedSlot !== -1 && (
+                                  <span className="bg-red-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0">
+                                    Slot #{assignedSlot + 1}
+                                  </span>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => deletePhotoFromAlbum(item.id)}
+                                  className="text-gray-400 hover:text-red-500 p-0.5"
+                                  title="Hapus foto dari album"
+                                >
+                                  <Trash2 size={12} />
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Slot buttons to place into frame */}
+                            <div>
+                              <span className="text-[9px] font-bold text-gray-500 uppercase tracking-wider block mb-1">
+                                Pasang ke Frame:
+                              </span>
+                              <div className="flex gap-1">
+                                {Array.from({ length: layout === 'grid' ? 4 : 3 }).map((_, sIdx) => (
+                                  <button
+                                    key={sIdx}
+                                    onClick={() => handleAssignPhotoToSlot(item, sIdx)}
+                                    className={`flex-1 py-1 text-[10px] font-bold rounded border transition-colors ${
+                                      assignedSlot === sIdx
+                                        ? 'bg-red-600 text-white border-red-600 shadow-xs'
+                                        : 'bg-white hover:bg-gray-100 text-gray-700 border-gray-300'
+                                    }`}
+                                  >
+                                    Slot {sIdx + 1}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Section 1: Frame Selection (Manual Add Frame is ONLY in Admin Dashboard) */}
             {activeTab === 'frame' && (
               <div className="space-y-4">
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <h3 className="font-bold text-sm text-gray-900">Pilih Desain Frame</h3>
-                    <p className="text-xs text-gray-500 mt-0.5">Bingkai bergambar, film analog & kustom</p>
+                    <p className="text-xs text-gray-500 mt-0.5">Bingkai bergambar & solid dari studio</p>
                   </div>
 
                   <button
                     type="button"
                     onClick={() => setShowGuideModal(true)}
                     className="flex items-center gap-1 px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 text-[11px] font-bold rounded-lg border border-amber-200 transition-colors shrink-0"
-                    title="Buka Panduan & Spesifikasi Frame Manual"
+                    title="Buka Panduan & Spesifikasi Frame"
                   >
                     <BookOpen size={13} className="text-amber-600" />
                     <span>Panduan Frame</span>
                   </button>
                 </div>
-
-                {/* Quick Add Custom Frame CTA */}
-                <button
-                  type="button"
-                  onClick={() => setShowAddFrameModal(true)}
-                  className="w-full py-2.5 px-3 bg-red-50 hover:bg-red-100 border border-dashed border-red-300 text-red-700 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-colors shadow-xs"
-                >
-                  <Plus size={15} className="text-red-600" />
-                  <span>+ Tambah Frame Manual / Unggah Gambar</span>
-                </button>
 
                 {/* Category Filter Chips */}
                 <div className="flex gap-1 overflow-x-auto hide-scrollbar pb-1 border-b border-gray-100 text-[11px]">
@@ -649,7 +926,7 @@ export default function EditorPhotostrip() {
                     { id: 'all', label: 'Semua' },
                     { id: 'graphic', label: '🎨 Bergambar' },
                     { id: 'solid', label: '⬛ Solid' },
-                    { id: 'custom', label: '⭐ Kustom' }
+                    { id: 'custom', label: '⭐ Kustom Studio' }
                   ].map((cat) => (
                     <button
                       key={cat.id}
@@ -676,7 +953,6 @@ export default function EditorPhotostrip() {
                     })
                     .map((f) => {
                       const isSelected = selectedFrameId === f.id;
-                      const isCustom = f.id.startsWith('frame_') || f.isCustom;
 
                       return (
                         <div
@@ -719,7 +995,6 @@ export default function EditorPhotostrip() {
                               </>
                             )}
 
-                            {/* Selection check */}
                             {isSelected && (
                               <div className="absolute top-1 right-1 bg-gray-900 text-white p-0.5 rounded-full shadow-xs">
                                 <CheckCircle2 size={11} className="text-emerald-400" />
@@ -737,27 +1012,6 @@ export default function EditorPhotostrip() {
                                 {f.badge || (f.imageUrl ? 'KUSTOM' : f.category)}
                               </span>
                             </div>
-
-                            {/* Delete custom frame button */}
-                            {isCustom && (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (window.confirm(`Hapus frame kustom "${f.name}"?`)) {
-                                    deleteCustomFrame(f.id);
-                                    if (selectedFrameId === f.id) {
-                                      setSelectedFrameId('film_35mm_sprocket');
-                                    }
-                                    showToast(`Frame "${f.name}" berhasil dihapus.`);
-                                  }
-                                }}
-                                className="text-gray-400 hover:text-red-600 p-1 rounded-md hover:bg-red-50 transition-colors"
-                                title="Hapus frame kustom"
-                              >
-                                <Trash2 size={12} />
-                              </button>
-                            )}
                           </div>
                         </div>
                       );
@@ -772,9 +1026,9 @@ export default function EditorPhotostrip() {
                 <div>
                   <h3 className="font-bold text-sm text-gray-900 flex items-center gap-1.5">
                     <Camera size={15} className="text-red-600" />
-                    Preset Kamera Analog & Digital
+                    Preset Warna Analog
                   </h3>
-                  <p className="text-xs text-gray-500">Simulasi profil warna film Fujifilm, Kodak, Polaroid & CCD</p>
+                  <p className="text-xs text-gray-500">Profil warna film Fujifilm, Kodak, Polaroid & CCD</p>
                 </div>
 
                 {/* Target Photo Selector */}
@@ -806,7 +1060,7 @@ export default function EditorPhotostrip() {
                       >
                         <span>Foto {i + 1}</span>
                         <span className="text-[9px] font-normal opacity-70 truncate max-w-full">
-                          {p.filterBrand || 'RAW'}
+                          {p?.filterBrand || 'RAW'}
                         </span>
                       </button>
                     ))}
@@ -883,7 +1137,7 @@ export default function EditorPhotostrip() {
                               }}
                               className="font-bold text-red-600 hover:text-red-700 underline text-[10px]"
                             >
-                              Terapkan ke Semua Foto
+                              Semua Foto
                             </button>
                           </div>
                         </div>
@@ -893,66 +1147,12 @@ export default function EditorPhotostrip() {
               </div>
             )}
 
-            {/* Section 3: Stickers */}
-            {activeTab === 'sticker' && (
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <h3 className="font-bold text-sm text-gray-900">Stiker Esensial</h3>
-                    <p className="text-xs text-gray-500">Pasang pada Foto #{activePhotoIdx + 1}</p>
-                  </div>
-                  <button
-                    onClick={() => {
-                      const next = [...photos];
-                      if (next[activePhotoIdx]) {
-                        next[activePhotoIdx].stickers = [];
-                        setPhotos(next);
-                        showToast(`Stiker di Foto #${activePhotoIdx + 1} dibersihkan`);
-                      }
-                    }}
-                    className="text-[10px] font-bold text-red-500 hover:text-red-700"
-                  >
-                    Reset Stiker
-                  </button>
-                </div>
-
-                {/* Photo selector indicator */}
-                <div className="flex gap-1.5 mb-3">
-                  {photos.slice(0, layout === 'grid' ? 4 : 3).map((_, i) => (
-                    <button
-                      key={i}
-                      onClick={() => setActivePhotoIdx(i)}
-                      className={`flex-1 py-1.5 rounded-md text-xs font-bold transition-colors ${
-                        activePhotoIdx === i
-                          ? 'bg-gray-900 text-white'
-                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                      }`}
-                    >
-                      Foto {i + 1}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="grid grid-cols-5 gap-2">
-                  {stickerList.map((s, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => handleAddSticker(s)}
-                      className="w-11 h-11 bg-gray-50 hover:bg-gray-100 border border-gray-200/60 rounded-xl flex items-center justify-center text-xl transition-transform active:scale-95 hover:scale-105"
-                    >
-                      {s}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Section 4: Photo Adjustments (Pan / Zoom / Replace) */}
+            {/* Section 3: Photo Adjustments (Pan / Zoom / Replace) */}
             {activeTab === 'adjust' && (
               <div className="space-y-4">
                 <div>
                   <h3 className="font-bold text-sm text-gray-900">Sesuaikan Posisi & Zoom</h3>
-                  <p className="text-xs text-gray-500">Geser ke arah manapun atau perbesar foto agar pas di bingkai</p>
+                  <p className="text-xs text-gray-500">Geser atau perbesar foto agar pas di dalam frame tanpa distorsi</p>
                 </div>
 
                 {/* Photo selector indicator */}
@@ -1115,14 +1315,6 @@ export default function EditorPhotostrip() {
                   </div>
                 </div>
 
-                {/* Hint drag & drop note */}
-                <div className="p-3 bg-red-50/70 border border-red-100 rounded-xl text-[11px] text-red-900 leading-relaxed flex items-start gap-2">
-                  <Move size={14} className="text-red-500 shrink-0 mt-0.5" />
-                  <span>
-                    <strong>Bisa Geser Langsung:</strong> Anda juga dapat mengklik & menahan (atau menyentuh) foto langsung di bingkai strip untuk menggesernya secara bebas ke segala arah.
-                  </span>
-                </div>
-
                 {/* Replace Photo File Upload */}
                 <label className="flex items-center justify-center gap-2 w-full py-2.5 bg-white hover:bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 cursor-pointer transition-colors shadow-xs">
                   <Upload size={14} className="text-gray-500" />
@@ -1134,6 +1326,60 @@ export default function EditorPhotostrip() {
                     className="hidden"
                   />
                 </label>
+              </div>
+            )}
+
+            {/* Section 4: Stickers */}
+            {activeTab === 'sticker' && (
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <h3 className="font-bold text-sm text-gray-900">Stiker Esensial</h3>
+                    <p className="text-xs text-gray-500">Pasang pada Foto #{activePhotoIdx + 1}</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      const next = [...photos];
+                      if (next[activePhotoIdx]) {
+                        next[activePhotoIdx].stickers = [];
+                        setPhotos(next);
+                        showToast(`Stiker di Foto #${activePhotoIdx + 1} dibersihkan`);
+                      }
+                    }}
+                    className="text-[10px] font-bold text-red-500 hover:text-red-700"
+                  >
+                    Reset Stiker
+                  </button>
+                </div>
+
+                {/* Photo selector indicator */}
+                <div className="flex gap-1.5 mb-3">
+                  {photos.slice(0, layout === 'grid' ? 4 : 3).map((_, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setActivePhotoIdx(i)}
+                      className={`flex-1 py-1.5 rounded-md text-xs font-bold transition-colors ${
+                        activePhotoIdx === i
+                          ? 'bg-gray-900 text-white'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                    >
+                      Foto {i + 1}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="grid grid-cols-5 gap-2">
+                  {stickerList.map((s, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => handleAddSticker(s)}
+                      className="w-11 h-11 bg-gray-50 hover:bg-gray-100 border border-gray-200/60 rounded-xl flex items-center justify-center text-xl transition-transform active:scale-95 hover:scale-105"
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
 
@@ -1273,7 +1519,7 @@ export default function EditorPhotostrip() {
               <span className="font-mono">#SNP-{Math.floor(1000 + Math.random() * 9000)}</span>
             </div>
 
-            {/* Photos Layout */}
+            {/* Photos Layout (4:3 aspect ratio per box without stretching) */}
             <div className={layout === 'grid' ? 'grid grid-cols-2 gap-2' : 'space-y-2.5 sm:space-y-3'}>
               {photos.slice(0, layout === 'grid' ? 4 : 3).map((p, idx) => {
                 const isActive = activePhotoIdx === idx;
@@ -1286,22 +1532,22 @@ export default function EditorPhotostrip() {
                     className={`aspect-[4/3] bg-gray-200 rounded-xs overflow-hidden relative group border-2 transition-colors select-none ${
                       isActive ? 'border-red-500 shadow-md ring-2 ring-red-500/20' : 'border-transparent'
                     } ${dragState?.idx === idx ? 'cursor-grabbing' : 'cursor-grab'}`}
-                    title="Klik & seret untuk memposisikan foto dalam bingkai"
+                    title="Klik untuk memilih foto. Seret foto untuk menggeser posisi."
                   >
                     <div 
                       className="w-full h-full relative overflow-hidden"
                       style={{
-                        transform: `translate(${p.offsetX || 0}%, ${p.offsetY || 0}%) scale(${p.zoom || 1.0})`,
+                        transform: `translate(${p?.offsetX || 0}%, ${p?.offsetY || 0}%) scale(${p?.zoom || 1.0})`,
                         transformOrigin: 'center center',
                         transition: dragState?.idx === idx ? 'none' : 'transform 0.1s ease-out'
                       }}
                     >
                       <img
-                        src={p.dataUrl}
+                        src={p?.dataUrl}
                         alt={`Photo ${idx + 1}`}
                         className="w-full h-full object-cover pointer-events-none select-none"
                         style={{
-                          filter: p.filterCss || 'none'
+                          filter: p?.filterCss || 'none'
                         }}
                         draggable={false}
                       />
@@ -1319,7 +1565,7 @@ export default function EditorPhotostrip() {
                     </span>
 
                     {/* Render stickers on this photo */}
-                    {p.stickers?.map((stk) => (
+                    {p?.stickers?.map((stk) => (
                       <div
                         key={stk.id}
                         className="absolute text-xl sm:text-2xl pointer-events-none select-none -translate-x-1/2 -translate-y-1/2 animate-scaleIn"
@@ -1330,7 +1576,7 @@ export default function EditorPhotostrip() {
                     ))}
 
                     {/* Quick remove sticker indicator on hover */}
-                    {p.stickers?.length > 0 && (
+                    {p?.stickers?.length > 0 && (
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -1385,29 +1631,50 @@ export default function EditorPhotostrip() {
           </div>
 
           <p className="text-xs text-gray-400 mt-4 text-center">
-            Tip: Klik foto pada photostrip untuk memilih foto yang ingin di-zoom atau ditambah stiker.
+            Tip: Klik salah satu foto di dalam bingkai untuk mengatur zoom, geser posisi, atau menambah stiker.
           </p>
         </div>
 
         {/* RIGHT COLUMN: Actions & Print Order */}
         <div className="w-full lg:w-80 shrink-0 space-y-6">
           
-          {/* Download Card */}
-          <div className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
+          {/* Download & Export Card */}
+          <div className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-gray-100 space-y-3">
             <div>
-              <h3 className="font-bold text-sm text-gray-900">Simpan & Bagikan</h3>
-              <p className="text-xs text-gray-500 mt-0.5">Ekspor gambar tajam kualitas lab cetak</p>
+              <h3 className="font-bold text-sm text-gray-900">Simpan & Unduh</h3>
+              <p className="text-xs text-gray-500 mt-0.5">Ekspor strip foto HD, GIF animasi, dan foto live</p>
             </div>
 
+            {/* 1. HD Still Photo Strip Download */}
             <button
               onClick={handleDownloadHD}
-              className="w-full py-3.5 bg-gray-900 hover:bg-black text-white rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all shadow-md shadow-gray-900/10 active:scale-98"
+              className="w-full py-3 bg-gray-900 hover:bg-black text-white rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all shadow-md shadow-gray-900/10 active:scale-98"
             >
               <Download size={16} />
-              Unduh Foto HD (300 DPI)
+              Unduh Strip Foto HD (PNG 300 DPI)
             </button>
 
-            <div className="flex bg-gray-50 border border-gray-200 rounded-xl overflow-hidden">
+            {/* 2. Animated Strip GIF Download */}
+            <button
+              onClick={handleDownloadAnimatedStripGif}
+              disabled={isGeneratingStripGif}
+              className="w-full py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-md shadow-purple-600/20 active:scale-98 disabled:opacity-50"
+            >
+              <Film size={15} />
+              <span>{isGeneratingStripGif ? 'Memproses Strip GIF...' : 'Unduh Strip Bergerak (GIF Animasi)'}</span>
+            </button>
+
+            {/* 3. Individual Live Photos & GIF from Album */}
+            <button
+              onClick={() => setShowLiveDownloadModal(true)}
+              className="w-full py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-colors border border-gray-200"
+            >
+              <ImageIcon size={15} className="text-red-600" />
+              <span>Unduh Foto Live / GIF Per Pose</span>
+            </button>
+
+            {/* Share URL */}
+            <div className="flex bg-gray-50 border border-gray-200 rounded-xl overflow-hidden pt-1">
               <input
                 type="text"
                 readOnly
@@ -1452,6 +1719,94 @@ export default function EditorPhotostrip() {
         </div>
 
       </main>
+
+      {/* INDIVIDUAL LIVE PHOTO & GIF DOWNLOAD MODAL */}
+      {showLiveDownloadModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-white w-full max-w-xl rounded-2xl p-6 shadow-2xl relative space-y-4">
+            <div className="flex items-center justify-between border-b pb-3">
+              <div>
+                <h3 className="font-bold text-base text-gray-900 flex items-center gap-2">
+                  <Film size={18} className="text-purple-600" />
+                  Unduh Foto Gerak & GIF Album Sesi
+                </h3>
+                <p className="text-xs text-gray-500">Pilih foto pose untuk diunduh sebagai animasi GIF atau video live.</p>
+              </div>
+              <button
+                onClick={() => setShowLiveDownloadModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="max-h-[60vh] overflow-y-auto space-y-3 pr-1">
+              {sessionAlbum?.length === 0 ? (
+                <p className="text-xs text-gray-400 py-6 text-center">Belum ada foto dalam album sesi.</p>
+              ) : (
+                sessionAlbum.map((item, idx) => (
+                  <div key={item.id || idx} className="p-3 bg-gray-50 rounded-xl border border-gray-200 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-14 h-14 rounded-lg overflow-hidden bg-black shrink-0 relative">
+                        <img src={item.gifUrl || item.dataUrl} alt="Pose Thumbnail" className="w-full h-full object-cover" />
+                        {item.gifUrl && (
+                          <span className="absolute bottom-0.5 right-0.5 text-[7px] bg-purple-600 text-white px-1 rounded font-bold">
+                            GIF
+                          </span>
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-gray-900">Pose #{idx + 1}</p>
+                        <p className="text-[10px] text-gray-500">{item.filterName || 'Analog'} • {item.capturedAt}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                      {item.gifUrl && (
+                        <a
+                          href={item.gifUrl}
+                          download={`snap_e_pose_${idx + 1}.gif`}
+                          className="px-2.5 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-colors"
+                        >
+                          <Download size={12} />
+                          Unduh GIF
+                        </a>
+                      )}
+                      {item.liveVideoUrl && (
+                        <a
+                          href={item.liveVideoUrl}
+                          download={`snap_e_live_${idx + 1}.webm`}
+                          className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-colors"
+                        >
+                          <Play size={12} />
+                          Live Video
+                        </a>
+                      )}
+                      <a
+                        href={item.dataUrl}
+                        download={`snap_e_photo_${idx + 1}.jpg`}
+                        className="px-2.5 py-1.5 bg-white hover:bg-gray-100 text-gray-700 border border-gray-200 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-colors"
+                      >
+                        <Download size={12} />
+                        Foto HD
+                      </a>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="pt-2 border-t flex justify-end">
+              <button
+                onClick={() => setShowLiveDownloadModal(false)}
+                className="px-4 py-2 bg-gray-900 text-white rounded-xl text-xs font-bold"
+              >
+                Tutup
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* PRINT ORDER MODAL */}
       {showPrintModal && (
@@ -1562,21 +1917,13 @@ export default function EditorPhotostrip() {
         </div>
       )}
 
-      {/* Custom Frame Creation Modal */}
-      <AddFrameModal
-        isOpen={showAddFrameModal}
-        onClose={() => setShowAddFrameModal(false)}
-        onOpenGuide={() => setShowGuideModal(true)}
-      />
-
-      {/* Frame Design & Specifications Guide Modal */}
+      {/* Frame Design & Specifications Guide Modal (Informational Only) */}
       <FrameGuideModal
         isOpen={showGuideModal}
         onClose={() => setShowGuideModal(false)}
-        onOpenAddFrame={() => setShowAddFrameModal(true)}
       />
 
-      {/* Footer - Public Only */}
+      {/* Footer */}
       <footer className="border-t border-gray-200 bg-white py-6 mt-auto">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-gray-500">
           <div className="flex items-center gap-2">
