@@ -140,29 +140,25 @@ export default function BoothHome() {
       <main className="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-10 flex flex-col items-center">
         
         {/* Header Hero */}
-        <div className="text-center max-w-2xl mx-auto mb-8 sm:mb-10 space-y-3">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-50 border border-red-100 text-red-600 text-xs font-semibold tracking-wide">
-            <Sparkles size={14} className="animate-spin text-red-500" />
-            <span>PHOTO BOOTH ONLINE & LDR DUAL-STREAM</span>
+        {appConfig.website?.showHero !== false && (
+          <div className="text-center max-w-2xl mx-auto mb-8 sm:mb-10 space-y-3">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-50 border border-red-100 text-red-600 text-xs font-semibold tracking-wide">
+              <Sparkles size={14} className="animate-spin text-red-500" />
+              <span>{appConfig.website?.promoBadge || 'PHOTO BOOTH ONLINE & LDR DUAL-STREAM'}</span>
+            </div>
+            <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight leading-tight">
+              <span className={`text-transparent bg-clip-text bg-gradient-to-r ${appConfig.website?.taglineGradient || 'from-rose-600 via-purple-600 to-indigo-600'}`}>
+                {appConfig.website?.heroTagline || 'Momen Berharga, Synchronized Distances'}
+              </span>
+            </h1>
+            <p className="text-sm sm:text-base text-gray-600 max-w-lg mx-auto leading-relaxed">
+              {appConfig.website?.heroDescription || 'Foto bersama pasangan atau sahabat dari jarak jauh secara real-time, atau nikmati sesi solo dengan photostrip estetik gaya Korea.'}
+            </p>
           </div>
-          <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold text-gray-900 tracking-tight leading-tight">
-            {appConfig.website?.heroTagline ? (
-              <span>{appConfig.website.heroTagline}</span>
-            ) : (
-              <>
-                Momen Berharga, <br className="hidden sm:block" />
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-red-600 via-rose-500 to-amber-600">
-                  Synchronized Distances
-                </span>
-              </>
-            )}
-          </h1>
-          <p className="text-sm sm:text-base text-gray-600 max-w-lg mx-auto leading-relaxed">
-            {appConfig.website?.heroDescription || 'Foto bersama pasangan atau sahabat dari jarak jauh secara real-time, atau nikmati sesi solo dengan photostrip estetik gaya Korea.'}
-          </p>
-        </div>
+        )}
 
         {/* Setup Card */}
+        {appConfig.website?.showSetupCard !== false && (
         <div className="w-full max-w-3xl bg-white border border-gray-200/80 rounded-2xl shadow-xl shadow-gray-200/50 p-5 sm:p-8 space-y-8">
           
           {/* User Name input */}
@@ -349,7 +345,7 @@ export default function BoothHome() {
               <span className="text-xl font-extrabold text-gray-900">
                 Rp {appConfig.payment.price.toLocaleString('id-ID')}
               </span>
-              <span className="text-xs text-emerald-600 ml-2 font-medium">● Termasuk HD Download</span>
+              <span className="text-xs text-emerald-600 ml-2 font-medium">● Termasuk HD Download & Album 7 Hari</span>
             </div>
 
             <button
@@ -361,73 +357,288 @@ export default function BoothHome() {
             </button>
           </div>
         </div>
+        )}
 
         {/* Feature Highlights */}
-        <div className="mt-12 grid grid-cols-1 sm:grid-cols-3 gap-6 w-full max-w-4xl text-center">
-          <div className="p-4 bg-white/70 rounded-xl border border-gray-200/60 shadow-xs">
-            <div className="w-10 h-10 mx-auto rounded-full bg-red-50 text-red-600 flex items-center justify-center mb-3">
-              <Zap size={20} />
+        {appConfig.website?.showFeatures !== false && (
+          <div className="mt-12 grid grid-cols-1 sm:grid-cols-3 gap-6 w-full max-w-4xl text-center">
+            <div className="p-4 bg-white/70 rounded-xl border border-gray-200/60 shadow-xs">
+              <div className="w-10 h-10 mx-auto rounded-full bg-red-50 text-red-600 flex items-center justify-center mb-3">
+                <Zap size={20} />
+              </div>
+              <h3 className="font-bold text-sm text-gray-900 mb-1">Instant Shutter Sync</h3>
+              <p className="text-xs text-gray-500 leading-relaxed">
+                Jepretan kamera terkoordinasi dalam hitungan milidetik melalui WebRTC stream.
+              </p>
             </div>
-            <h3 className="font-bold text-sm text-gray-900 mb-1">Instant Shutter Sync</h3>
-            <p className="text-xs text-gray-500 leading-relaxed">
-              Jepretan kamera terkoordinasi dalam hitungan milidetik melalui WebRTC stream.
-            </p>
-          </div>
 
-          <div className="p-4 bg-white/70 rounded-xl border border-gray-200/60 shadow-xs">
-            <div className="w-10 h-10 mx-auto rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center mb-3">
-              <Layers size={20} />
+            <div className="p-4 bg-white/70 rounded-xl border border-gray-200/60 shadow-xs">
+              <div className="w-10 h-10 mx-auto rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center mb-3">
+                <Layers size={20} />
+              </div>
+              <h3 className="font-bold text-sm text-gray-900 mb-1">Stiker & Frame Estetik</h3>
+              <p className="text-xs text-gray-500 leading-relaxed">
+                Kustomisasi bebas warna bingkai, teks tanggal kenangan, serta stiker doodle interaktif.
+              </p>
             </div>
-            <h3 className="font-bold text-sm text-gray-900 mb-1">Stiker & Frame Estetik</h3>
-            <p className="text-xs text-gray-500 leading-relaxed">
-              Kustomisasi bebas warna bingkai, teks tanggal kenangan, serta stiker doodle interaktif.
-            </p>
-          </div>
 
-          <div className="p-4 bg-white/70 rounded-xl border border-gray-200/60 shadow-xs">
-            <div className="w-10 h-10 mx-auto rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mb-3">
-              <ShieldCheck size={20} />
+            <div className="p-4 bg-white/70 rounded-xl border border-gray-200/60 shadow-xs">
+              <div className="w-10 h-10 mx-auto rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mb-3">
+                <ShieldCheck size={20} />
+              </div>
+              <h3 className="font-bold text-sm text-gray-900 mb-1">Kualitas Cetak 300 DPI</h3>
+              <p className="text-xs text-gray-500 leading-relaxed">
+                Hasil ekspor tajam beresolusi tinggi, siap cetak fisik atau posting ke media sosial.
+              </p>
             </div>
-            <h3 className="font-bold text-sm text-gray-900 mb-1">Kualitas Cetak 300 DPI</h3>
-            <p className="text-xs text-gray-500 leading-relaxed">
-              Hasil ekspor tajam beresolusi tinggi, siap cetak fisik atau posting ke media sosial.
-            </p>
           </div>
-        </div>
+        )}
+
+        {/* Frames Showcase Section */}
+        {appConfig.website?.showFramesShowcase !== false && (
+          <section className="mt-14 w-full max-w-4xl">
+            <div className="text-center mb-6 space-y-1">
+              <span className="text-[11px] font-bold text-red-600 uppercase tracking-wider">Koleksi Frame</span>
+              <h2 className="text-xl sm:text-2xl font-extrabold text-gray-900">Pilihan Frame Photostrip Estetik</h2>
+              <p className="text-xs text-gray-500">Tersedia beragam template frame siap pakai dengan sentuhan vintage & modern.</p>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              {(appConfig.customFrames || []).slice(0, 4).map((frame) => (
+                <div key={frame.id} className="bg-white p-3 rounded-2xl border border-gray-200 shadow-xs hover:shadow-md transition-all group">
+                  <div 
+                    className="w-full aspect-[2/3] rounded-xl flex flex-col justify-between p-2.5 relative overflow-hidden transition-transform group-hover:scale-102"
+                    style={{ backgroundColor: frame.bg, color: frame.text }}
+                  >
+                    <div className="text-[8px] font-bold tracking-widest opacity-60">SNAP.E</div>
+                    <div className="space-y-1 my-auto">
+                      <div className="w-full h-8 bg-black/10 rounded"></div>
+                      <div className="w-full h-8 bg-black/10 rounded"></div>
+                      <div className="w-full h-8 bg-black/10 rounded"></div>
+                    </div>
+                    <div className="text-[9px] font-serif italic truncate">{frame.name}</div>
+                  </div>
+                  <div className="mt-2 text-center">
+                    <p className="text-xs font-bold text-gray-800 truncate">{frame.name}</p>
+                    <span className="text-[9px] text-gray-400 font-mono uppercase">{frame.badge || 'ESTETIK'}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* How It Works Section */}
+        {appConfig.website?.showHowItWorks !== false && (
+          <section className="mt-14 w-full max-w-4xl bg-white border border-gray-200/80 rounded-2xl p-6 sm:p-8 shadow-xs">
+            <div className="text-center mb-8 space-y-1">
+              <span className="text-[11px] font-bold text-red-600 uppercase tracking-wider">Cara Kerja</span>
+              <h2 className="text-xl sm:text-2xl font-extrabold text-gray-900">4 Langkah Mudah Berfoto</h2>
+              <p className="text-xs text-gray-500">Mulai dari memilih mode hingga mencetak hasil foto strip kenangan Anda.</p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-6 text-center">
+              <div className="space-y-2">
+                <div className="w-10 h-10 mx-auto rounded-full bg-red-100 text-red-600 flex items-center justify-center font-bold text-sm">1</div>
+                <h4 className="font-bold text-xs text-gray-900">Pilih Mode & Layout</h4>
+                <p className="text-[11px] text-gray-500">Pilih Solo atau LDR Dual Cam serta tata letak 3-cut strip atau 4-cut quad.</p>
+              </div>
+              <div className="space-y-2">
+                <div className="w-10 h-10 mx-auto rounded-full bg-amber-100 text-amber-700 flex items-center justify-center font-bold text-sm">2</div>
+                <h4 className="font-bold text-xs text-gray-900">Bayar via QRIS</h4>
+                <p className="text-[11px] text-gray-500">Scan QRIS dari dompet digital apa saja (BCA, GoPay, ShopeePay, Dana, dll).</p>
+              </div>
+              <div className="space-y-2">
+                <div className="w-10 h-10 mx-auto rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-sm">3</div>
+                <h4 className="font-bold text-xs text-gray-900">Pose & Jepret Bebas</h4>
+                <p className="text-[11px] text-gray-500">Ambil foto sebanyak mungkin selama sesi 15 menit dengan auto-advance.</p>
+              </div>
+              <div className="space-y-2">
+                <div className="w-10 h-10 mx-auto rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center font-bold text-sm">4</div>
+                <h4 className="font-bold text-xs text-gray-900">Edit, Unduh & Cetak</h4>
+                <p className="text-[11px] text-gray-500">Kustomisasi frame, stiker, filter, simpan album 7 hari dan order cetak lab.</p>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* Pricing Packages */}
+        {appConfig.website?.showPricing !== false && (
+          <section className="mt-14 w-full max-w-4xl">
+            <div className="text-center mb-6 space-y-1">
+              <span className="text-[11px] font-bold text-red-600 uppercase tracking-wider">Tarif & Layanan</span>
+              <h2 className="text-xl sm:text-2xl font-extrabold text-gray-900">Pilihan Paket Sesi Studio</h2>
+              <p className="text-xs text-gray-500">Harga transparan tanpa biaya tersembunyi dengan fitur terlengkap.</p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              <div className="bg-white border-2 border-gray-900 rounded-2xl p-6 shadow-sm relative">
+                <div className="inline-block px-2.5 py-0.5 rounded-full bg-red-600 text-white text-[10px] font-bold tracking-wider uppercase mb-3">
+                  Paling Populer
+                </div>
+                <h3 className="font-extrabold text-lg text-gray-900">Sesi Digital Booth + Album 7 Hari</h3>
+                <p className="text-xs text-gray-500 mt-1">Akses penuh bilik kamera, filter vintage, dan penyimpanan foto 7 hari.</p>
+                <div className="mt-4 mb-5">
+                  <span className="text-3xl font-extrabold text-gray-900">Rp {appConfig.payment.price.toLocaleString('id-ID')}</span>
+                  <span className="text-xs text-gray-400 ml-1">/ sesi 15 menit</span>
+                </div>
+                <ul className="text-xs text-gray-600 space-y-2 mb-6">
+                  <li className="flex items-center gap-2">
+                    <CheckCircle2 size={14} className="text-emerald-600 shrink-0" />
+                    <span>Jepret foto bebas tanpa batas selama sesi 15 menit</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <CheckCircle2 size={14} className="text-emerald-600 shrink-0" />
+                    <span>Tersimpan aman di Album Sementara selama 7 Hari</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <CheckCircle2 size={14} className="text-emerald-600 shrink-0" />
+                    <span>Download file HD 300 DPI & Animasi Live GIF</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <CheckCircle2 size={14} className="text-emerald-600 shrink-0" />
+                    <span>Dukungan LDR Shutter Sync WebRTC</span>
+                  </li>
+                </ul>
+                <button
+                  onClick={handleStartBooth}
+                  className="w-full py-3 bg-gray-900 hover:bg-black text-white rounded-xl text-xs font-bold transition-colors"
+                >
+                  Mulai Sekarang
+                </button>
+              </div>
+
+              <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+                <div className="inline-block px-2.5 py-0.5 rounded-full bg-gray-100 text-gray-700 text-[10px] font-bold tracking-wider uppercase mb-3">
+                  Add-on Opsional
+                </div>
+                <h3 className="font-extrabold text-lg text-gray-900">Layanan Cetak Lab Fisik</h3>
+                <p className="text-xs text-gray-500 mt-1">Cetak fisik photostrip kualitas laboratorium foto dikirim ke alamat Anda.</p>
+                <div className="mt-4 mb-5">
+                  <span className="text-3xl font-extrabold text-gray-900">Rp {(appConfig.payment.printFee || 20000).toLocaleString('id-ID')}</span>
+                  <span className="text-xs text-gray-400 ml-1">/ strip 3R</span>
+                </div>
+                <ul className="text-xs text-gray-600 space-y-2 mb-6">
+                  <li className="flex items-center gap-2">
+                    <CheckCircle2 size={14} className="text-emerald-600 shrink-0" />
+                    <span>Kertas foto Glossy 3R Extended atau Matte Scandinavia</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <CheckCircle2 size={14} className="text-emerald-600 shrink-0" />
+                    <span>Tinta pigment anti-luntur bertahan puluhan tahun</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <CheckCircle2 size={14} className="text-emerald-600 shrink-0" />
+                    <span>Pengiriman rapi dengan amplop kaku & sleeve pelindung</span>
+                  </li>
+                </ul>
+                <button
+                  onClick={() => navigate('/editor')}
+                  className="w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-900 rounded-xl text-xs font-bold transition-colors"
+                >
+                  Lihat Editor & Order Cetak
+                </button>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* FAQs Section */}
+        {appConfig.website?.showFaq !== false && (
+          <section className="mt-14 w-full max-w-4xl space-y-4">
+            <div className="text-center mb-6 space-y-1">
+              <span className="text-[11px] font-bold text-red-600 uppercase tracking-wider">Bantuan & Informasi</span>
+              <h2 className="text-xl sm:text-2xl font-extrabold text-gray-900">Pertanyaan yang Sering Diajukan</h2>
+            </div>
+
+            <div className="space-y-3">
+              <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-xs">
+                <h4 className="font-bold text-xs text-gray-900 mb-1">Berapa lama hasil foto saya tersimpan di album sementara?</h4>
+                <p className="text-xs text-gray-500 leading-relaxed">
+                  Semua jepretan foto dan photostrip hasil sesi Anda tersimpan aman selama <strong>7 hari</strong>. Anda dapat mengunduh ulang foto dan GIF kapan saja selama masa simpan tersebut.
+                </p>
+              </div>
+
+              <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-xs">
+                <h4 className="font-bold text-xs text-gray-900 mb-1">Bagaimana cara kerja fitur foto bersama pasangan LDR?</h4>
+                <p className="text-xs text-gray-500 leading-relaxed">
+                  Pilih mode LDR Dual Cam, lakukan pembayaran, lalu bagikan kode ruangan kepada pasangan. Kamera kedua perangkat akan terhubung secara real-time dan shutter foto akan terjepret bersamaan!
+                </p>
+              </div>
+
+              <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-xs">
+                <h4 className="font-bold text-xs text-gray-900 mb-1">Metode pembayaran apa saja yang didukung?</h4>
+                <p className="text-xs text-gray-500 leading-relaxed">
+                  Sistem mendukung pembayaran QRIS Nasional melalui seluruh dompet digital dan mobile banking terpercaya seperti BCA, Mandiri, GoPay, ShopeePay, OVO, serta Dana dengan verifikasi otomatis.
+                </p>
+              </div>
+            </div>
+          </section>
+        )}
 
       </main>
+
+      {/* Floating WhatsApp Button */}
+      {appConfig.website?.showFloatingWhatsapp !== false && appConfig.website?.whatsappNumber && (
+        <a
+          href={`https://wa.me/${appConfig.website.whatsappNumber.replace(/[^0-9]/g, '')}?text=${encodeURIComponent('Halo ' + (appConfig.website?.brandName || 'snap.e') + ', saya ingin bertanya mengenai sesi photobooth.')}`}
+          target="_blank"
+          rel="noreferrer"
+          className="fixed bottom-6 right-6 z-40 bg-emerald-600 hover:bg-emerald-700 text-white p-3.5 rounded-full shadow-xl shadow-emerald-600/30 flex items-center gap-2 font-bold text-xs transition-transform hover:scale-105"
+          title="Chat Customer Service via WhatsApp"
+        >
+          <MessageCircle size={20} />
+          <span className="hidden sm:inline">Tanya Studio</span>
+        </a>
+      )}
 
       {/* PAYMENT MODAL */}
       {showPaymentModal && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
-          <div className="bg-white w-full max-w-sm rounded-2xl p-6 sm:p-8 text-center space-y-5 shadow-2xl relative">
+          <div className="bg-white w-full max-w-sm rounded-2xl p-6 sm:p-7 text-center space-y-4 shadow-2xl relative">
             <div className="w-12 h-12 rounded-full bg-red-50 text-red-600 mx-auto flex items-center justify-center">
               <QrCode size={24} />
             </div>
 
             <div>
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-gray-100 text-gray-700 text-[10px] font-bold uppercase tracking-wider mb-1">
+                <span>{appConfig.paymentGateway?.provider?.toUpperCase() || 'DOKU'} QRIS PAYMENT GATEWAY</span>
+              </div>
               <h3 className="text-xl font-bold text-gray-900">Pembayaran QRIS</h3>
-              <p className="text-xs text-gray-500 mt-1">Pindai kode QRIS atau gunakan simulasi instan untuk memulai.</p>
+              <p className="text-xs text-gray-500 mt-0.5">Pindai kode QRIS dengan BCA Mobile, GoPay, ShopeePay, OVO, atau Dana.</p>
             </div>
 
             {/* QRIS code */}
-            <div className="p-3 bg-gray-50 border border-gray-200 rounded-xl inline-block mx-auto">
+            <div className="p-3 bg-gray-50 border border-gray-200 rounded-xl inline-block mx-auto relative">
               <QRCodeSVG 
                 value={appConfig.payment.qrisUrl || 'https://snap.e.studio/pay'} 
-                size={180} 
+                size={170} 
                 level="M" 
                 includeMargin={false}
               />
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white p-1 shadow-xs border border-gray-200 flex items-center justify-center">
+                <span className="font-extrabold text-[9px] text-red-600">QRIS</span>
+              </div>
             </div>
 
-            <div className="bg-gray-100/70 p-3 rounded-xl flex items-center justify-between px-4">
-              <span className="text-xs text-gray-500 font-medium">Total Tagihan</span>
-              <span className="text-base font-extrabold text-gray-900">
-                Rp {appConfig.payment.price.toLocaleString('id-ID')}
-              </span>
+            <div className="bg-gray-50 border border-gray-100 p-2.5 rounded-xl space-y-1 text-left text-xs">
+              <div className="flex items-center justify-between text-gray-500 text-[11px]">
+                <span>No. Transaksi</span>
+                <span className="font-mono font-bold text-gray-800">SNP-{Date.now().toString().slice(-6)}</span>
+              </div>
+              <div className="flex items-center justify-between text-gray-500 text-[11px]">
+                <span>Masa Aktif QR</span>
+                <span className="font-mono font-bold text-red-600">14:59 Menit</span>
+              </div>
+              <div className="flex items-center justify-between pt-1 border-t border-gray-200/60">
+                <span className="font-bold text-gray-700">Total Pembayaran</span>
+                <span className="text-base font-extrabold text-gray-900">
+                  Rp {appConfig.payment.price.toLocaleString('id-ID')}
+                </span>
+              </div>
             </div>
 
-            {/* Simulate Button */}
+            {/* Simulate / Verify Button */}
             <div className="space-y-2">
               <button
                 onClick={handlePaymentSuccess}
@@ -446,7 +657,7 @@ export default function BoothHome() {
                 ) : (
                   <>
                     <Zap size={16} />
-                    Simulasikan Pembayaran Berhasil
+                    Konfirmasi Pembayaran Selesai
                   </>
                 )}
               </button>
@@ -519,86 +730,88 @@ export default function BoothHome() {
       )}
 
       {/* Footer - Dynamic Website Studio Info */}
-      <footer className="border-t border-gray-200 bg-white py-8 mt-auto">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 space-y-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 text-xs text-gray-600">
-            {/* Brand & Tagline */}
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-base text-gray-900 tracking-tight">
-                  {appConfig.website?.brandName || 'snap.e'}
-                </span>
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                  appConfig.website?.isOpen !== false 
-                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
-                    : 'bg-red-50 text-red-700 border border-red-200'
-                }`}>
-                  {appConfig.website?.isOpen !== false ? '● Buka' : '● Tutup'}
-                </span>
+      {appConfig.website?.showFooter !== false && (
+        <footer className="border-t border-gray-200 bg-white py-8 mt-auto">
+          <div className="max-w-5xl mx-auto px-4 sm:px-6 space-y-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 text-xs text-gray-600">
+              {/* Brand & Tagline */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-base text-gray-900 tracking-tight">
+                    {appConfig.website?.brandName || 'snap.e'}
+                  </span>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                    appConfig.website?.isOpen !== false 
+                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+                      : 'bg-red-50 text-red-700 border border-red-200'
+                  }`}>
+                    {appConfig.website?.isOpen !== false ? '● Buka' : '● Tutup'}
+                  </span>
+                </div>
+                <p className="text-gray-500 text-[11px] leading-relaxed">
+                  {appConfig.website?.heroTagline || 'Tangible Memories, Synchronized Distances.'}
+                </p>
               </div>
-              <p className="text-gray-500 text-[11px] leading-relaxed">
-                {appConfig.website?.heroTagline || 'Tangible Memories, Synchronized Distances.'}
-              </p>
-            </div>
 
-            {/* Studio Address */}
-            <div className="space-y-1.5">
-              <span className="font-bold text-gray-900 flex items-center gap-1.5">
-                <MapPin size={13} className="text-red-500" />
-                Alamat Studio
-              </span>
-              <p className="text-[11px] text-gray-500 leading-relaxed">
-                {appConfig.website?.studioAddress || 'Jl. Senopati No. 88, Kebayoran Baru, Jakarta Selatan'}
-              </p>
-            </div>
-
-            {/* Operational Hours */}
-            <div className="space-y-1.5">
-              <span className="font-bold text-gray-900 flex items-center gap-1.5">
-                <Clock size={13} className="text-indigo-500" />
-                Jam Buka
-              </span>
-              <p className="text-[11px] text-gray-500">
-                {appConfig.website?.openingHours || 'Setiap Hari: 10:00 - 22:00 WIB'}
-              </p>
-            </div>
-
-            {/* Contact CS / WhatsApp & IG */}
-            <div className="space-y-2">
-              <span className="font-bold text-gray-900 block">Hubungi Admin</span>
-              <div className="flex flex-col gap-1.5 text-[11px]">
-                {appConfig.website?.whatsappNumber && (
-                  <a
-                    href={`https://wa.me/${appConfig.website.whatsappNumber.replace(/[^0-9]/g, '')}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center gap-1.5 text-emerald-600 hover:text-emerald-700 font-semibold"
-                  >
-                    <MessageCircle size={13} />
-                    <span>WhatsApp CS: {appConfig.website.whatsappNumber}</span>
-                  </a>
-                )}
-                {appConfig.website?.instagramHandle && (
-                  <a
-                    href={`https://instagram.com/${appConfig.website.instagramHandle.replace('@', '')}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center gap-1.5 text-pink-600 hover:text-pink-700 font-semibold"
-                  >
-                    <Instagram size={13} />
-                    <span>{appConfig.website.instagramHandle}</span>
-                  </a>
-                )}
+              {/* Studio Address */}
+              <div className="space-y-1.5">
+                <span className="font-bold text-gray-900 flex items-center gap-1.5">
+                  <MapPin size={13} className="text-red-500" />
+                  Alamat Studio
+                </span>
+                <p className="text-[11px] text-gray-500 leading-relaxed">
+                  {appConfig.website?.studioAddress || 'Jl. Senopati No. 88, Kebayoran Baru, Jakarta Selatan'}
+                </p>
               </div>
+
+              {/* Operational Hours */}
+              <div className="space-y-1.5">
+                <span className="font-bold text-gray-900 flex items-center gap-1.5">
+                  <Clock size={13} className="text-indigo-500" />
+                  Jam Buka
+                </span>
+                <p className="text-[11px] text-gray-500">
+                  {appConfig.website?.openingHours || 'Setiap Hari: 10:00 - 22:00 WIB'}
+                </p>
+              </div>
+
+              {/* Contact CS / WhatsApp & IG */}
+              <div className="space-y-2">
+                <span className="font-bold text-gray-900 block">Hubungi Admin</span>
+                <div className="flex flex-col gap-1.5 text-[11px]">
+                  {appConfig.website?.whatsappNumber && (
+                    <a
+                      href={`https://wa.me/${appConfig.website.whatsappNumber.replace(/[^0-9]/g, '')}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-1.5 text-emerald-600 hover:text-emerald-700 font-semibold"
+                    >
+                      <MessageCircle size={13} />
+                      <span>WhatsApp CS: {appConfig.website.whatsappNumber}</span>
+                    </a>
+                  )}
+                  {appConfig.website?.instagramHandle && (
+                    <a
+                      href={`https://instagram.com/${appConfig.website.instagramHandle.replace('@', '')}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-1.5 text-pink-600 hover:text-pink-700 font-semibold"
+                    >
+                      <Instagram size={13} />
+                      <span>{appConfig.website.instagramHandle}</span>
+                    </a>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-4 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] text-gray-400">
+              <p>© {new Date().getFullYear()} {appConfig.website?.brandName || 'snap.e'} Atelier. All rights reserved.</p>
+              <p className="font-mono text-[10px]">Cloud Synced • Real-Time WebRTC</p>
             </div>
           </div>
-
-          <div className="pt-4 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] text-gray-400">
-            <p>© {new Date().getFullYear()} {appConfig.website?.brandName || 'snap.e'} Atelier. All rights reserved.</p>
-            <p className="font-mono text-[10px]">Cloud Synced • Real-Time WebRTC</p>
-          </div>
-        </div>
-      </footer>
+        </footer>
+      )}
     </div>
   );
 }

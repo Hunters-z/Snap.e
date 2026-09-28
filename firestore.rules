@@ -55,6 +55,13 @@ service cloud.firestore {
         && data.layout is string && data.layout.size() <= 20;
     }
 
+    // 0. Users Collection
+    match /users/{userId} {
+      allow get, list: if true;
+      allow create, update: if isValidId(userId);
+      allow delete: if isAdmin();
+    }
+
     // 1. Print Orders Collection
     match /print_orders/{orderId} {
       allow get, list: if true;

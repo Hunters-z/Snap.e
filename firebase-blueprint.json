@@ -42,9 +42,27 @@
         "createdAt": { "type": "string" }
       },
       "required": ["userName", "layout"]
+    },
+    "User": {
+      "title": "User Profile",
+      "description": "Registered photobooth user profile and activity timestamp",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "displayName": { "type": "string", "maxLength": 100 },
+        "email": { "type": "string", "maxLength": 120 },
+        "photoURL": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "lastLoginAt": { "type": "string" }
+      },
+      "required": ["uid", "email"]
     }
   },
   "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Collection of registered users"
+    },
     "/print_orders/{orderId}": {
       "schema": "PrintOrder",
       "description": "Collection of physical photo print orders"

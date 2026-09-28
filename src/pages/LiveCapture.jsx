@@ -450,16 +450,15 @@ export default function LiveCapture() {
       slotIndex: activeSlotIndex
     };
 
-    // 1. Add to session album (temporary storage)
+    // 1. Add to session album (temporary 7-day storage)
     addPhotoToAlbum(newPhotoItem);
 
     // 2. Assign to current active slot in photostrip
     selectPhotoForSlot(activeSlotIndex, newPhotoItem);
 
-    // 3. Advance to next slot automatically if there is an empty slot remaining
-    if (activeSlotIndex < totalShots - 1) {
-      setActiveSlotIndex(activeSlotIndex + 1);
-    }
+    // 3. Immediately advance to next photo slot without having to select pose 1, 2, or 3
+    const nextSlot = (activeSlotIndex + 1) % totalShots;
+    setActiveSlotIndex(nextSlot);
 
     setIsCapturing(false);
   };
@@ -945,6 +944,17 @@ export default function LiveCapture() {
               >
                 <X size={18} />
               </button>
+            </div>
+
+            {/* 7-Day Storage Guarantee Banner */}
+            <div className="bg-amber-500/10 border border-amber-500/30 p-2.5 rounded-xl flex items-center justify-between text-xs text-amber-300">
+              <div className="flex items-center gap-2">
+                <Clock size={14} className="text-amber-400 shrink-0" />
+                <span>Album Sementara: Foto tersimpan aman selama <strong>7 Hari</strong></span>
+              </div>
+              <span className="text-[10px] font-mono bg-amber-500/20 px-2 py-0.5 rounded-md text-amber-200 font-bold shrink-0">
+                Bebas Jepret & Pilih
+              </span>
             </div>
 
             {/* Album Grid */}

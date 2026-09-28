@@ -59,7 +59,21 @@ const DEFAULT_CONFIG = {
   subtitle: 'Tangible Memories, Synchronized Distances',
   payment: {
     price: 15000,
+    sessionDurationMinutes: 15,
+    printFee: 20000,
     qrisUrl: 'https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=00020101021126570014ID.LINKAJA.WWW01189360091100000000005204581253033605802ID5906SNAP_E6007JAKARTA5405150005802ID63041234',
+  },
+  paymentGateway: {
+    provider: 'doku', // 'doku' | 'midtrans' | 'xendit' | 'manual'
+    merchantId: 'MALL-DOKU-882190',
+    clientKey: 'pk_live_doku_a89123bc891',
+    secretKey: 'sk_live_doku_993821736152',
+    webhookUrl: typeof window !== 'undefined' ? `${window.location.origin}/api/qris-webhook` : '',
+    environment: 'sandbox', // 'sandbox' | 'production'
+    activeMethods: ['qris_bca', 'qris_gopay', 'qris_shopeepay', 'qris_dana', 'qris_ovo'],
+    qrisCustomImage: '',
+    enableAutoVerify: true,
+    settlementType: 'instant'
   },
   customFrames: DEFAULT_FRAMES,
   customFilters: CAMERA_PRESETS,
@@ -67,15 +81,27 @@ const DEFAULT_CONFIG = {
   website: {
     brandName: 'snap.e',
     heroTagline: 'Momen Berharga, Synchronized Distances',
+    taglineGradient: 'from-rose-600 via-purple-600 to-indigo-600',
     heroDescription: 'Foto bersama pasangan atau sahabat dari jarak jauh secara real-time, atau nikmati sesi solo dengan photostrip estetik gaya Korea.',
     announcement: '✨ Selamat datang di Studio snap.e! Cetak strip foto kualitas lab dan simpan live photo memori Anda.',
     showAnnouncement: true,
+    showHero: true,
+    showSetupCard: true,
+    showFeatures: true,
+    showFramesShowcase: true,
+    showPricing: true,
+    showHowItWorks: true,
+    showTestimonials: true,
+    showFaq: true,
+    showFooter: true,
+    showFloatingWhatsapp: true,
     whatsappNumber: '0812-3456-7890',
     instagramHandle: '@snape.photobooth',
     studioAddress: 'Jl. Senopati No. 88, Jakarta Selatan',
     openingHours: '10:00 - 22:00 WIB',
     isOpen: true,
-    accentColor: '#E11D48'
+    accentColor: '#E11D48',
+    promoBadge: 'PROMO BULAN INI'
   }
 };
 
@@ -115,6 +141,7 @@ const DEFAULT_SAMPLE_PHOTOS = [
 ];
 
 const SESSION_MAX_SECONDS = 15 * 60; // 900s = 15 minutes
+const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
 export function BoothProvider({ children }) {
   // App configuration (pricing, frames, filters)
@@ -140,6 +167,9 @@ export function BoothProvider({ children }) {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authRedirectUrl, setAuthRedirectUrl] = useState(null);
 
+  // Registered users state for admin dashboard
+  const [registeredUsers, setRegisteredUsers] = useState([]);
+
   const [userName, setUserName] = useState(() => {
     try {
       const savedUser = localStorage.getItem('snape_current_user');
@@ -150,7 +180,7 @@ export function BoothProvider({ children }) {
     } catch {
       // ignore
     }
-    return localStorage.getItem('snape_user_name') || 'Tamu';
+    return localStorage.getItem('snape_user_name') || 'Pengguna';
   });
   const [mode, setMode] = useState('solo'); // 'solo' | 'ldr'
   const [layout, setLayout] = useState('strip'); // 'strip' (3 shots) | 'grid' (4 shots)
@@ -177,22 +207,30 @@ export function BoothProvider({ children }) {
     return SESSION_MAX_SECONDS;
   });
 
-  // Session Album (temporary storage for all photos taken in session)
+  // Session Album (temporary 7-day storage for photos taken in session)
   const [sessionAlbum, setSessionAlbum] = useState(() => {
     try {
       const saved = localStorage.getItem('snape_session_album');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const now = Date.now();
+          // Filter out photos that have expired (> 7 days)
+          const validPhotos = parsed.filter(p => !p.expiresAt || new Date(p.expiresAt).getTime() > now);
+          if (validPhotos.length > 0) return validPhotos;
+        }
       }
     } catch {
       // fallback
     }
+    const sampleExpiresAt = new Date(Date.now() + SEVEN_DAYS_MS).toISOString();
     return DEFAULT_SAMPLE_PHOTOS.map((p, idx) => ({
       id: `sample_${idx + 1}`,
       ...p,
       title: `Pose ${idx + 1}`,
       capturedAt: '12:00',
+      createdAt: new Date().toISOString(),
+      expiresAt: sampleExpiresAt,
       liveVideoUrl: null,
       gifUrl: null
     }));
@@ -243,18 +281,21 @@ export function BoothProvider({ children }) {
     setSessionTimeRemaining(SESSION_MAX_SECONDS);
   }, []);
 
-  // Album actions
+  // Album actions with 7-day expiration
   const addPhotoToAlbum = useCallback((newPhoto) => {
+    const now = Date.now();
     const photoWithId = {
-      id: newPhoto.id || `snap_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+      id: newPhoto.id || `snap_${now}_${Math.random().toString(36).substr(2, 4)}`,
       capturedAt: newPhoto.capturedAt || new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
+      createdAt: new Date(now).toISOString(),
+      expiresAt: new Date(now + SEVEN_DAYS_MS).toISOString(),
       ...newPhoto
     };
 
     setSessionAlbum(prev => {
       const updated = [photoWithId, ...prev];
       try {
-        localStorage.setItem('snape_session_album', JSON.stringify(updated.slice(0, 30)));
+        localStorage.setItem('snape_session_album', JSON.stringify(updated.slice(0, 50)));
       } catch (e) {
         console.warn('Storage warning for album:', e);
       }
@@ -481,6 +522,79 @@ export function BoothProvider({ children }) {
     return () => unsubscribe();
   }, []);
 
+  // 3. Synchronize Registered Users with Firestore Real-time
+  useEffect(() => {
+    const usersColRef = collection(db, 'users');
+
+    const unsubscribe = onSnapshot(
+      usersColRef,
+      (snapshot) => {
+        const remoteUsers = snapshot.docs.map(docItem => ({
+          id: docItem.id,
+          ...docItem.data()
+        }));
+
+        if (remoteUsers.length === 0) {
+          const starterUsers = [
+            {
+              uid: 'usr_admin',
+              displayName: 'Randi Kurnia',
+              email: '0601randikurnia.s@gmail.com',
+              role: 'admin',
+              createdAt: new Date(Date.now() - 86400000 * 14).toISOString(),
+              lastLoginAt: new Date().toISOString()
+            },
+            {
+              uid: 'usr_nabila',
+              displayName: 'Nabila Azzahra',
+              email: 'nabila.azzahra@gmail.com',
+              role: 'customer',
+              createdAt: new Date(Date.now() - 86400000 * 5).toISOString(),
+              lastLoginAt: new Date(Date.now() - 3600000 * 2).toISOString()
+            },
+            {
+              uid: 'usr_dimas',
+              displayName: 'Dimas Prasetya',
+              email: 'dimas.prasetya@gmail.com',
+              role: 'customer',
+              createdAt: new Date(Date.now() - 86400000 * 4).toISOString(),
+              lastLoginAt: new Date(Date.now() - 3600000 * 6).toISOString()
+            },
+            {
+              uid: 'usr_alisya',
+              displayName: 'Alisya Putri',
+              email: 'alisya.putri@gmail.com',
+              role: 'customer',
+              createdAt: new Date(Date.now() - 86400000 * 3).toISOString(),
+              lastLoginAt: new Date(Date.now() - 3600000 * 12).toISOString()
+            },
+            {
+              uid: 'usr_kevin',
+              displayName: 'Kevin Pratama',
+              email: 'kevin.pratama@gmail.com',
+              role: 'customer',
+              createdAt: new Date(Date.now() - 86400000 * 1).toISOString(),
+              lastLoginAt: new Date(Date.now() - 3600000 * 24).toISOString()
+            }
+          ];
+
+          starterUsers.forEach(u => {
+            setDoc(doc(db, 'users', u.uid), u).catch(() => {});
+          });
+          setRegisteredUsers(starterUsers);
+        } else {
+          remoteUsers.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+          setRegisteredUsers(remoteUsers);
+        }
+      },
+      (error) => {
+        handleFirestoreError(error, 'list', 'users');
+      }
+    );
+
+    return () => unsubscribe();
+  }, []);
+
   // Save config changes to Firestore & local
   const updateAppConfig = async (newConfig) => {
     setAppConfig(newConfig);
@@ -494,10 +608,81 @@ export function BoothProvider({ children }) {
         customFilters: newConfig.customFilters,
         customStickers: newConfig.customStickers || DEFAULT_STICKERS,
         website: newConfig.website || DEFAULT_CONFIG.website,
+        paymentGateway: newConfig.paymentGateway || DEFAULT_CONFIG.paymentGateway,
         updatedAt: new Date().toISOString()
       }, { merge: true });
     } catch (e) {
       console.warn('Error saving to Firestore:', e);
+    }
+  };
+
+  // Payment Gateway Config Update
+  const updatePaymentGatewayConfig = async (gwData) => {
+    const mergedGateway = {
+      ...(appConfig.paymentGateway || DEFAULT_CONFIG.paymentGateway),
+      ...gwData
+    };
+    const updated = {
+      ...appConfig,
+      paymentGateway: mergedGateway
+    };
+    setAppConfig(updated);
+    try {
+      localStorage.setItem('snape_app_config', JSON.stringify(updated));
+      await updateDoc(doc(db, 'studio_config', 'main'), {
+        paymentGateway: mergedGateway,
+        updatedAt: new Date().toISOString()
+      });
+    } catch (err) {
+      console.warn('Could not save payment gateway config:', err);
+    }
+    return mergedGateway;
+  };
+
+  // Custom Preset Filters Management
+  const addCustomFilter = async (filterData) => {
+    const newFilter = {
+      id: `flt_${Date.now()}`,
+      name: filterData.name || 'Preset Baru',
+      brand: filterData.brand || 'CUSTOM',
+      category: filterData.category || 'vintage',
+      css: filterData.css || 'contrast(1.1) saturate(1.2)',
+      description: filterData.description || 'Preset kustom buatan studio',
+      createdAt: new Date().toISOString()
+    };
+    const nextFilters = [...(appConfig.customFilters || CAMERA_PRESETS), newFilter];
+    const updated = {
+      ...appConfig,
+      customFilters: nextFilters
+    };
+    setAppConfig(updated);
+    try {
+      localStorage.setItem('snape_app_config', JSON.stringify(updated));
+      await updateDoc(doc(db, 'studio_config', 'main'), {
+        customFilters: nextFilters,
+        updatedAt: new Date().toISOString()
+      });
+    } catch (err) {
+      console.warn('Could not save filter:', err);
+    }
+    return newFilter;
+  };
+
+  const deleteCustomFilter = async (filterId) => {
+    const nextFilters = (appConfig.customFilters || CAMERA_PRESETS).filter(f => f.id !== filterId);
+    const updated = {
+      ...appConfig,
+      customFilters: nextFilters
+    };
+    setAppConfig(updated);
+    try {
+      localStorage.setItem('snape_app_config', JSON.stringify(updated));
+      await updateDoc(doc(db, 'studio_config', 'main'), {
+        customFilters: nextFilters,
+        updatedAt: new Date().toISOString()
+      });
+    } catch (err) {
+      console.warn('Could not delete filter:', err);
     }
   };
 
@@ -576,6 +761,22 @@ export function BoothProvider({ children }) {
       setCurrentUser(userData);
       localStorage.setItem('snape_current_user', JSON.stringify(userData));
       setUserName(userData.displayName);
+
+      // Register or update user record in Firestore
+      try {
+        await setDoc(doc(db, 'users', user.uid), {
+          uid: user.uid,
+          email: user.email,
+          displayName: userData.displayName,
+          photoURL: userData.photoURL,
+          role: admin ? 'admin' : 'customer',
+          lastLoginAt: new Date().toISOString(),
+          createdAt: new Date().toISOString()
+        }, { merge: true });
+      } catch (e) {
+        console.warn('Could not save user profile to Firestore:', e);
+      }
+
       if (admin) {
         setIsAdminAuth(true);
         localStorage.setItem('snape_admin_authenticated', 'true');
@@ -587,24 +788,8 @@ export function BoothProvider({ children }) {
     }
   };
 
-  const loginWithDemo = (role = 'user') => {
-    const admin = role === 'admin';
-    const demoUser = {
-      uid: admin ? 'admin_0601randikurnia' : `user_${Date.now()}`,
-      email: admin ? '0601randikurnia.s@gmail.com' : 'pengguna@snap.e',
-      displayName: admin ? 'Randi Kurnia (Admin)' : 'Pengguna Photobooth',
-      photoURL: null,
-      isAdmin: admin,
-      isDemo: true
-    };
-    setCurrentUser(demoUser);
-    localStorage.setItem('snape_current_user', JSON.stringify(demoUser));
-    setUserName(demoUser.displayName);
-    if (admin) {
-      setIsAdminAuth(true);
-      localStorage.setItem('snape_admin_authenticated', 'true');
-    }
-    return { success: true, user: demoUser, isAdmin: admin };
+  const loginWithDemo = () => {
+    throw new Error('Fitur login demo telah dinonaktifkan. Silakan masuk menggunakan akun Google Anda.');
   };
 
   const logout = async () => {
@@ -831,7 +1016,12 @@ export function BoothProvider({ children }) {
         deleteCustomFrame,
         addCustomSticker,
         deleteCustomSticker,
+        addCustomFilter,
+        deleteCustomFilter,
+        updatePaymentGatewayConfig,
         updateWebsiteConfig,
+        registeredUsers,
+        registeredUsersCount: registeredUsers.length,
         currentUser,
         authLoading,
         isAdminAuth: Boolean(currentUser?.isAdmin || isAdminAuth),

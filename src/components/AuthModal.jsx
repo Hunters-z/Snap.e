@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { X, ShieldCheck, UserCheck, AlertCircle, Sparkles, Loader2 } from 'lucide-react';
+import { X, AlertCircle, Sparkles, Loader2, Lock } from 'lucide-react';
 import { useBooth } from '../context/BoothContext';
 
 export default function AuthModal() {
@@ -9,8 +9,7 @@ export default function AuthModal() {
     showAuthModal, 
     closeAuthModal, 
     authRedirectUrl, 
-    loginWithGoogle, 
-    loginWithDemo 
+    loginWithGoogle 
   } = useBooth();
 
   const [loading, setLoading] = useState(false);
@@ -26,7 +25,6 @@ export default function AuthModal() {
       closeAuthModal();
 
       if (result.isAdmin) {
-        // As requested: "jika saya login dengan akun admin maka akan langsung dialihkan ke dashboard admin"
         navigate('/admin');
       } else if (authRedirectUrl) {
         navigate(authRedirectUrl);
@@ -36,33 +34,14 @@ export default function AuthModal() {
     } catch (err) {
       console.error('Google Sign-in failed:', err);
       if (err?.code === 'auth/popup-blocked') {
-        setErrorMsg('Jendela popup Google diblokir oleh browser. Silakan izinkan popup atau gunakan tombol Masuk Cepat di bawah.');
+        setErrorMsg('Jendela popup Google diblokir oleh browser. Silakan izinkan popup untuk melanjutkan login.');
       } else if (err?.code === 'auth/cancelled-popup-request' || err?.code === 'auth/popup-closed-by-user') {
-        setErrorMsg('Proses login dibatalkan. Anda dapat mencoba lagi.');
+        setErrorMsg('Proses login dibatalkan. Silakan coba lagi.');
       } else {
-        setErrorMsg('Gagal terhubung ke Google Login. Silakan coba lagi atau gunakan mode pengujian.');
+        setErrorMsg('Gagal terhubung ke Google Login. Silakan periksa koneksi internet Anda dan coba lagi.');
       }
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleQuickAdminSignIn = () => {
-    setErrorMsg('');
-    loginWithDemo('admin');
-    closeAuthModal();
-    // Direct redirect to admin dashboard as requested
-    navigate('/admin');
-  };
-
-  const handleQuickGuestSignIn = () => {
-    setErrorMsg('');
-    loginWithDemo('user');
-    closeAuthModal();
-    if (authRedirectUrl) {
-      navigate(authRedirectUrl);
-    } else {
-      navigate('/setup');
     }
   };
 
@@ -91,16 +70,8 @@ export default function AuthModal() {
             Masuk ke snap.e
           </h2>
           <p className="text-xs sm:text-sm text-gray-500">
-            Login diperlukan untuk mengakses bilik foto, menyimpan photostrip, dan layanan cetak lab.
+            Login dengan akun Google Anda untuk mengakses bilik foto, menyimpan album 7 hari, dan layanan cetak lab.
           </p>
-        </div>
-
-        {/* Admin notice banner */}
-        <div className="bg-amber-50/80 border border-amber-200/80 rounded-2xl p-3.5 mb-5 flex items-start gap-2.5 text-left">
-          <ShieldCheck size={18} className="text-amber-600 shrink-0 mt-0.5" />
-          <div className="text-xs text-amber-900 leading-relaxed">
-            <span className="font-bold">Otomatisasi Khusus Admin:</span> Jika Anda login dengan akun admin (<code className="font-mono text-amber-800 font-bold bg-amber-100/70 px-1 py-0.5 rounded">0601randikurnia.s@gmail.com</code>), sistem akan <strong>langsung mengalihkan Anda ke Dashboard Admin Studio</strong>.
-          </div>
         </div>
 
         {errorMsg && (
@@ -141,41 +112,16 @@ export default function AuthModal() {
             )}
             <span>Masuk dengan Google (Firebase Auth)</span>
           </button>
+        </div>
 
-          {/* Quick Testing Options Separator */}
-          <div className="relative flex py-2 items-center">
-            <div className="flex-grow border-t border-gray-200"></div>
-            <span className="shrink-0 mx-3 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-              Opsi Masuk Cepat
-            </span>
-            <div className="flex-grow border-t border-gray-200"></div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <button
-              onClick={handleQuickAdminSignIn}
-              type="button"
-              className="py-2.5 px-3 bg-gray-900 hover:bg-black text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-colors shadow-xs"
-              title="Masuk langsung sebagai admin 0601randikurnia.s@gmail.com dan dialihkan ke dashboard"
-            >
-              <ShieldCheck size={14} className="text-amber-400" />
-              <span>Masuk sebagai Admin</span>
-            </button>
-
-            <button
-              onClick={handleQuickGuestSignIn}
-              type="button"
-              className="py-2.5 px-3 bg-gray-100 hover:bg-gray-200 text-gray-800 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-colors"
-              title="Masuk sebagai pengguna photobooth"
-            >
-              <UserCheck size={14} className="text-emerald-600" />
-              <span>Masuk sebagai Tamu</span>
-            </button>
-          </div>
+        {/* Security Info */}
+        <div className="mt-5 p-3 bg-gray-50 border border-gray-100 rounded-2xl flex items-center justify-center gap-2 text-gray-500 text-[11px]">
+          <Lock size={13} className="text-gray-400" />
+          <span>Autentikasi terenkripsi aman langsung melalui Firebase</span>
         </div>
 
         {/* Footer info */}
-        <p className="text-[11px] text-gray-400 text-center mt-5">
+        <p className="text-[11px] text-gray-400 text-center mt-4">
           Dengan masuk, Anda menyetujui ketentuan privasi sesi photobooth snap.e.
         </p>
       </div>

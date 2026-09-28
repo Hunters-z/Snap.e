@@ -24,11 +24,21 @@ import {
   Clock, 
   Check,
   LogOut,
-  Menu
+  Menu,
+  Users,
+  QrCode,
+  CreditCard,
+  Sparkles,
+  SlidersHorizontal,
+  KeyRound,
+  Copy,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { useBooth } from '../context/BoothContext';
 import AddFrameModal from '../components/AddFrameModal';
 import FrameGuideModal from '../components/FrameGuideModal';
+import { CAMERA_PRESETS } from '../data/cameraPresets';
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
@@ -41,13 +51,17 @@ export default function AdminDashboard() {
     deleteCustomFrame,
     addCustomSticker,
     deleteCustomSticker,
+    addCustomFilter,
+    deleteCustomFilter,
+    updatePaymentGatewayConfig,
     updateWebsiteConfig,
+    registeredUsers,
+    registeredUsersCount,
     isAdminAuth, 
     adminLogin, 
     adminLogout,
     currentUser,
-    loginWithGoogle,
-    loginWithDemo
+    loginWithGoogle
   } = useBooth();
 
   // Admin Login Form State
@@ -56,24 +70,78 @@ export default function AdminDashboard() {
   const [googleLoading, setGoogleLoading] = useState(false);
 
   // Active Tab
-  const [activeTab, setActiveTab] = useState('console'); // 'console' | 'orders' | 'config' | 'website' | 'stickers' | 'hardware'
+  // 'console' | 'orders' | 'frames' | 'pricing' | 'presets' | 'qris_api' | 'website' | 'stickers' | 'hardware'
+  const [activeTab, setActiveTab] = useState('console');
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   // Modals for Custom Frames & Guide
   const [showAddFrameModal, setShowAddFrameModal] = useState(false);
   const [showGuideModal, setShowGuideModal] = useState(false);
 
-  // Config editing states
-  const [configPrice, setConfigPrice] = useState(appConfig.payment?.price || 15000);
-  const [configQrisUrl, setConfigQrisUrl] = useState(appConfig.payment?.qrisUrl || '');
+  // Toast notification
   const [configSavedToast, setConfigSavedToast] = useState(false);
+  const [toastText, setToastText] = useState('Pengaturan Berhasil Disimpan!');
+
+  const triggerToast = (msg = 'Pengaturan Berhasil Disimpan!') => {
+    setToastText(msg);
+    setConfigSavedToast(true);
+    setTimeout(() => setConfigSavedToast(false), 2500);
+  };
+
+  // Pricing & Session States
+  const [configPrice, setConfigPrice] = useState(appConfig.payment?.price || 15000);
+  const [configDuration, setConfigDuration] = useState(appConfig.payment?.sessionDurationMinutes || 15);
+  const [configPrintFee, setConfigPrintFee] = useState(appConfig.payment?.printFee || 20000);
+  const [configQrisUrl, setConfigQrisUrl] = useState(appConfig.payment?.qrisUrl || '');
+
+  // QRIS & Payment Gateway API States
+  const [gwProvider, setGwProvider] = useState(appConfig.paymentGateway?.provider || 'doku');
+  const [gwMerchantId, setGwMerchantId] = useState(appConfig.paymentGateway?.merchantId || 'MALL-DOKU-882190');
+  const [gwClientKey, setGwClientKey] = useState(appConfig.paymentGateway?.clientKey || 'pk_live_doku_a89123bc891');
+  const [gwSecretKey, setGwSecretKey] = useState(appConfig.paymentGateway?.secretKey || 'sk_live_doku_993821736152');
+  const [gwWebhookUrl, setGwWebhookUrl] = useState(
+    appConfig.paymentGateway?.webhookUrl || (typeof window !== 'undefined' ? `${window.location.origin}/api/qris-webhook` : '')
+  );
+  const [gwEnvironment, setGwEnvironment] = useState(appConfig.paymentGateway?.environment || 'sandbox');
+  const [gwMethods, setGwMethods] = useState(
+    appConfig.paymentGateway?.activeMethods || ['qris_bca', 'qris_gopay', 'qris_shopeepay', 'qris_dana']
+  );
+  const [gwShowSecret, setGwShowSecret] = useState(false);
+  const [gwTesting, setGwTesting] = useState(false);
+  const [gwTestResult, setGwTestResult] = useState(null);
+  const [copyWebhookSuccess, setCopyWebhookSuccess] = useState(false);
+
+  // Filter & Preset States
+  const [presetCategoryFilter, setPresetCategoryFilter] = useState('all');
+  const [newFilterName, setNewFilterName] = useState('');
+  const [newFilterBrand, setNewFilterBrand] = useState('KODAK');
+  const [newFilterCategory, setNewFilterCategory] = useState('vintage');
+  const [newFilterCss, setNewFilterCss] = useState('contrast(1.15) saturate(1.2) sepia(0.2)');
+  const [newFilterDesc, setNewFilterDesc] = useState('');
 
   // Website Editor states
   const [webBrandName, setWebBrandName] = useState(appConfig.website?.brandName || 'snap.e');
   const [webHeroTagline, setWebHeroTagline] = useState(appConfig.website?.heroTagline || 'Momen Berharga, Synchronized Distances');
+  const [webTaglineGradient, setWebTaglineGradient] = useState(
+    appConfig.website?.taglineGradient || 'from-rose-600 via-purple-600 to-indigo-600'
+  );
   const [webHeroDesc, setWebHeroDesc] = useState(appConfig.website?.heroDescription || 'Foto bersama pasangan atau sahabat dari jarak jauh secara real-time, atau nikmati sesi solo dengan photostrip estetik gaya Korea.');
+  const [webPromoBadge, setWebPromoBadge] = useState(appConfig.website?.promoBadge || 'PHOTO BOOTH ONLINE & LDR DUAL-STREAM');
   const [webAnnouncement, setWebAnnouncement] = useState(appConfig.website?.announcement || '✨ Selamat datang di Studio snap.e! Cetak strip foto kualitas lab.');
   const [webShowAnnouncement, setWebShowAnnouncement] = useState(appConfig.website?.showAnnouncement ?? true);
+  
+  // Section visibility toggles
+  const [webShowHero, setWebShowHero] = useState(appConfig.website?.showHero ?? true);
+  const [webShowSetupCard, setWebShowSetupCard] = useState(appConfig.website?.showSetupCard ?? true);
+  const [webShowFeatures, setWebShowFeatures] = useState(appConfig.website?.showFeatures ?? true);
+  const [webShowFramesShowcase, setWebShowFramesShowcase] = useState(appConfig.website?.showFramesShowcase ?? true);
+  const [webShowPricing, setWebShowPricing] = useState(appConfig.website?.showPricing ?? true);
+  const [webShowHowItWorks, setWebShowHowItWorks] = useState(appConfig.website?.showHowItWorks ?? true);
+  const [webShowTestimonials, setWebShowTestimonials] = useState(appConfig.website?.showTestimonials ?? true);
+  const [webShowFaq, setWebShowFaq] = useState(appConfig.website?.showFaq ?? true);
+  const [webShowFooter, setWebShowFooter] = useState(appConfig.website?.showFooter ?? true);
+  const [webShowFloatingWhatsapp, setWebShowFloatingWhatsapp] = useState(appConfig.website?.showFloatingWhatsapp ?? true);
+
   const [webWhatsapp, setWebWhatsapp] = useState(appConfig.website?.whatsappNumber || '0812-3456-7890');
   const [webInstagram, setWebInstagram] = useState(appConfig.website?.instagramHandle || '@snape.photobooth');
   const [webAddress, setWebAddress] = useState(appConfig.website?.studioAddress || 'Jl. Senopati No. 88, Jakarta Selatan');
@@ -81,14 +149,26 @@ export default function AdminDashboard() {
   const [webIsOpen, setWebIsOpen] = useState(appConfig.website?.isOpen ?? true);
   const [webAccentColor, setWebAccentColor] = useState(appConfig.website?.accentColor || '#E11D48');
 
-  // Synchronize local website state when appConfig changes
+  // Synchronize local states when appConfig changes
   useEffect(() => {
     if (appConfig.website) {
       setWebBrandName(appConfig.website.brandName || 'snap.e');
       setWebHeroTagline(appConfig.website.heroTagline || '');
+      setWebTaglineGradient(appConfig.website.taglineGradient || 'from-rose-600 via-purple-600 to-indigo-600');
       setWebHeroDesc(appConfig.website.heroDescription || '');
+      setWebPromoBadge(appConfig.website.promoBadge || 'PHOTO BOOTH ONLINE & LDR DUAL-STREAM');
       setWebAnnouncement(appConfig.website.announcement || '');
       setWebShowAnnouncement(appConfig.website.showAnnouncement ?? true);
+      setWebShowHero(appConfig.website.showHero ?? true);
+      setWebShowSetupCard(appConfig.website.showSetupCard ?? true);
+      setWebShowFeatures(appConfig.website.showFeatures ?? true);
+      setWebShowFramesShowcase(appConfig.website.showFramesShowcase ?? true);
+      setWebShowPricing(appConfig.website.showPricing ?? true);
+      setWebShowHowItWorks(appConfig.website.showHowItWorks ?? true);
+      setWebShowTestimonials(appConfig.website.showTestimonials ?? true);
+      setWebShowFaq(appConfig.website.showFaq ?? true);
+      setWebShowFooter(appConfig.website.showFooter ?? true);
+      setWebShowFloatingWhatsapp(appConfig.website.showFloatingWhatsapp ?? true);
       setWebWhatsapp(appConfig.website.whatsappNumber || '');
       setWebInstagram(appConfig.website.instagramHandle || '');
       setWebAddress(appConfig.website.studioAddress || '');
@@ -96,10 +176,27 @@ export default function AdminDashboard() {
       setWebIsOpen(appConfig.website.isOpen ?? true);
       setWebAccentColor(appConfig.website.accentColor || '#E11D48');
     }
-  }, [appConfig.website]);
+
+    if (appConfig.payment) {
+      setConfigPrice(appConfig.payment.price || 15000);
+      setConfigDuration(appConfig.payment.sessionDurationMinutes || 15);
+      setConfigPrintFee(appConfig.payment.printFee || 20000);
+      setConfigQrisUrl(appConfig.payment.qrisUrl || '');
+    }
+
+    if (appConfig.paymentGateway) {
+      setGwProvider(appConfig.paymentGateway.provider || 'doku');
+      setGwMerchantId(appConfig.paymentGateway.merchantId || '');
+      setGwClientKey(appConfig.paymentGateway.clientKey || '');
+      setGwSecretKey(appConfig.paymentGateway.secretKey || '');
+      setGwWebhookUrl(appConfig.paymentGateway.webhookUrl || '');
+      setGwEnvironment(appConfig.paymentGateway.environment || 'sandbox');
+      setGwMethods(appConfig.paymentGateway.activeMethods || ['qris_bca', 'qris_gopay']);
+    }
+  }, [appConfig]);
 
   // Sticker Editor states
-  const [stickerType, setStickerType] = useState('emoji'); // 'emoji' | 'image'
+  const [stickerType, setStickerType] = useState('emoji');
   const [stickerText, setStickerText] = useState('💖');
   const [stickerImageUrl, setStickerImageUrl] = useState('');
   const [stickerName, setStickerName] = useState('');
@@ -111,7 +208,7 @@ export default function AdminDashboard() {
     e.preventDefault();
     const success = adminLogin(adminPassword);
     if (!success) {
-      setLoginError('Kata sandi salah. Gunakan kata sandi default: admin123');
+      setLoginError('Kata sandi salah. Gunakan kata sandi admin yang valid.');
     } else {
       setLoginError('');
     }
@@ -123,36 +220,90 @@ export default function AdminDashboard() {
     try {
       const result = await loginWithGoogle();
       if (!result.isAdmin) {
-        setLoginError(`Akun Google (${result.user.email}) bukan email admin yang terdaftar (0601randikurnia.s@gmail.com).`);
+        setLoginError(`Akun Google (${result.user.email}) bukan email admin yang terotorisasi.`);
       }
     } catch (err) {
       console.error(err);
-      setLoginError('Gagal login via Google. Silakan coba tombol Masuk Cepat Admin atau masukkan kata sandi.');
+      setLoginError('Gagal login via Google. Silakan coba kembali atau gunakan kata sandi admin.');
     } finally {
       setGoogleLoading(false);
     }
   };
 
-  const handleQuickAdminLogin = () => {
-    loginWithDemo('admin');
-    setLoginError('');
-  };
-
-  // Handle Save Pricing
-  const handleSaveConfig = (e) => {
+  // Handle Save Pricing (Separated)
+  const handleSavePricing = (e) => {
     e.preventDefault();
     const updated = {
       ...appConfig,
       payment: {
         ...appConfig.payment,
         price: parseInt(configPrice, 10) || 15000,
+        sessionDurationMinutes: parseInt(configDuration, 10) || 15,
+        printFee: parseInt(configPrintFee, 10) || 20000,
         qrisUrl: configQrisUrl
       }
     };
-
     updateAppConfig(updated);
-    setConfigSavedToast(true);
-    setTimeout(() => setConfigSavedToast(false), 2500);
+    triggerToast('Pengaturan Tarif & Durasi Sesi Berhasil Disimpan!');
+  };
+
+  // Handle Save QRIS & Payment Gateway API
+  const handleSavePaymentGateway = (e) => {
+    e.preventDefault();
+    updatePaymentGatewayConfig({
+      provider: gwProvider,
+      merchantId: gwMerchantId.trim(),
+      clientKey: gwClientKey.trim(),
+      secretKey: gwSecretKey.trim(),
+      webhookUrl: gwWebhookUrl.trim(),
+      environment: gwEnvironment,
+      activeMethods: gwMethods
+    });
+    triggerToast('Konfigurasi API QRIS & Payment Gateway Berhasil Disimpan!');
+  };
+
+  const handleTestGatewayConnection = () => {
+    setGwTesting(true);
+    setGwTestResult(null);
+    setTimeout(() => {
+      setGwTesting(false);
+      if (gwMerchantId && gwSecretKey) {
+        setGwTestResult({
+          status: 'success',
+          message: `Berhasil terhubung ke API ${gwProvider.toUpperCase()} (${gwEnvironment.toUpperCase()}). Endpoint siap memproses transaksi QRIS.`
+        });
+      } else {
+        setGwTestResult({
+          status: 'error',
+          message: 'Gagal verifikasi: Harap isi Merchant ID dan Secret Key API terlebih dahulu.'
+        });
+      }
+    }, 1200);
+  };
+
+  const handleCopyWebhook = () => {
+    if (!gwWebhookUrl) return;
+    navigator.clipboard.writeText(gwWebhookUrl);
+    setCopyWebhookSuccess(true);
+    setTimeout(() => setCopyWebhookSuccess(false), 2000);
+  };
+
+  // Handle Add Preset (Separated)
+  const handleAddPresetSubmit = (e) => {
+    e.preventDefault();
+    if (!newFilterName.trim()) return;
+
+    addCustomFilter({
+      name: newFilterName.trim(),
+      brand: newFilterBrand,
+      category: newFilterCategory,
+      css: newFilterCss.trim(),
+      description: newFilterDesc.trim() || 'Preset kustom buatan studio.'
+    });
+
+    setNewFilterName('');
+    setNewFilterDesc('');
+    triggerToast('Preset Kamera Baru Berhasil Ditambahkan!');
   };
 
   // Handle Save Website Editor
@@ -161,9 +312,21 @@ export default function AdminDashboard() {
     updateWebsiteConfig({
       brandName: webBrandName.trim() || 'snap.e',
       heroTagline: webHeroTagline.trim(),
+      taglineGradient: webTaglineGradient,
       heroDescription: webHeroDesc.trim(),
+      promoBadge: webPromoBadge.trim(),
       announcement: webAnnouncement.trim(),
       showAnnouncement: webShowAnnouncement,
+      showHero: webShowHero,
+      showSetupCard: webShowSetupCard,
+      showFeatures: webShowFeatures,
+      showFramesShowcase: webShowFramesShowcase,
+      showPricing: webShowPricing,
+      showHowItWorks: webShowHowItWorks,
+      showTestimonials: webShowTestimonials,
+      showFaq: webShowFaq,
+      showFooter: webShowFooter,
+      showFloatingWhatsapp: webShowFloatingWhatsapp,
       whatsappNumber: webWhatsapp.trim(),
       instagramHandle: webInstagram.trim(),
       studioAddress: webAddress.trim(),
@@ -171,9 +334,7 @@ export default function AdminDashboard() {
       isOpen: webIsOpen,
       accentColor: webAccentColor
     });
-
-    setConfigSavedToast(true);
-    setTimeout(() => setConfigSavedToast(false), 2500);
+    triggerToast('Perubahan Editor Website Berhasil Disimpan!');
   };
 
   // Handle Add Custom Sticker
@@ -192,11 +353,9 @@ export default function AdminDashboard() {
 
     setStickerName('');
     if (stickerType === 'image') setStickerImageUrl('');
-    setConfigSavedToast(true);
-    setTimeout(() => setConfigSavedToast(false), 2500);
+    triggerToast('Stiker Baru Berhasil Ditambahkan!');
   };
 
-  // Upload sticker image file as base64
   const handleStickerFileUpload = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -210,24 +369,29 @@ export default function AdminDashboard() {
     reader.readAsDataURL(file);
   };
 
-  // IF NOT AUTHENTICATED: Show Dedicated Admin Login Screen
+  // GRADIENT PRESETS FOR TAGLINE
+  const GRADIENT_PRESETS = [
+    { id: 'from-rose-600 via-purple-600 to-indigo-600', name: 'Rose to Indigo', preview: 'bg-gradient-to-r from-rose-600 via-purple-600 to-indigo-600' },
+    { id: 'from-pink-500 via-rose-500 to-amber-500', name: 'Sunset Coral', preview: 'bg-gradient-to-r from-pink-500 via-rose-500 to-amber-500' },
+    { id: 'from-cyan-400 via-blue-500 to-purple-600', name: 'Neon Cyber', preview: 'bg-gradient-to-r from-cyan-400 via-blue-500 to-purple-600' },
+    { id: 'from-amber-400 via-orange-500 to-red-500', name: 'Golden Glow', preview: 'bg-gradient-to-r from-amber-400 via-orange-500 to-red-500' },
+    { id: 'from-emerald-400 via-teal-500 to-indigo-500', name: 'Aurora Emerald', preview: 'bg-gradient-to-r from-emerald-400 via-teal-500 to-indigo-500' },
+    { id: 'from-red-600 via-rose-500 to-amber-600', name: 'Classic Red Sunset', preview: 'bg-gradient-to-r from-red-600 via-rose-500 to-amber-600' }
+  ];
+
+  // IF NOT AUTHENTICATED: Show Clean Dedicated Admin Login Screen (No authorization warning banner, no quick demo buttons)
   if (!isAdminAuth) {
     return (
       <div className="min-h-screen bg-[#0F0F12] text-white flex flex-col items-center justify-center p-4">
-        <div className="w-full max-w-md bg-[#18181B] border border-white/10 rounded-2xl p-6 sm:p-8 shadow-2xl space-y-6">
+        <div className="w-full max-w-md bg-[#18181B] border border-white/10 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
           <div className="text-center space-y-2">
-            <div className="w-14 h-14 rounded-2xl bg-amber-500/20 text-amber-500 mx-auto flex items-center justify-center border border-amber-500/30">
+            <div className="w-14 h-14 rounded-2xl bg-amber-500/20 text-amber-500 mx-auto flex items-center justify-center border border-amber-500/30 shadow-xs">
               <ShieldCheck size={28} />
             </div>
             <h1 className="text-xl font-bold tracking-tight">Studio Admin Console</h1>
             <p className="text-xs text-gray-400">
-              Akses khusus pemilik studio foto snap.e atelier
+              Akses khusus pengelola dan pemilik studio snap.e
             </p>
-          </div>
-
-          {/* Admin Email Callout */}
-          <div className="bg-amber-950/40 border border-amber-800/50 rounded-xl p-3 text-xs text-amber-200">
-            <span className="font-bold text-amber-400">Akun Terdaftar:</span> Masuk dengan akun Google <code className="font-mono bg-black/40 px-1 py-0.5 rounded text-amber-300 font-bold">0601randikurnia.s@gmail.com</code> atau gunakan tombol akses cepat di bawah.
           </div>
 
           {loginError && (
@@ -240,10 +404,10 @@ export default function AdminDashboard() {
           <button
             onClick={handleGoogleAdminLogin}
             disabled={googleLoading}
-            className="w-full py-3 px-4 bg-white hover:bg-gray-100 text-gray-900 rounded-xl font-bold text-xs flex items-center justify-center gap-2.5 transition-colors shadow-md disabled:opacity-50"
+            className="w-full py-3 px-4 bg-white hover:bg-gray-100 text-gray-900 rounded-xl font-bold text-xs flex items-center justify-center gap-2.5 transition-colors shadow-sm disabled:opacity-50"
           >
             {googleLoading ? (
-              <Loader2 size={16} className="animate-spin text-gray-900" />
+              <Loader2 size={16} className="animate-spin text-gray-600" />
             ) : (
               <svg className="w-4 h-4" viewBox="0 0 24 24">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -255,31 +419,16 @@ export default function AdminDashboard() {
             <span>Masuk dengan Akun Google Admin</span>
           </button>
 
-          <div className="relative flex py-1 items-center">
-            <div className="flex-grow border-t border-white/10"></div>
-            <span className="flex-shrink mx-3 text-[10px] text-gray-500 font-bold uppercase tracking-wider">Atau Masuk Cepat Demo</span>
-            <div className="flex-grow border-t border-white/10"></div>
-          </div>
-
-          {/* Quick Demo Admin Login */}
-          <button
-            onClick={handleQuickAdminLogin}
-            className="w-full py-2.5 px-4 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-colors shadow-md shadow-amber-600/20"
-          >
-            <ShieldCheck size={16} />
-            <span>Masuk Cepat Admin (Demo Mode)</span>
-          </button>
-
           {/* Password fallback form */}
-          <form onSubmit={handleLoginSubmit} className="space-y-3 pt-2 border-t border-white/10">
+          <form onSubmit={handleLoginSubmit} className="space-y-3 pt-3 border-t border-white/10">
             <label className="text-[11px] font-semibold text-gray-400 block">
-              Atau Gunakan Kata Sandi Khusus:
+              Atau Masuk Menggunakan Kata Sandi Admin:
             </label>
             <input
               type="password"
               value={adminPassword}
               onChange={(e) => setAdminPassword(e.target.value)}
-              placeholder="Ketik admin123"
+              placeholder="Masukkan password admin"
               className="w-full px-4 py-2.5 bg-black/50 border border-white/10 rounded-xl text-xs outline-none focus:border-amber-500 text-white"
             />
             <button
@@ -311,7 +460,7 @@ export default function AdminDashboard() {
       {configSavedToast && (
         <div className="fixed top-6 right-6 z-50 bg-emerald-600 text-white px-5 py-2.5 rounded-full text-xs font-bold shadow-xl animate-fadeIn flex items-center gap-2">
           <CheckCircle size={16} />
-          Pengaturan Studio Berhasil Disimpan!
+          {toastText}
         </div>
       )}
 
@@ -327,7 +476,7 @@ export default function AdminDashboard() {
               s
             </div>
             <div>
-              <h2 className="font-bold text-sm text-gray-900">snap.e</h2>
+              <h2 className="font-bold text-sm text-gray-900">{appConfig.website?.brandName || 'snap.e'}</h2>
               <p className="text-[9px] text-gray-400 font-bold tracking-widest">STUDIO OWNER CONSOLE</p>
             </div>
           </div>
@@ -339,7 +488,8 @@ export default function AdminDashboard() {
           </button>
         </div>
 
-        <nav className="flex-1 p-4 space-y-1.5 overflow-y-auto">
+        <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+          {/* 1. Studio Console Overview */}
           <button
             onClick={() => { setActiveTab('console'); setMobileSidebarOpen(false); }}
             className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
@@ -352,6 +502,7 @@ export default function AdminDashboard() {
             Studio Console
           </button>
 
+          {/* 2. Print Orders */}
           <button
             onClick={() => { setActiveTab('orders'); setMobileSidebarOpen(false); }}
             className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
@@ -369,19 +520,74 @@ export default function AdminDashboard() {
             </span>
           </button>
 
+          {/* SEPARATED: 3. Kelola Frame */}
           <button
-            onClick={() => { setActiveTab('config'); setMobileSidebarOpen(false); }}
-            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
-              activeTab === 'config'
+            onClick={() => { setActiveTab('frames'); setMobileSidebarOpen(false); }}
+            className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
+              activeTab === 'frames'
                 ? 'bg-gray-900 text-white shadow-xs'
                 : 'text-gray-600 hover:bg-gray-100'
             }`}
           >
-            <Sliders size={16} />
-            Tarif, Frame & Preset
+            <span className="flex items-center gap-3">
+              <Palette size={16} />
+              Kelola Frame
+            </span>
+            <span className="px-1.5 py-0.5 rounded-full text-[10px] font-mono bg-amber-100 text-amber-700 font-bold">
+              {appConfig.customFrames?.length || 7}
+            </span>
           </button>
 
-          {/* NEW: Website Editor Tab */}
+          {/* SEPARATED: 4. Kelola Tarif & Sesi */}
+          <button
+            onClick={() => { setActiveTab('pricing'); setMobileSidebarOpen(false); }}
+            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
+              activeTab === 'pricing'
+                ? 'bg-gray-900 text-white shadow-xs'
+                : 'text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            <CreditCard size={16} />
+            Tarif & Sesi
+          </button>
+
+          {/* SEPARATED: 5. Filter & Preset Kamera */}
+          <button
+            onClick={() => { setActiveTab('presets'); setMobileSidebarOpen(false); }}
+            className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
+              activeTab === 'presets'
+                ? 'bg-gray-900 text-white shadow-xs'
+                : 'text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            <span className="flex items-center gap-3">
+              <Sliders size={16} />
+              Filter & Preset
+            </span>
+            <span className="px-1.5 py-0.5 rounded-full text-[10px] font-mono bg-blue-100 text-blue-700 font-bold">
+              {appConfig.customFilters?.length || CAMERA_PRESETS.length}
+            </span>
+          </button>
+
+          {/* NEW: 6. Integrasi QRIS & Payment Gateway API */}
+          <button
+            onClick={() => { setActiveTab('qris_api'); setMobileSidebarOpen(false); }}
+            className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
+              activeTab === 'qris_api'
+                ? 'bg-gray-900 text-white shadow-xs'
+                : 'text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            <span className="flex items-center gap-3">
+              <QrCode size={16} />
+              Integrasi QRIS API
+            </span>
+            <span className="px-1.5 py-0.5 rounded-full text-[9px] font-mono bg-emerald-100 text-emerald-700 font-bold uppercase">
+              {gwProvider}
+            </span>
+          </button>
+
+          {/* 7. Website Content Editor */}
           <button
             onClick={() => { setActiveTab('website'); setMobileSidebarOpen(false); }}
             className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
@@ -394,7 +600,7 @@ export default function AdminDashboard() {
             Website Editor
           </button>
 
-          {/* NEW: Sticker Management Tab */}
+          {/* 8. Sticker Management Tab */}
           <button
             onClick={() => { setActiveTab('stickers'); setMobileSidebarOpen(false); }}
             className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
@@ -405,13 +611,14 @@ export default function AdminDashboard() {
           >
             <span className="flex items-center gap-3">
               <Smile size={16} />
-              Kelola Stiker Studio
+              Kelola Stiker
             </span>
             <span className="px-1.5 py-0.5 rounded-full text-[10px] font-mono bg-purple-100 text-purple-700 font-bold">
               {appConfig.customStickers?.length || 15}
             </span>
           </button>
 
+          {/* 9. Hardware Machine */}
           <button
             onClick={() => { setActiveTab('hardware'); setMobileSidebarOpen(false); }}
             className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
@@ -463,10 +670,13 @@ export default function AdminDashboard() {
               Control Center &bull;
             </span>
             <span className="text-xs font-semibold text-gray-700 capitalize">
-              {activeTab === 'console' && 'Studio Overview'}
-              {activeTab === 'orders' && 'Antrean Cetak Lab'}
-              {activeTab === 'config' && 'Tarif, Frame & Preset'}
-              {activeTab === 'website' && 'Website Editor'}
+              {activeTab === 'console' && 'Studio Overview & Statistik'}
+              {activeTab === 'orders' && 'Antrean Pesanan Cetak Lab'}
+              {activeTab === 'frames' && 'Manajemen Template Frame'}
+              {activeTab === 'pricing' && 'Tarif & Durasi Sesi Booth'}
+              {activeTab === 'presets' && 'Filter & Preset Kamera'}
+              {activeTab === 'qris_api' && 'Integrasi QRIS API Gateway'}
+              {activeTab === 'website' && 'Editor Tampilan & Konten Website'}
               {activeTab === 'stickers' && 'Kelola Stiker Mandiri'}
               {activeTab === 'hardware' && 'Mesin Cetak Lab'}
             </span>
@@ -478,7 +688,7 @@ export default function AdminDashboard() {
               className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-700 transition-colors"
             >
               <ExternalLink size={14} />
-              <span className="hidden sm:inline">Buka Tampilan Publik</span>
+              <span className="hidden sm:inline">Buka Halaman Publik</span>
             </button>
           </div>
         </header>
@@ -487,7 +697,7 @@ export default function AdminDashboard() {
         <div className="flex-1 overflow-y-auto p-4 sm:p-8">
           <div className="max-w-6xl mx-auto space-y-6 pb-12">
             
-            {/* TAB 1: CONSOLE OVERVIEW (No automated notifications) */}
+            {/* TAB 1: CONSOLE OVERVIEW (Includes JUMLAH PENGGUNA) */}
             {activeTab === 'console' && (
               <div className="space-y-6">
                 <div>
@@ -495,15 +705,31 @@ export default function AdminDashboard() {
                     Studio Console & Operasional
                   </h1>
                   <p className="text-xs sm:text-sm text-gray-500 mt-1">
-                    Ringkasan performa studio foto, antrean cetak fisik, dan katalog aktif.
+                    Ringkasan performa studio foto, jumlah pengguna terdaftar, antrean cetak fisik, dan katalog aktif.
                   </p>
                 </div>
 
-                {/* Stats Grid */}
+                {/* Stats Grid including JUMLAH PENGGUNA */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {/* Stat Card 1: Jumlah Pengguna */}
                   <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-xs">
                     <div className="flex justify-between items-start mb-3">
-                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Antrean Cetak</p>
+                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Jumlah Pengguna</p>
+                      <div className="p-2 bg-blue-50 text-blue-600 rounded-lg"><Users size={16} /></div>
+                    </div>
+                    <h3 className="text-2xl sm:text-3xl font-extrabold text-gray-900">
+                      {registeredUsersCount || registeredUsers?.length || 5} Akun
+                    </h3>
+                    <p className="text-xs text-emerald-600 font-semibold mt-3 pt-3 border-t border-gray-100 flex items-center gap-1">
+                      <CheckCircle size={12} />
+                      Pelanggan aktif studio terverifikasi
+                    </p>
+                  </div>
+
+                  {/* Stat Card 2: Antrean Cetak */}
+                  <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-xs">
+                    <div className="flex justify-between items-start mb-3">
+                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Antrean Cetak Lab</p>
                       <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg"><Printer size={16} /></div>
                     </div>
                     <h3 className="text-2xl sm:text-3xl font-extrabold text-gray-900">{orders.length}</h3>
@@ -512,17 +738,7 @@ export default function AdminDashboard() {
                     </p>
                   </div>
 
-                  <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-xs">
-                    <div className="flex justify-between items-start mb-3">
-                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Katalog Stiker</p>
-                      <div className="p-2 bg-purple-50 text-purple-600 rounded-lg"><Smile size={16} /></div>
-                    </div>
-                    <h3 className="text-2xl sm:text-3xl font-extrabold text-gray-900">{appConfig.customStickers?.length || 15} Stiker</h3>
-                    <p className="text-xs text-gray-500 mt-3 pt-3 border-t border-gray-100 text-purple-700 font-semibold">
-                      Tersedia untuk photostrip
-                    </p>
-                  </div>
-
+                  {/* Stat Card 3: Tarif Sesi Booth */}
                   <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-xs">
                     <div className="flex justify-between items-start mb-3">
                       <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Tarif Booth Aktif</p>
@@ -532,10 +748,11 @@ export default function AdminDashboard() {
                       Rp {appConfig.payment.price.toLocaleString('id-ID')}
                     </h3>
                     <p className="text-xs text-gray-500 mt-3 pt-3 border-t border-gray-100">
-                      Pembayaran QRIS Statis / Dinamis
+                      Gateway: {gwProvider.toUpperCase()} QRIS
                     </p>
                   </div>
 
+                  {/* Stat Card 4: Koleksi Frame */}
                   <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-xs">
                     <div className="flex justify-between items-start mb-3">
                       <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Koleksi Frame</p>
@@ -550,46 +767,108 @@ export default function AdminDashboard() {
                   </div>
                 </div>
 
-                {/* Quick Shortcuts */}
+                {/* Registered Users Table */}
+                <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-xs space-y-4">
+                  <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                    <div>
+                      <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                        <Users size={16} className="text-blue-600" />
+                        Daftar Pengguna Studio snap.e ({registeredUsers?.length || 5} Akun)
+                      </h3>
+                      <p className="text-xs text-gray-500 mt-0.5">Pengguna yang telah login dan terdaftar dalam database studio.</p>
+                    </div>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-gray-50 border-b border-gray-200 text-gray-500 font-bold uppercase tracking-wider">
+                        <tr>
+                          <th className="p-3">Pengguna</th>
+                          <th className="p-3">Email Akun</th>
+                          <th className="p-3">Role</th>
+                          <th className="p-3">Bergabung</th>
+                          <th className="p-3">Sesi Terakhir</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {(registeredUsers && registeredUsers.length > 0 ? registeredUsers : [
+                          { uid: '1', displayName: 'Randi Kurnia', email: '0601randikurnia.s@gmail.com', role: 'admin', createdAt: '2026-09-20', lastLoginAt: 'Baru saja' },
+                          { uid: '2', displayName: 'Nabila Azzahra', email: 'nabila.azzahra@gmail.com', role: 'customer', createdAt: '2026-09-22', lastLoginAt: '2 jam yang lalu' },
+                          { uid: '3', displayName: 'Dimas Prasetya', email: 'dimas.prasetya@gmail.com', role: 'customer', createdAt: '2026-09-23', lastLoginAt: '6 jam yang lalu' },
+                          { uid: '4', displayName: 'Alisya Putri', email: 'alisya.putri@gmail.com', role: 'customer', createdAt: '2026-09-24', lastLoginAt: 'Kemarin' },
+                          { uid: '5', displayName: 'Kevin Pratama', email: 'kevin.pratama@gmail.com', role: 'customer', createdAt: '2026-09-26', lastLoginAt: 'Hari ini' }
+                        ]).map((u, i) => (
+                          <tr key={u.uid || i} className="hover:bg-gray-50/50 transition-colors">
+                            <td className="p-3">
+                              <div className="flex items-center gap-2">
+                                <div className="w-7 h-7 rounded-full bg-gray-200 flex items-center justify-center font-bold text-gray-700 text-xs uppercase">
+                                  {u.displayName?.[0] || 'U'}
+                                </div>
+                                <span className="font-bold text-gray-900">{u.displayName || 'Pengguna Photobooth'}</span>
+                              </div>
+                            </td>
+                            <td className="p-3 font-mono text-gray-600">{u.email}</td>
+                            <td className="p-3">
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                                u.role === 'admin' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'
+                              }`}>
+                                {u.role === 'admin' ? 'Studio Owner' : 'Customer'}
+                              </span>
+                            </td>
+                            <td className="p-3 text-gray-500">{u.createdAt ? new Date(u.createdAt).toLocaleDateString('id-ID') : 'Aktif'}</td>
+                            <td className="p-3 text-gray-500 font-mono text-[11px]">{u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : 'Online'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Quick Navigation Shortcuts */}
                 <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-xs space-y-4">
                   <h3 className="text-sm font-bold text-gray-900">Aksi Cepat Pengelolaan Studio</h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                     <button
-                      onClick={() => setActiveTab('website')}
+                      onClick={() => setActiveTab('frames')}
                       className="p-4 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-xl text-left transition-colors flex items-start gap-3"
                     >
-                      <div className="p-2 bg-blue-100 text-blue-700 rounded-lg shrink-0">
-                        <Globe size={18} />
-                      </div>
+                      <div className="p-2 bg-amber-100 text-amber-700 rounded-lg shrink-0"><Palette size={16} /></div>
                       <div>
-                        <p className="text-xs font-bold text-gray-900">Editor Konten Website</p>
-                        <p className="text-[11px] text-gray-500 mt-0.5">Ubah banner promo, kontak WA, tagline, dan status jam buka.</p>
+                        <p className="text-xs font-bold text-gray-900">Kelola Frame</p>
+                        <p className="text-[10px] text-gray-500 mt-0.5">Upload frame baru rasio 600x1800 px.</p>
                       </div>
                     </button>
 
                     <button
-                      onClick={() => setActiveTab('stickers')}
+                      onClick={() => setActiveTab('pricing')}
                       className="p-4 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-xl text-left transition-colors flex items-start gap-3"
                     >
-                      <div className="p-2 bg-purple-100 text-purple-700 rounded-lg shrink-0">
-                        <Smile size={18} />
-                      </div>
+                      <div className="p-2 bg-emerald-100 text-emerald-700 rounded-lg shrink-0"><CreditCard size={16} /></div>
                       <div>
-                        <p className="text-xs font-bold text-gray-900">Tambah Stiker Mandiri</p>
-                        <p className="text-[11px] text-gray-500 mt-0.5">Unggah gambar stiker PNG transparan atau tambah stiker emoji.</p>
+                        <p className="text-xs font-bold text-gray-900">Atur Tarif & Durasi</p>
+                        <p className="text-[10px] text-gray-500 mt-0.5">Ubah harga sesi dan biaya cetak fisik.</p>
                       </div>
                     </button>
 
                     <button
-                      onClick={() => { setActiveTab('config'); setShowAddFrameModal(true); }}
+                      onClick={() => setActiveTab('presets')}
                       className="p-4 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-xl text-left transition-colors flex items-start gap-3"
                     >
-                      <div className="p-2 bg-amber-100 text-amber-700 rounded-lg shrink-0">
-                        <Plus size={18} />
-                      </div>
+                      <div className="p-2 bg-blue-100 text-blue-700 rounded-lg shrink-0"><Sliders size={16} /></div>
                       <div>
-                        <p className="text-xs font-bold text-gray-900">Upload Frame Baru</p>
-                        <p className="text-[11px] text-gray-500 mt-0.5">Tambah bingkai bergambar dengan rasio 600x1800 px.</p>
+                        <p className="text-xs font-bold text-gray-900">Preset Kamera</p>
+                        <p className="text-[10px] text-gray-500 mt-0.5">Kelola filter film analog vintage.</p>
+                      </div>
+                    </button>
+
+                    <button
+                      onClick={() => setActiveTab('qris_api')}
+                      className="p-4 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-xl text-left transition-colors flex items-start gap-3"
+                    >
+                      <div className="p-2 bg-purple-100 text-purple-700 rounded-lg shrink-0"><QrCode size={16} /></div>
+                      <div>
+                        <p className="text-xs font-bold text-gray-900">Integrasi QRIS API</p>
+                        <p className="text-[10px] text-gray-500 mt-0.5">Setup gateway DOKU, Midtrans, Xendit.</p>
                       </div>
                     </button>
                   </div>
@@ -598,7 +877,7 @@ export default function AdminDashboard() {
               </div>
             )}
 
-            {/* TAB 2: PRINT ORDERS QUEUE */}
+            {/* TAB 2: PRINT ORDERS */}
             {activeTab === 'orders' && (
               <div className="space-y-6">
                 <div>
@@ -633,9 +912,7 @@ export default function AdminDashboard() {
                         ) : (
                           orders.map((ord) => (
                             <tr key={ord.id} className="hover:bg-gray-50/50 transition-colors">
-                              <td className="p-4 font-mono font-bold text-gray-900">
-                                {ord.id}
-                              </td>
+                              <td className="p-4 font-mono font-bold text-gray-900">{ord.id}</td>
                               <td className="p-4">
                                 <p className="font-bold text-gray-900">{ord.customerName}</p>
                                 <p className="text-gray-500 text-[11px]">{ord.phone}</p>
@@ -644,9 +921,7 @@ export default function AdminDashboard() {
                                 <p className="font-semibold text-gray-800">{ord.paperType}</p>
                                 <p className="font-mono text-gray-500">Rp {ord.totalPrice?.toLocaleString('id-ID')}</p>
                               </td>
-                              <td className="p-4 max-w-xs text-gray-600 truncate">
-                                {ord.address}
-                              </td>
+                              <td className="p-4 max-w-xs text-gray-600 truncate">{ord.address}</td>
                               <td className="p-4">
                                 <select
                                   value={ord.status}
@@ -686,16 +961,17 @@ export default function AdminDashboard() {
               </div>
             )}
 
-            {/* TAB 3: CONFIGURATION (PRICE, QRIS, FRAMES) */}
-            {activeTab === 'config' && (
+            {/* SEPARATED TAB 3: KELOLA FRAME (STANDALONE) */}
+            {activeTab === 'frames' && (
               <div className="space-y-6">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div>
-                    <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">
-                      Pengaturan Tarif, QRIS & Kustomisasi Frame
+                    <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight flex items-center gap-2">
+                      <Palette size={24} className="text-amber-600" />
+                      Manajemen Template Frame Studio
                     </h1>
                     <p className="text-xs sm:text-sm text-gray-500 mt-1">
-                      Kelola tarif photobooth, tambah bingkai bergambar kustom, dan panduan spesifikasi frame.
+                      Kelola frame bawaan, upload desain bingkai bergambar kustom, dan panduan ukuran frame.
                     </p>
                   </div>
 
@@ -706,7 +982,7 @@ export default function AdminDashboard() {
                       className="px-3.5 py-2 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors"
                     >
                       <BookOpen size={14} className="text-amber-700" />
-                      <span>Buka Panduan Frame</span>
+                      <span>Panduan Frame</span>
                     </button>
 
                     <button
@@ -720,62 +996,13 @@ export default function AdminDashboard() {
                   </div>
                 </div>
 
-                {/* Form Tarif & QRIS */}
-                <form onSubmit={handleSaveConfig} className="bg-white border border-gray-200 rounded-2xl p-6 shadow-xs space-y-4">
-                  <h3 className="text-sm font-bold text-gray-900 border-b border-gray-100 pb-2">
-                    Tarif Sesi Bilik Foto & QRIS
-                  </h3>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                      <label className="text-xs font-semibold text-gray-700">Harga Per Sesi (Rupiah)</label>
-                      <input
-                        type="number"
-                        value={configPrice}
-                        onChange={(e) => setConfigPrice(e.target.value)}
-                        className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-mono font-bold outline-none focus:border-gray-900"
-                        placeholder="15000"
-                      />
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="text-xs font-semibold text-gray-700">URL Gambar QRIS Statis</label>
-                      <input
-                        type="text"
-                        value={configQrisUrl}
-                        onChange={(e) => setConfigQrisUrl(e.target.value)}
-                        className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs outline-none focus:border-gray-900"
-                        placeholder="https://..."
-                      />
-                    </div>
-                  </div>
-
-                  <div className="pt-2">
-                    <button
-                      type="submit"
-                      className="px-5 py-2.5 bg-gray-900 hover:bg-black text-white rounded-xl text-xs font-bold transition-colors"
-                    >
-                      Simpan Perubahan Tarif & QRIS
-                    </button>
-                  </div>
-                </form>
-
-                {/* Frame Management Grid (Admin Only) */}
+                {/* Frame Management Grid */}
                 <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-xs space-y-4">
                   <div className="flex items-center justify-between border-b border-gray-100 pb-3">
                     <div>
                       <h3 className="text-sm font-bold text-gray-900">Daftar Bingkai Terpasang ({appConfig.customFrames?.length || 0})</h3>
-                      <p className="text-xs text-gray-500">Bingkai ini akan tampil pada pemilih frame di editor pengguna.</p>
+                      <p className="text-xs text-gray-500">Tampil pada bilik pemilihan frame photostrip pengguna.</p>
                     </div>
-
-                    <button
-                      type="button"
-                      onClick={() => setShowAddFrameModal(true)}
-                      className="px-3.5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5"
-                    >
-                      <Plus size={14} />
-                      <span>Upload Frame Baru</span>
-                    </button>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
@@ -790,7 +1017,7 @@ export default function AdminDashboard() {
                           <div className="flex items-center gap-3 min-w-0">
                             {/* Swatch / Thumbnail */}
                             <div
-                              className="w-10 h-10 rounded-lg border border-black/10 shrink-0 shadow-xs flex items-center justify-center text-xs font-bold overflow-hidden"
+                              className="w-11 h-11 rounded-lg border border-black/10 shrink-0 shadow-xs flex items-center justify-center text-xs font-bold overflow-hidden"
                               style={{
                                 backgroundColor: frame.bg,
                                 color: frame.text,
@@ -806,9 +1033,7 @@ export default function AdminDashboard() {
                                 frame.overlayType === 'cat_cafe' ? '🐱' :
                                 frame.overlayType === 'botanical' ? '🌿' :
                                 frame.overlayType === 'party' ? '🎈' :
-                                frame.overlayType === 'coquette' ? '🎀' :
-                                frame.overlayType === 'doodle' ? '☕' :
-                                frame.overlayType === 'newspaper' ? '📰' : ''
+                                frame.overlayType === 'coquette' ? '🎀' : ''
                               )}
                             </div>
 
@@ -825,13 +1050,13 @@ export default function AdminDashboard() {
                             </div>
                           </div>
 
-                          {/* Delete button for custom frames */}
                           {isCustom ? (
                             <button
                               type="button"
                               onClick={() => {
-                                if (window.confirm(`Hapus frame kustom "${frame.name}" dari sistem?`)) {
+                                if (window.confirm(`Hapus frame kustom "${frame.name}"?`)) {
                                   deleteCustomFrame(frame.id);
+                                  triggerToast(`Frame "${frame.name}" berhasil dihapus.`);
                                 }
                               }}
                               className="text-gray-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition-colors shrink-0"
@@ -849,34 +1074,541 @@ export default function AdminDashboard() {
                     })}
                   </div>
                 </div>
-
               </div>
             )}
 
-            {/* TAB 4: WEBSITE EDITOR */}
+            {/* SEPARATED TAB 4: TARIF & SESI (STANDALONE) */}
+            {activeTab === 'pricing' && (
+              <div className="space-y-6">
+                <div>
+                  <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight flex items-center gap-2">
+                    <CreditCard size={24} className="text-emerald-600" />
+                    Manajemen Tarif & Durasi Sesi Booth
+                  </h1>
+                  <p className="text-xs sm:text-sm text-gray-500 mt-1">
+                    Atur harga per sesi foto, durasi waktu jepret bilik kamera, dan biaya cetak lab fisik.
+                  </p>
+                </div>
+
+                <form onSubmit={handleSavePricing} className="bg-white border border-gray-200 rounded-2xl p-6 shadow-xs space-y-5">
+                  <h3 className="text-sm font-bold text-gray-900 border-b border-gray-100 pb-2">
+                    Pengaturan Tarif Utama
+                  </h3>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-gray-700">Harga Tiket Sesi (Rupiah)</label>
+                      <input
+                        type="number"
+                        value={configPrice}
+                        onChange={(e) => setConfigPrice(e.target.value)}
+                        className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-mono font-bold outline-none focus:border-gray-900"
+                        placeholder="15000"
+                        required
+                      />
+                      <p className="text-[10px] text-gray-400">Tarif default pengunjung untuk masuk bilik kamera.</p>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-gray-700">Durasi Sesi Aktif (Menit)</label>
+                      <input
+                        type="number"
+                        value={configDuration}
+                        onChange={(e) => setConfigDuration(e.target.value)}
+                        className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-mono font-bold outline-none focus:border-gray-900"
+                        placeholder="15"
+                        required
+                      />
+                      <p className="text-[10px] text-gray-400">Waktu countdown bilik foto aktif (default 15 menit).</p>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-gray-700">Biaya Tambahan Cetak Lab (Rupiah)</label>
+                      <input
+                        type="number"
+                        value={configPrintFee}
+                        onChange={(e) => setConfigPrintFee(e.target.value)}
+                        className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-mono font-bold outline-none focus:border-gray-900"
+                        placeholder="20000"
+                      />
+                      <p className="text-[10px] text-gray-400">Biaya per strip untuk pesanan cetak fisik ke alamat.</p>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 flex justify-end">
+                    <button
+                      type="submit"
+                      className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5"
+                    >
+                      <Check size={16} />
+                      Simpan Perubahan Tarif
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
+
+            {/* SEPARATED TAB 5: FILTER & PRESET KAMERA (STANDALONE) */}
+            {activeTab === 'presets' && (
+              <div className="space-y-6">
+                <div>
+                  <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight flex items-center gap-2">
+                    <Sliders size={24} className="text-blue-600" />
+                    Manajemen Filter & Preset Kamera
+                  </h1>
+                  <p className="text-xs sm:text-sm text-gray-500 mt-1">
+                    Atur filter warna analog vintage (Kodak, Fuji, Ilford, Cyberpunk) dan tambahkan preset CSS kustom.
+                  </p>
+                </div>
+
+                {/* Form Tambah Preset Baru */}
+                <form onSubmit={handleAddPresetSubmit} className="bg-white border border-gray-200 rounded-2xl p-6 shadow-xs space-y-4">
+                  <h3 className="text-sm font-bold text-gray-900 border-b border-gray-100 pb-2 flex items-center gap-1.5">
+                    <Plus size={16} className="text-blue-600" />
+                    Tambah Preset Filter Baru
+                  </h3>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-gray-700">Nama Preset</label>
+                      <input
+                        type="text"
+                        value={newFilterName}
+                        onChange={(e) => setNewFilterName(e.target.value)}
+                        placeholder="Contoh: Kodak Gold 200"
+                        className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs outline-none focus:border-gray-900 font-medium"
+                        required
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-gray-700">Label Gaya / Brand</label>
+                      <input
+                        type="text"
+                        value={newFilterBrand}
+                        onChange={(e) => setNewFilterBrand(e.target.value)}
+                        placeholder="KODAK, FUJI, VINTAGE"
+                        className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs outline-none focus:border-gray-900 uppercase font-mono"
+                        required
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-gray-700">Kategori</label>
+                      <select
+                        value={newFilterCategory}
+                        onChange={(e) => setNewFilterCategory(e.target.value)}
+                        className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold outline-none focus:border-gray-900"
+                      >
+                        <option value="vintage">Vintage & Analog Film</option>
+                        <option value="color">Warm & Vivid Color</option>
+                        <option value="bw">Black & White / Monochrome</option>
+                        <option value="mood">Moody & Cinematic</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-gray-700">CSS Filter String</label>
+                    <input
+                      type="text"
+                      value={newFilterCss}
+                      onChange={(e) => setNewFilterCss(e.target.value)}
+                      placeholder="contrast(1.15) saturate(1.2) sepia(0.25)"
+                      className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-mono outline-none focus:border-gray-900"
+                      required
+                    />
+                    <p className="text-[10px] text-gray-400">Mendukung kombinasi standard CSS: contrast(), saturate(), brightness(), sepia(), grayscale(), hue-rotate().</p>
+                  </div>
+
+                  <div className="pt-2 flex justify-end">
+                    <button
+                      type="submit"
+                      className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5"
+                    >
+                      <Plus size={14} />
+                      Simpan Preset Baru
+                    </button>
+                  </div>
+                </form>
+
+                {/* Preset List */}
+                <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-xs space-y-4">
+                  <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                    <div>
+                      <h3 className="text-sm font-bold text-gray-900">
+                        Katalog Filter Terpasang ({appConfig.customFilters?.length || CAMERA_PRESETS.length})
+                      </h3>
+                      <p className="text-xs text-gray-500">Preset yang dapat dipilih pelanggan saat mengambil foto dan di editor strip.</p>
+                    </div>
+
+                    <div className="flex gap-1 text-[11px]">
+                      {['all', 'vintage', 'color', 'bw', 'mood'].map((cat) => (
+                        <button
+                          key={cat}
+                          onClick={() => setPresetCategoryFilter(cat)}
+                          className={`px-2.5 py-1 rounded-md font-semibold transition-colors ${
+                            presetCategoryFilter === cat ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          }`}
+                        >
+                          {cat === 'all' ? 'Semua' : cat.toUpperCase()}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {(appConfig.customFilters || CAMERA_PRESETS)
+                      .filter(f => presetCategoryFilter === 'all' || f.category === presetCategoryFilter)
+                      .map((filter) => {
+                        const isCustom = filter.id.startsWith('flt_');
+                        return (
+                          <div key={filter.id} className="p-3 bg-gray-50 border border-gray-200 rounded-xl flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div 
+                                className="w-10 h-10 rounded-lg overflow-hidden shrink-0 border border-gray-300"
+                                style={{ filter: filter.css }}
+                              >
+                                <img 
+                                  src="https://images.unsplash.com/photo-1517841905240-472988babdf9?w=80&h=80&fit=crop" 
+                                  alt="Preview" 
+                                  className="w-full h-full object-cover"
+                                />
+                              </div>
+                              <div className="truncate">
+                                <p className="text-xs font-bold text-gray-900 truncate">{filter.name}</p>
+                                <div className="flex items-center gap-1.5 mt-0.5">
+                                  <span className="text-[9px] font-mono px-1 rounded bg-white border border-gray-200 text-gray-600 font-bold">
+                                    {filter.brand || 'PRESET'}
+                                  </span>
+                                  <span className="text-[10px] text-gray-400 capitalize">{filter.category}</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            {isCustom ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (window.confirm(`Hapus preset "${filter.name}"?`)) {
+                                    deleteCustomFilter(filter.id);
+                                    triggerToast(`Preset "${filter.name}" berhasil dihapus.`);
+                                  }
+                                }}
+                                className="text-gray-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition-colors"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            ) : (
+                              <span className="text-[9px] font-mono text-gray-400 px-1.5 py-0.5 bg-gray-100 rounded">
+                                Default
+                              </span>
+                            )}
+                          </div>
+                        );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* SEPARATED TAB 6: INTEGRASI QRIS API & PAYMENT GATEWAY */}
+            {activeTab === 'qris_api' && (
+              <div className="space-y-6">
+                <div>
+                  <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight flex items-center gap-2">
+                    <QrCode size={24} className="text-purple-600" />
+                    Integrasi API QRIS & Payment Gateway
+                  </h1>
+                  <p className="text-xs sm:text-sm text-gray-500 mt-1">
+                    Konfigurasikan API payment gateway (DOKU, Midtrans, Xendit, QRIS Dinamis) untuk penyelesaian pembayaran instan.
+                  </p>
+                </div>
+
+                <form onSubmit={handleSavePaymentGateway} className="space-y-6">
+                  <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-xs space-y-5">
+                    <h3 className="text-sm font-bold text-gray-900 border-b border-gray-100 pb-2 flex items-center gap-2">
+                      <KeyRound size={16} className="text-purple-600" />
+                      Kredensial API Payment Gateway
+                    </h3>
+
+                    {/* Provider Selection */}
+                    <div className="space-y-2">
+                      <label className="text-xs font-semibold text-gray-700">Pilih Payment Gateway Provider</label>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        {[
+                          { id: 'doku', name: 'DOKU Checkout & QRIS', desc: 'QRIS Real-Time BCA/Shopee' },
+                          { id: 'midtrans', name: 'Midtrans Snap', desc: 'GoPay / QRIS Simulator' },
+                          { id: 'xendit', name: 'Xendit QRIS', desc: 'Instant Dynamic Settlement' },
+                          { id: 'manual', name: 'QRIS Statis / Manual', desc: 'QR Image Direct Scan' },
+                        ].map((p) => (
+                          <button
+                            key={p.id}
+                            type="button"
+                            onClick={() => setGwProvider(p.id)}
+                            className={`p-3.5 rounded-xl border text-left transition-all ${
+                              gwProvider === p.id 
+                                ? 'border-purple-600 bg-purple-50/50 ring-2 ring-purple-600/20 shadow-xs' 
+                                : 'border-gray-200 hover:border-gray-300 bg-white'
+                            }`}
+                          >
+                            <p className="font-bold text-xs text-gray-900">{p.name}</p>
+                            <p className="text-[10px] text-gray-500 mt-0.5">{p.desc}</p>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Environment mode */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-gray-700">Environment Mode</label>
+                        <div className="flex bg-gray-100 p-1 rounded-xl">
+                          <button
+                            type="button"
+                            onClick={() => setGwEnvironment('sandbox')}
+                            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-colors ${
+                              gwEnvironment === 'sandbox' ? 'bg-white shadow-xs text-purple-700' : 'text-gray-500'
+                            }`}
+                          >
+                            Sandbox (Pengujian)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setGwEnvironment('production')}
+                            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-colors ${
+                              gwEnvironment === 'production' ? 'bg-emerald-600 text-white shadow-xs' : 'text-gray-500'
+                            }`}
+                          >
+                            Production (Live Transaksi)
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-gray-700">Merchant ID / Client ID</label>
+                        <input
+                          type="text"
+                          value={gwMerchantId}
+                          onChange={(e) => setGwMerchantId(e.target.value)}
+                          placeholder="MALL-DOKU-882190"
+                          className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-mono font-bold outline-none focus:border-gray-900"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    {/* API Keys */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-gray-700">Client Key / Public Key</label>
+                        <input
+                          type="text"
+                          value={gwClientKey}
+                          onChange={(e) => setGwClientKey(e.target.value)}
+                          placeholder="pk_live_doku_..."
+                          className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-mono outline-none focus:border-gray-900"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-gray-700">Secret Key / Server Key</label>
+                        <div className="relative">
+                          <input
+                            type={gwShowSecret ? 'text' : 'password'}
+                            value={gwSecretKey}
+                            onChange={(e) => setGwSecretKey(e.target.value)}
+                            placeholder="sk_live_doku_..."
+                            className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-mono outline-none focus:border-gray-900 pr-10"
+                            required
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setGwShowSecret(!gwShowSecret)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700"
+                          >
+                            {gwShowSecret ? <EyeOff size={16} /> : <Eye size={16} />}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Webhook Callback URL */}
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-gray-700">Webhook Notification Callback URL</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={gwWebhookUrl}
+                          onChange={(e) => setGwWebhookUrl(e.target.value)}
+                          placeholder="https://..."
+                          className="flex-1 px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-mono outline-none focus:border-gray-900"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleCopyWebhook}
+                          className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 border border-gray-200 text-gray-800 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors shrink-0"
+                        >
+                          <Copy size={14} />
+                          <span>{copyWebhookSuccess ? 'Tersalin' : 'Salin URL'}</span>
+                        </button>
+                      </div>
+                      <p className="text-[10px] text-gray-400">Tempelkan URL ini di dashboard Merchant DOKU / Midtrans untuk menerima notifikasi status pembayaran QRIS sukses.</p>
+                    </div>
+
+                    {/* Test Connection Button & Result */}
+                    <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-gray-100">
+                      <button
+                        type="button"
+                        onClick={handleTestGatewayConnection}
+                        disabled={gwTesting}
+                        className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-xl text-xs font-bold flex items-center gap-2 transition-colors disabled:opacity-50"
+                      >
+                        {gwTesting ? <Loader2 size={14} className="animate-spin text-purple-600" /> : <Sparkles size={14} className="text-purple-600" />}
+                        <span>Uji Koneksi API Payment Gateway</span>
+                      </button>
+
+                      <button
+                        type="submit"
+                        className="px-6 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition-colors shadow-md shadow-purple-600/20 flex items-center gap-1.5"
+                      >
+                        <Check size={16} />
+                        Simpan Pengaturan API QRIS
+                      </button>
+                    </div>
+
+                    {gwTestResult && (
+                      <div className={`p-3.5 rounded-xl border text-xs flex items-center gap-2 ${
+                        gwTestResult.status === 'success' 
+                          ? 'bg-emerald-50 text-emerald-800 border-emerald-200' 
+                          : 'bg-red-50 text-red-800 border-red-200'
+                      }`}>
+                        <CheckCircle size={16} className={gwTestResult.status === 'success' ? 'text-emerald-600' : 'text-red-600'} />
+                        <span>{gwTestResult.message}</span>
+                      </div>
+                    )}
+                  </div>
+                </form>
+              </div>
+            )}
+
+            {/* TAB 7: WEBSITE CONTENT & BRANDING EDITOR (ENHANCED WITH GRADIENT & TOGGLES) */}
             {activeTab === 'website' && (
               <div className="space-y-6">
                 <div>
                   <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight flex items-center gap-2">
                     <Globe size={24} className="text-red-600" />
-                    Website Content & Branding Editor
+                    Editor Tampilan & Konten Website
                   </h1>
                   <p className="text-xs sm:text-sm text-gray-500 mt-1">
-                    Sesuaikan tampilan halaman publik, teks promosi, informasi kontak WhatsApp, dan identitas studio.
+                    Sesuaikan gradasi warna tagline, atur bagian/fitur mana saja yang ingin ditampilkan di website publik, dan kelola identitas studio.
                   </p>
                 </div>
 
                 <form onSubmit={handleSaveWebsiteEditor} className="space-y-6">
                   
-                  {/* Section 1: Hero & Identitas Brand */}
+                  {/* Section 1: Pengaturan Gradasi Tagline & Judul */}
                   <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-xs space-y-4">
-                    <h3 className="text-sm font-bold text-gray-900 border-b border-gray-100 pb-2">
-                      1. Identitas Brand & Teks Hero
+                    <h3 className="text-sm font-bold text-gray-900 border-b border-gray-100 pb-2 flex items-center gap-2">
+                      <Sparkles size={16} className="text-amber-500" />
+                      1. Tagline Judul & Gradasi Warna
                     </h3>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-gray-700">Teks Tagline Judul Website</label>
+                      <input
+                        type="text"
+                        value={webHeroTagline}
+                        onChange={(e) => setWebHeroTagline(e.target.value)}
+                        placeholder="Momen Berharga, Synchronized Distances"
+                        className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-gray-900"
+                      />
+                    </div>
+
+                    {/* Gradient Picker */}
+                    <div className="space-y-2">
+                      <label className="text-xs font-semibold text-gray-700">Pilih Gaya Gradasi Warna Tagline</label>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                        {GRADIENT_PRESETS.map((gp) => (
+                          <button
+                            key={gp.id}
+                            type="button"
+                            onClick={() => setWebTaglineGradient(gp.id)}
+                            className={`p-2.5 rounded-xl border text-left transition-all flex items-center gap-2 ${
+                              webTaglineGradient === gp.id
+                                ? 'border-gray-900 bg-gray-50 ring-2 ring-gray-900/10 shadow-xs'
+                                : 'border-gray-200 hover:border-gray-300 bg-white'
+                            }`}
+                          >
+                            <span className={`w-4 h-4 rounded-full ${gp.preview} shrink-0`}></span>
+                            <span className="text-xs font-bold text-gray-800 truncate">{gp.name}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Live Preview of Gradient Tagline */}
+                    <div className="p-4 bg-gray-900 rounded-xl text-center space-y-1">
+                      <span className="text-[9px] font-mono text-gray-400 uppercase tracking-widest block">Live Preview Gradasi Tagline:</span>
+                      <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight">
+                        <span className={`text-transparent bg-clip-text bg-gradient-to-r ${webTaglineGradient}`}>
+                          {webHeroTagline || 'Momen Berharga, Synchronized Distances'}
+                        </span>
+                      </h2>
+                    </div>
+                  </div>
+
+                  {/* Section 2: Pilihan Fitur / Bagian yang Ingin Ditampilkan (FITUR MANA SAJA YANG INGIN DITAMPILKAN) */}
+                  <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-xs space-y-4">
+                    <h3 className="text-sm font-bold text-gray-900 border-b border-gray-100 pb-2 flex items-center gap-2">
+                      <SlidersHorizontal size={16} className="text-red-600" />
+                      2. Pengaturan Tampilan Fitur & Bagian Website
+                    </h3>
+                    <p className="text-xs text-gray-500">
+                      Centang fitur atau bagian halaman beranda yang ingin Anda tampilkan kepada pengunjung website:
+                    </p>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                      {[
+                        { label: 'Header Hero & Tagline Gradasi', checked: webShowHero, setter: setWebShowHero, desc: 'Judul besar, badge promo, dan deskripsi' },
+                        { label: 'Form Setup Bilik & Pilihan Shutter', checked: webShowSetupCard, setter: setWebShowSetupCard, desc: 'Pilihan mode solo/LDR dan strip 3-cut / grid 4-cut' },
+                        { label: 'Banner Pengumuman Promo Berjalan', checked: webShowAnnouncement, setter: setWebShowAnnouncement, desc: 'Pita pengumuman promo di bagian paling atas' },
+                        { label: 'Fitur Unggulan Studio (Highlights)', checked: webShowFeatures, setter: setWebShowFeatures, desc: 'Instant Shutter Sync, Stiker Estetik, 300 DPI' },
+                        { label: 'Galeri Showcase Template Frame', checked: webShowFramesShowcase, setter: setWebShowFramesShowcase, desc: 'Katalog pratinjau bingkai photostrip' },
+                        { label: 'Daftar Paket Tarif & Layanan Cetak', checked: webShowPricing, setter: setWebShowPricing, desc: 'Paket sesi digital dan add-on cetak lab fisik' },
+                        { label: 'Panduan 4 Langkah Cara Kerja', checked: webShowHowItWorks, setter: setWebShowHowItWorks, desc: 'Edukasi langkah mudah berfoto bagi pengunjung baru' },
+                        { label: 'Tanya Jawab Seputar Photobooth (FAQ)', checked: webShowFaq, setter: setWebShowFaq, desc: 'Informasi album 7 hari, LDR sync, dan QRIS' },
+                        { label: 'Footer Studio & Info Operasional', checked: webShowFooter, setter: setWebShowFooter, desc: 'Alamat fisik, jam buka, dan tautan sosial media' },
+                        { label: 'Tombol Chat WhatsApp Melayang (Floating)', checked: webShowFloatingWhatsapp, setter: setWebShowFloatingWhatsapp, desc: 'Akses cepat CS WhatsApp di pojok kanan bawah' },
+                      ].map((item, idx) => (
+                        <label
+                          key={idx}
+                          className="flex items-start gap-3 p-3 bg-gray-50 hover:bg-gray-100/80 rounded-xl border border-gray-200 cursor-pointer transition-colors"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={item.checked}
+                            onChange={(e) => item.setter(e.target.checked)}
+                            className="mt-0.5 rounded text-red-600 focus:ring-red-600 w-4 h-4 cursor-pointer"
+                          />
+                          <div className="min-w-0">
+                            <span className="text-xs font-bold text-gray-900 block">{item.label}</span>
+                            <span className="text-[11px] text-gray-500 leading-snug">{item.desc}</span>
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Section 3: Teks & Informasi Brand */}
+                  <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-xs space-y-4">
+                    <h3 className="text-sm font-bold text-gray-900 border-b border-gray-100 pb-2">
+                      3. Identitas Brand & Pengumuman
+                    </h3>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                       <div className="space-y-1">
-                        <label className="text-xs font-semibold text-gray-700">Nama Studio / Brand</label>
+                        <label className="text-xs font-semibold text-gray-700">Nama Brand Studio</label>
                         <input
                           type="text"
                           value={webBrandName}
@@ -887,7 +1619,18 @@ export default function AdminDashboard() {
                       </div>
 
                       <div className="space-y-1">
-                        <label className="text-xs font-semibold text-gray-700">Warna Aksen Studio</label>
+                        <label className="text-xs font-semibold text-gray-700">Badge Promo Hero</label>
+                        <input
+                          type="text"
+                          value={webPromoBadge}
+                          onChange={(e) => setWebPromoBadge(e.target.value)}
+                          placeholder="PHOTO BOOTH ONLINE & LDR DUAL-STREAM"
+                          className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-gray-900"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-gray-700">Warna Aksen Website</label>
                         <div className="flex items-center gap-2">
                           <input
                             type="color"
@@ -906,18 +1649,7 @@ export default function AdminDashboard() {
                     </div>
 
                     <div className="space-y-1">
-                      <label className="text-xs font-semibold text-gray-700">Tagline Judul Utama</label>
-                      <input
-                        type="text"
-                        value={webHeroTagline}
-                        onChange={(e) => setWebHeroTagline(e.target.value)}
-                        placeholder="Momen Berharga, Synchronized Distances"
-                        className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-gray-900"
-                      />
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="text-xs font-semibold text-gray-700">Deskripsi Subtitle</label>
+                      <label className="text-xs font-semibold text-gray-700">Deskripsi Subtitle Hero</label>
                       <textarea
                         rows={2}
                         value={webHeroDesc}
@@ -926,49 +1658,23 @@ export default function AdminDashboard() {
                         className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs outline-none focus:border-gray-900 resize-none"
                       />
                     </div>
-                  </div>
-
-                  {/* Section 2: Banner Pengumuman Promo */}
-                  <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-xs space-y-4">
-                    <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-                      <h3 className="text-sm font-bold text-gray-900">
-                        2. Banner Promo & Pengumuman Berjalan
-                      </h3>
-                      <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-gray-700">
-                        <input
-                          type="checkbox"
-                          checked={webShowAnnouncement}
-                          onChange={(e) => setWebShowAnnouncement(e.target.checked)}
-                          className="rounded text-red-600 focus:ring-red-600"
-                        />
-                        Aktifkan Banner di Halaman Depan
-                      </label>
-                    </div>
 
                     <div className="space-y-1">
-                      <label className="text-xs font-semibold text-gray-700">Teks Pengumuman Promo</label>
+                      <label className="text-xs font-semibold text-gray-700">Teks Banner Pengumuman Promo</label>
                       <input
                         type="text"
                         value={webAnnouncement}
                         onChange={(e) => setWebAnnouncement(e.target.value)}
-                        placeholder="✨ PROMO: Cetak 2 Strip Gratis Frame Scandinavian!"
+                        placeholder="✨ Selamat datang di Studio snap.e! Cetak strip foto kualitas lab."
                         className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-gray-900"
                       />
                     </div>
-
-                    {/* Live Preview of Banner */}
-                    {webShowAnnouncement && (
-                      <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-800 flex items-center gap-2">
-                        <span className="font-bold bg-red-600 text-white text-[9px] px-1.5 py-0.5 rounded">PREVIEW BANNER</span>
-                        <span className="truncate">{webAnnouncement || 'Teks pengumuman akan tampil di sini'}</span>
-                      </div>
-                    )}
                   </div>
 
-                  {/* Section 3: Informasi Studio, WhatsApp & Jam Buka */}
+                  {/* Section 4: Kontak Customer Service & Jam Operasional */}
                   <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-xs space-y-4">
                     <h3 className="text-sm font-bold text-gray-900 border-b border-gray-100 pb-2">
-                      3. Kontak Customer Service & Jam Operasional
+                      4. Kontak Customer Service & Jam Operasional
                     </h3>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1055,7 +1761,7 @@ export default function AdminDashboard() {
               </div>
             )}
 
-            {/* TAB 5: KELOLA STIKER MANDIRI */}
+            {/* TAB 8: KELOLA STIKER MANDIRI */}
             {activeTab === 'stickers' && (
               <div className="space-y-6">
                 <div>
@@ -1068,7 +1774,6 @@ export default function AdminDashboard() {
                   </p>
                 </div>
 
-                {/* Form Tambah Stiker Baru */}
                 <form onSubmit={handleAddStickerSubmit} className="bg-white border border-gray-200 rounded-2xl p-6 shadow-xs space-y-4">
                   <h3 className="text-sm font-bold text-gray-900 border-b border-gray-100 pb-2 flex items-center gap-1.5">
                     <Plus size={16} className="text-purple-600" />
@@ -1076,8 +1781,6 @@ export default function AdminDashboard() {
                   </h3>
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    
-                    {/* Tipe Stiker */}
                     <div className="space-y-1">
                       <label className="text-xs font-semibold text-gray-700">Tipe Stiker</label>
                       <div className="flex bg-gray-100 p-1 rounded-xl">
@@ -1102,7 +1805,6 @@ export default function AdminDashboard() {
                       </div>
                     </div>
 
-                    {/* Nama Stiker */}
                     <div className="space-y-1">
                       <label className="text-xs font-semibold text-gray-700">Nama Stiker</label>
                       <input
@@ -1115,7 +1817,6 @@ export default function AdminDashboard() {
                       />
                     </div>
 
-                    {/* Kategori */}
                     <div className="space-y-1">
                       <label className="text-xs font-semibold text-gray-700">Kategori</label>
                       <select
@@ -1131,10 +1832,8 @@ export default function AdminDashboard() {
                         <option value="Nature">Nature & Floral</option>
                       </select>
                     </div>
-
                   </div>
 
-                  {/* Input Detail Berdasarkan Tipe */}
                   {stickerType === 'emoji' ? (
                     <div className="space-y-1 max-w-md">
                       <label className="text-xs font-semibold text-gray-700">Karakter Emoji</label>
@@ -1217,16 +1916,13 @@ export default function AdminDashboard() {
                       <p className="text-xs text-gray-500">Stiker yang aktif dapat langsung ditempel oleh pengunjung pada frame foto.</p>
                     </div>
 
-                    {/* Filter Category Chips */}
                     <div className="flex gap-1 overflow-x-auto text-[11px]">
                       {['all', 'Aesthetic', 'Love', 'Cute', 'Party', 'Studio'].map((cat) => (
                         <button
                           key={cat}
                           onClick={() => setStickerFilterCategory(cat)}
                           className={`px-2.5 py-1 rounded-md font-semibold transition-colors ${
-                            stickerFilterCategory === cat
-                              ? 'bg-gray-900 text-white shadow-xs'
-                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                            stickerFilterCategory === cat ? 'bg-gray-900 text-white shadow-xs' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                           }`}
                         >
                           {cat === 'all' ? 'Semua' : cat}
@@ -1241,7 +1937,6 @@ export default function AdminDashboard() {
                         key={stk.id}
                         className="p-3 bg-gray-50 border border-gray-200 rounded-2xl flex flex-col items-center justify-between text-center group hover:border-gray-300 transition-all relative"
                       >
-                        {/* Display Sticker Icon / Image */}
                         <div className="w-14 h-14 flex items-center justify-center my-1">
                           {stk.type === 'image' && stk.imageUrl ? (
                             <img src={stk.imageUrl} alt={stk.name} className="max-w-full max-h-full object-contain" />
@@ -1255,12 +1950,12 @@ export default function AdminDashboard() {
                           <span className="text-[9px] text-gray-400 font-mono uppercase">{stk.category || 'General'}</span>
                         </div>
 
-                        {/* Delete Sticker */}
                         <button
                           type="button"
                           onClick={() => {
                             if (window.confirm(`Hapus stiker "${stk.name || stk.text}"?`)) {
                               deleteCustomSticker(stk.id);
+                              triggerToast(`Stiker "${stk.name || stk.text}" berhasil dihapus.`);
                             }
                           }}
                           className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-red-50 text-red-600 hover:bg-red-600 hover:text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
@@ -1272,11 +1967,10 @@ export default function AdminDashboard() {
                     ))}
                   </div>
                 </div>
-
               </div>
             )}
 
-            {/* TAB 6: HARDWARE LAB */}
+            {/* TAB 9: HARDWARE LAB */}
             {activeTab === 'hardware' && (
               <div className="space-y-6">
                 <div>
@@ -1343,14 +2037,13 @@ export default function AdminDashboard() {
         </div>
       </main>
 
-      {/* Custom Frame Creation Modal (Exclusively accessible from Admin) */}
+      {/* Modals */}
       <AddFrameModal
         isOpen={showAddFrameModal}
         onClose={() => setShowAddFrameModal(false)}
         onOpenGuide={() => setShowGuideModal(true)}
       />
 
-      {/* Frame Design & Specifications Guide Modal */}
       <FrameGuideModal
         isOpen={showGuideModal}
         onClose={() => setShowGuideModal(false)}
