@@ -271,10 +271,10 @@ export default function FrameGuideModal({ isOpen, onClose, onOpenAddFrame }) {
             <ol className="list-decimal pl-5 space-y-1.5 text-xs text-gray-700">
               <li>Buat gambar desain bingkai Anda di <strong>Canva, Photoshop, Figma, atau Procreate</strong> menggunakan ukuran kanvas <strong>600 × 1800 px</strong> (atau 1200 × 3600 px untuk HD).</li>
               <li>Ekspor gambar dalam format <strong>PNG Transparan</strong> dengan lubang tembus pandang pada slot foto.</li>
-              <li>Buka tombol <strong>&ldquo;+ Tambah Frame Manual&rdquo;</strong> pada tab bingkai atau di Dashboard Admin Studio.</li>
-              <li>Ketik nama bingkai, unggah file gambar (atau tempel URL gambar), lalu tentukan warna latar & warna teks yang cocok.</li>
+              <li>Penambahan bingkai kustom dilakukan secara eksklusif melalui <strong>Dashboard Admin Studio (/admin)</strong> pada menu <em>Tarif, Frame & Preset</em>.</li>
+              <li>Admin memasukkan nama bingkai, mengunggah file gambar (atau menempelkan URL gambar), dan menentukan warna latar.</li>
               <li>Periksa <em>Live Preview</em> di samping form, lalu klik <strong>Simpan Frame</strong>.</li>
-              <li>Frame baru Anda otomatis tersimpan di Cloud Firestore dan langsung dapat digunakan oleh seluruh pengunjung photobooth!</li>
+              <li>Frame baru otomatis tersimpan di Cloud Firestore dan langsung aktif dapat dipilih oleh pengunjung bilik foto.</li>
             </ol>
           </div>
 

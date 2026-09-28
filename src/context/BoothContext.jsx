@@ -36,6 +36,24 @@ export function isUserAdmin(user) {
 
 const BoothContext = createContext(null);
 
+const DEFAULT_STICKERS = [
+  { id: 'stk_1', type: 'emoji', text: '✨', name: 'Sparkles', category: 'Aesthetic' },
+  { id: 'stk_2', type: 'emoji', text: '💖', name: 'Sparkle Heart', category: 'Love' },
+  { id: 'stk_3', type: 'emoji', text: '🎀', name: 'Coquette Bow', category: 'Cute' },
+  { id: 'stk_4', type: 'emoji', text: '⭐', name: 'Star', category: 'Aesthetic' },
+  { id: 'stk_5', type: 'emoji', text: '🍒', name: 'Cherry', category: 'Cute' },
+  { id: 'stk_6', type: 'emoji', text: '🌸', name: 'Sakura Blossom', category: 'Nature' },
+  { id: 'stk_7', type: 'emoji', text: '📸', name: 'Retro Camera', category: 'Studio' },
+  { id: 'stk_8', type: 'emoji', text: '💌', name: 'Love Letter', category: 'Love' },
+  { id: 'stk_9', type: 'emoji', text: '🧸', name: 'Teddy Bear', category: 'Cute' },
+  { id: 'stk_10', type: 'emoji', text: '🕊️', name: 'Dove', category: 'Aesthetic' },
+  { id: 'stk_11', type: 'emoji', text: '🐱', name: 'Cute Cat', category: 'Cute' },
+  { id: 'stk_12', type: 'emoji', text: '☕', name: 'Cafe Coffee', category: 'Aesthetic' },
+  { id: 'stk_13', type: 'emoji', text: '🎉', name: 'Confetti Party', category: 'Party' },
+  { id: 'stk_14', type: 'emoji', text: '🎞️', name: 'Film Strip', category: 'Studio' },
+  { id: 'stk_15', type: 'emoji', text: '🐾', name: 'Paws', category: 'Cute' }
+];
+
 const DEFAULT_CONFIG = {
   title: 'snap.e',
   subtitle: 'Tangible Memories, Synchronized Distances',
@@ -44,7 +62,21 @@ const DEFAULT_CONFIG = {
     qrisUrl: 'https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=00020101021126570014ID.LINKAJA.WWW01189360091100000000005204581253033605802ID5906SNAP_E6007JAKARTA5405150005802ID63041234',
   },
   customFrames: DEFAULT_FRAMES,
-  customFilters: CAMERA_PRESETS
+  customFilters: CAMERA_PRESETS,
+  customStickers: DEFAULT_STICKERS,
+  website: {
+    brandName: 'snap.e',
+    heroTagline: 'Momen Berharga, Synchronized Distances',
+    heroDescription: 'Foto bersama pasangan atau sahabat dari jarak jauh secara real-time, atau nikmati sesi solo dengan photostrip estetik gaya Korea.',
+    announcement: '✨ Selamat datang di Studio snap.e! Cetak strip foto kualitas lab dan simpan live photo memori Anda.',
+    showAnnouncement: true,
+    whatsappNumber: '0812-3456-7890',
+    instagramHandle: '@snape.photobooth',
+    studioAddress: 'Jl. Senopati No. 88, Jakarta Selatan',
+    openingHours: '10:00 - 22:00 WIB',
+    isOpen: true,
+    accentColor: '#E11D48'
+  }
 };
 
 const DEFAULT_SAMPLE_PHOTOS = [
@@ -349,6 +381,13 @@ export function BoothProvider({ children }) {
             mergedFrames = [...DEFAULT_FRAMES, ...customOnly];
           }
 
+          let mergedStickers = DEFAULT_STICKERS;
+          if (Array.isArray(remoteData.customStickers) && remoteData.customStickers.length > 0) {
+            const defaultStickerIds = new Set(DEFAULT_STICKERS.map(s => s.id));
+            const customOnly = remoteData.customStickers.filter(s => !defaultStickerIds.has(s.id));
+            mergedStickers = [...DEFAULT_STICKERS, ...customOnly];
+          }
+
           setAppConfig((prev) => ({
             ...prev,
             ...remoteData,
@@ -357,8 +396,13 @@ export function BoothProvider({ children }) {
               price: remoteData.price ?? prev.payment.price,
               qrisUrl: remoteData.qrisUrl ?? prev.payment.qrisUrl,
             },
+            website: {
+              ...prev.website,
+              ...(remoteData.website || {})
+            },
             customFrames: mergedFrames,
             customFilters: mergedFilters,
+            customStickers: mergedStickers,
           }));
           setIsFirebaseConnected(true);
         } else {
@@ -368,6 +412,8 @@ export function BoothProvider({ children }) {
             qrisUrl: DEFAULT_CONFIG.payment.qrisUrl,
             customFrames: DEFAULT_CONFIG.customFrames,
             customFilters: DEFAULT_CONFIG.customFilters,
+            customStickers: DEFAULT_CONFIG.customStickers,
+            website: DEFAULT_CONFIG.website,
             updatedAt: new Date().toISOString()
           }).catch(err => console.warn('Could not bootstrap default Firestore config:', err));
         }
@@ -446,6 +492,8 @@ export function BoothProvider({ children }) {
         qrisUrl: newConfig.payment.qrisUrl,
         customFrames: newConfig.customFrames,
         customFilters: newConfig.customFilters,
+        customStickers: newConfig.customStickers || DEFAULT_STICKERS,
+        website: newConfig.website || DEFAULT_CONFIG.website,
         updatedAt: new Date().toISOString()
       }, { merge: true });
     } catch (e) {
@@ -644,6 +692,99 @@ export function BoothProvider({ children }) {
     }
   };
 
+  // Custom Sticker Management (Admin independent sticker addition)
+  const addCustomSticker = async (stickerData) => {
+    const stickerId = `stk_${Date.now()}`;
+    const newSticker = {
+      id: stickerId,
+      type: stickerData.type || 'emoji', // 'emoji' | 'image'
+      text: stickerData.text || '✨',
+      imageUrl: stickerData.imageUrl || null,
+      name: stickerData.name || 'Stiker Kustom',
+      category: stickerData.category || 'Aesthetic',
+      createdAt: new Date().toISOString()
+    };
+
+    const nextStickers = [...(appConfig.customStickers || DEFAULT_STICKERS), newSticker];
+    const updated = {
+      ...appConfig,
+      customStickers: nextStickers
+    };
+
+    setAppConfig(updated);
+    try {
+      localStorage.setItem('snape_app_config', JSON.stringify(updated));
+    } catch (err) {
+      console.warn('LocalStorage error:', err);
+    }
+
+    try {
+      await updateDoc(doc(db, 'studio_config', 'main'), {
+        customStickers: nextStickers,
+        updatedAt: new Date().toISOString()
+      });
+    } catch (err) {
+      console.warn('Could not update Firestore customStickers:', err);
+    }
+
+    return newSticker;
+  };
+
+  const deleteCustomSticker = async (stickerId) => {
+    const nextStickers = (appConfig.customStickers || DEFAULT_STICKERS).filter(s => s.id !== stickerId);
+    const updated = {
+      ...appConfig,
+      customStickers: nextStickers
+    };
+
+    setAppConfig(updated);
+    try {
+      localStorage.setItem('snape_app_config', JSON.stringify(updated));
+    } catch (err) {
+      console.warn('LocalStorage error:', err);
+    }
+
+    try {
+      await updateDoc(doc(db, 'studio_config', 'main'), {
+        customStickers: nextStickers,
+        updatedAt: new Date().toISOString()
+      });
+    } catch (err) {
+      console.warn('Could not delete sticker in Firestore:', err);
+    }
+  };
+
+  // Website Config Management (Admin Website Content Editor)
+  const updateWebsiteConfig = async (websiteData) => {
+    const mergedWebsite = {
+      ...(appConfig.website || DEFAULT_CONFIG.website),
+      ...websiteData
+    };
+
+    const updated = {
+      ...appConfig,
+      website: mergedWebsite
+    };
+
+    setAppConfig(updated);
+    try {
+      localStorage.setItem('snape_app_config', JSON.stringify(updated));
+    } catch (err) {
+      console.warn('LocalStorage error:', err);
+    }
+
+    try {
+      await updateDoc(doc(db, 'studio_config', 'main'), {
+        website: mergedWebsite,
+        updatedAt: new Date().toISOString()
+      });
+    } catch (err) {
+      console.warn('Could not update Firestore website config:', err);
+    }
+
+    return mergedWebsite;
+  };
+
   // Admin PIN Login / Logout (legacy / fallback support)
   const adminLogin = (password) => {
     if (password === 'admin123' || password === 'snape2024' || password === 'admin') {
@@ -688,6 +829,9 @@ export function BoothProvider({ children }) {
         deleteOrder,
         addCustomFrame,
         deleteCustomFrame,
+        addCustomSticker,
+        deleteCustomSticker,
+        updateWebsiteConfig,
         currentUser,
         authLoading,
         isAdminAuth: Boolean(currentUser?.isAdmin || isAdminAuth),

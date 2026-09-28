@@ -6,6 +6,7 @@ import { useBooth } from '../context/BoothContext';
 export default function Topbar() {
   const location = useLocation();
   const { 
+    appConfig,
     currentUser, 
     isAdmin, 
     openAuthModal, 
@@ -29,7 +30,7 @@ export default function Topbar() {
           </div>
           <div className="flex flex-col">
             <span className="font-bold text-lg tracking-tight text-gray-900 flex items-center gap-1">
-              snap.e <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
+              {appConfig.website?.brandName || 'snap.e'} <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
             </span>
           </div>
         </Link>

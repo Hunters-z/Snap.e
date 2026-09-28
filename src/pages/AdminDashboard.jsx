@@ -1,24 +1,30 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   Printer, 
   ExternalLink, 
-  Smartphone, 
   Printer as PrinterIcon, 
+  CheckCircle, 
+  Trash2, 
+  X, 
+  Palette, 
+  Sliders, 
+  DollarSign, 
+  ShieldCheck, 
+  Loader2, 
+  BookOpen, 
+  Plus, 
+  Globe, 
+  Smile, 
+  Upload, 
+  MessageCircle, 
+  Instagram, 
+  MapPin, 
+  Clock, 
+  Check,
   LogOut,
-  CheckCircle,
-  Trash2,
-  Menu,
-  X,
-  Palette,
-  Sliders,
-  DollarSign,
-  ShieldCheck,
-  Loader2,
-  BookOpen,
-  Plus,
-  Layers
+  Menu
 } from 'lucide-react';
 import { useBooth } from '../context/BoothContext';
 import AddFrameModal from '../components/AddFrameModal';
@@ -33,6 +39,9 @@ export default function AdminDashboard() {
     updateOrderStatus, 
     deleteOrder, 
     deleteCustomFrame,
+    addCustomSticker,
+    deleteCustomSticker,
+    updateWebsiteConfig,
     isAdminAuth, 
     adminLogin, 
     adminLogout,
@@ -47,7 +56,7 @@ export default function AdminDashboard() {
   const [googleLoading, setGoogleLoading] = useState(false);
 
   // Active Tab
-  const [activeTab, setActiveTab] = useState('console'); // 'console' | 'orders' | 'config' | 'hardware'
+  const [activeTab, setActiveTab] = useState('console'); // 'console' | 'orders' | 'config' | 'website' | 'stickers' | 'hardware'
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   // Modals for Custom Frames & Guide
@@ -57,11 +66,45 @@ export default function AdminDashboard() {
   // Config editing states
   const [configPrice, setConfigPrice] = useState(appConfig.payment?.price || 15000);
   const [configQrisUrl, setConfigQrisUrl] = useState(appConfig.payment?.qrisUrl || '');
-  const [newFrameName, setNewFrameName] = useState('');
-  const [newFrameColor, setNewFrameColor] = useState('#FFE4E6');
-  const [newFilterName, setNewFilterName] = useState('');
-  const [newFilterCss, setNewFilterCss] = useState('');
   const [configSavedToast, setConfigSavedToast] = useState(false);
+
+  // Website Editor states
+  const [webBrandName, setWebBrandName] = useState(appConfig.website?.brandName || 'snap.e');
+  const [webHeroTagline, setWebHeroTagline] = useState(appConfig.website?.heroTagline || 'Momen Berharga, Synchronized Distances');
+  const [webHeroDesc, setWebHeroDesc] = useState(appConfig.website?.heroDescription || 'Foto bersama pasangan atau sahabat dari jarak jauh secara real-time, atau nikmati sesi solo dengan photostrip estetik gaya Korea.');
+  const [webAnnouncement, setWebAnnouncement] = useState(appConfig.website?.announcement || '✨ Selamat datang di Studio snap.e! Cetak strip foto kualitas lab.');
+  const [webShowAnnouncement, setWebShowAnnouncement] = useState(appConfig.website?.showAnnouncement ?? true);
+  const [webWhatsapp, setWebWhatsapp] = useState(appConfig.website?.whatsappNumber || '0812-3456-7890');
+  const [webInstagram, setWebInstagram] = useState(appConfig.website?.instagramHandle || '@snape.photobooth');
+  const [webAddress, setWebAddress] = useState(appConfig.website?.studioAddress || 'Jl. Senopati No. 88, Jakarta Selatan');
+  const [webOpeningHours, setWebOpeningHours] = useState(appConfig.website?.openingHours || '10:00 - 22:00 WIB');
+  const [webIsOpen, setWebIsOpen] = useState(appConfig.website?.isOpen ?? true);
+  const [webAccentColor, setWebAccentColor] = useState(appConfig.website?.accentColor || '#E11D48');
+
+  // Synchronize local website state when appConfig changes
+  useEffect(() => {
+    if (appConfig.website) {
+      setWebBrandName(appConfig.website.brandName || 'snap.e');
+      setWebHeroTagline(appConfig.website.heroTagline || '');
+      setWebHeroDesc(appConfig.website.heroDescription || '');
+      setWebAnnouncement(appConfig.website.announcement || '');
+      setWebShowAnnouncement(appConfig.website.showAnnouncement ?? true);
+      setWebWhatsapp(appConfig.website.whatsappNumber || '');
+      setWebInstagram(appConfig.website.instagramHandle || '');
+      setWebAddress(appConfig.website.studioAddress || '');
+      setWebOpeningHours(appConfig.website.openingHours || '10:00 - 22:00 WIB');
+      setWebIsOpen(appConfig.website.isOpen ?? true);
+      setWebAccentColor(appConfig.website.accentColor || '#E11D48');
+    }
+  }, [appConfig.website]);
+
+  // Sticker Editor states
+  const [stickerType, setStickerType] = useState('emoji'); // 'emoji' | 'image'
+  const [stickerText, setStickerText] = useState('💖');
+  const [stickerImageUrl, setStickerImageUrl] = useState('');
+  const [stickerName, setStickerName] = useState('');
+  const [stickerCategory, setStickerCategory] = useState('Aesthetic');
+  const [stickerFilterCategory, setStickerFilterCategory] = useState('all');
 
   // Handle Login
   const handleLoginSubmit = (e) => {
@@ -95,7 +138,7 @@ export default function AdminDashboard() {
     setLoginError('');
   };
 
-  // Handle Save Pricing & Frames
+  // Handle Save Pricing
   const handleSaveConfig = (e) => {
     e.preventDefault();
     const updated = {
@@ -107,28 +150,64 @@ export default function AdminDashboard() {
       }
     };
 
-    if (newFrameName.trim()) {
-      const frameId = `custom_${Date.now()}`;
-      updated.customFrames = [
-        ...(updated.customFrames || []),
-        { id: frameId, name: newFrameName.trim(), bg: newFrameColor, text: '#111827' }
-      ];
-      setNewFrameName('');
-    }
-
-    if (newFilterName.trim() && newFilterCss.trim()) {
-      const filterId = `filter_${Date.now()}`;
-      updated.customFilters = [
-        ...(updated.customFilters || []),
-        { id: filterId, name: newFilterName.trim(), css: newFilterCss.trim() }
-      ];
-      setNewFilterName('');
-      setNewFilterCss('');
-    }
-
     updateAppConfig(updated);
     setConfigSavedToast(true);
     setTimeout(() => setConfigSavedToast(false), 2500);
+  };
+
+  // Handle Save Website Editor
+  const handleSaveWebsiteEditor = (e) => {
+    e.preventDefault();
+    updateWebsiteConfig({
+      brandName: webBrandName.trim() || 'snap.e',
+      heroTagline: webHeroTagline.trim(),
+      heroDescription: webHeroDesc.trim(),
+      announcement: webAnnouncement.trim(),
+      showAnnouncement: webShowAnnouncement,
+      whatsappNumber: webWhatsapp.trim(),
+      instagramHandle: webInstagram.trim(),
+      studioAddress: webAddress.trim(),
+      openingHours: webOpeningHours.trim(),
+      isOpen: webIsOpen,
+      accentColor: webAccentColor
+    });
+
+    setConfigSavedToast(true);
+    setTimeout(() => setConfigSavedToast(false), 2500);
+  };
+
+  // Handle Add Custom Sticker
+  const handleAddStickerSubmit = (e) => {
+    e.preventDefault();
+    if (stickerType === 'emoji' && !stickerText.trim()) return;
+    if (stickerType === 'image' && !stickerImageUrl.trim()) return;
+
+    addCustomSticker({
+      type: stickerType,
+      text: stickerText.trim() || '✨',
+      imageUrl: stickerType === 'image' ? stickerImageUrl : null,
+      name: stickerName.trim() || (stickerType === 'emoji' ? `Emoji ${stickerText}` : 'Stiker Gambar'),
+      category: stickerCategory
+    });
+
+    setStickerName('');
+    if (stickerType === 'image') setStickerImageUrl('');
+    setConfigSavedToast(true);
+    setTimeout(() => setConfigSavedToast(false), 2500);
+  };
+
+  // Upload sticker image file as base64
+  const handleStickerFileUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setStickerImageUrl(event.target.result);
+      if (!stickerName) {
+        setStickerName(file.name.replace(/\.[^/.]+$/, ''));
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   // IF NOT AUTHENTICATED: Show Dedicated Admin Login Screen
@@ -158,83 +237,65 @@ export default function AdminDashboard() {
           )}
 
           {/* Google Login for Admin */}
-          <div className="space-y-3">
-            <button
-              onClick={handleGoogleAdminLogin}
-              disabled={googleLoading}
-              className="w-full py-3 px-4 bg-white hover:bg-gray-100 text-gray-900 font-bold text-xs rounded-xl flex items-center justify-center gap-2.5 transition-all shadow-md disabled:opacity-50"
-            >
-              {googleLoading ? (
-                <Loader2 size={16} className="animate-spin text-gray-600" />
-              ) : (
-                <svg className="w-4 h-4" viewBox="0 0 24 24">
-                  <path
-                    fill="#4285F4"
-                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                  />
-                  <path
-                    fill="#34A853"
-                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                  />
-                  <path
-                    fill="#FBBC05"
-                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
-                  />
-                  <path
-                    fill="#EA4335"
-                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
-                  />
-                </svg>
-              )}
-              <span>Masuk dengan Google (Akun Admin)</span>
-            </button>
-
-            <button
-              onClick={handleQuickAdminLogin}
-              type="button"
-              className="w-full py-2.5 px-4 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-colors"
-            >
-              <ShieldCheck size={14} />
-              <span>Masuk Cepat Admin (0601randikurnia.s@gmail.com)</span>
-            </button>
-          </div>
+          <button
+            onClick={handleGoogleAdminLogin}
+            disabled={googleLoading}
+            className="w-full py-3 px-4 bg-white hover:bg-gray-100 text-gray-900 rounded-xl font-bold text-xs flex items-center justify-center gap-2.5 transition-colors shadow-md disabled:opacity-50"
+          >
+            {googleLoading ? (
+              <Loader2 size={16} className="animate-spin text-gray-900" />
+            ) : (
+              <svg className="w-4 h-4" viewBox="0 0 24 24">
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+              </svg>
+            )}
+            <span>Masuk dengan Akun Google Admin</span>
+          </button>
 
           <div className="relative flex py-1 items-center">
             <div className="flex-grow border-t border-white/10"></div>
-            <span className="shrink-0 mx-3 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
-              Atau Kata Sandi PIN
-            </span>
+            <span className="flex-shrink mx-3 text-[10px] text-gray-500 font-bold uppercase tracking-wider">Atau Masuk Cepat Demo</span>
             <div className="flex-grow border-t border-white/10"></div>
           </div>
 
-          <form onSubmit={handleLoginSubmit} className="space-y-4">
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-gray-300">Kata Sandi / Kunci Otorisasi</label>
-              <input
-                type="password"
-                required
-                value={adminPassword}
-                onChange={(e) => setAdminPassword(e.target.value)}
-                placeholder="Masukkan kata sandi admin..."
-                className="w-full px-4 py-2.5 bg-[#27272A] border border-white/10 rounded-xl text-sm outline-none focus:border-amber-500 transition-colors text-white"
-              />
-            </div>
+          {/* Quick Demo Admin Login */}
+          <button
+            onClick={handleQuickAdminLogin}
+            className="w-full py-2.5 px-4 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-colors shadow-md shadow-amber-600/20"
+          >
+            <ShieldCheck size={16} />
+            <span>Masuk Cepat Admin (Demo Mode)</span>
+          </button>
 
+          {/* Password fallback form */}
+          <form onSubmit={handleLoginSubmit} className="space-y-3 pt-2 border-t border-white/10">
+            <label className="text-[11px] font-semibold text-gray-400 block">
+              Atau Gunakan Kata Sandi Khusus:
+            </label>
+            <input
+              type="password"
+              value={adminPassword}
+              onChange={(e) => setAdminPassword(e.target.value)}
+              placeholder="Ketik admin123"
+              className="w-full px-4 py-2.5 bg-black/50 border border-white/10 rounded-xl text-xs outline-none focus:border-amber-500 text-white"
+            />
             <button
               type="submit"
-              className="w-full py-2.5 bg-gray-800 hover:bg-gray-700 text-white font-bold text-xs rounded-xl transition-colors border border-white/10"
+              className="w-full py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-xl font-bold text-xs transition-colors"
             >
-              Verifikasi PIN Sandi
+              Masuk dengan Password
             </button>
           </form>
 
-          <div className="pt-3 border-t border-white/10 flex items-center justify-between text-xs text-gray-400">
-            <span>Sandi default: <code className="text-amber-400">admin123</code></span>
+          <div className="text-center pt-2">
             <button
               onClick={() => navigate('/')}
-              className="text-gray-400 hover:text-white underline"
+              className="text-xs text-gray-400 hover:text-white"
             >
-              Kembali ke Beranda
+              &larr; Kembali ke Beranda Photobooth
             </button>
           </div>
         </div>
@@ -278,12 +339,12 @@ export default function AdminDashboard() {
           </button>
         </div>
 
-        <nav className="flex-1 p-4 space-y-1.5">
+        <nav className="flex-1 p-4 space-y-1.5 overflow-y-auto">
           <button
             onClick={() => { setActiveTab('console'); setMobileSidebarOpen(false); }}
             className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
               activeTab === 'console'
-                ? 'bg-gray-900 text-white shadow-sm'
+                ? 'bg-gray-900 text-white shadow-xs'
                 : 'text-gray-600 hover:bg-gray-100'
             }`}
           >
@@ -295,7 +356,7 @@ export default function AdminDashboard() {
             onClick={() => { setActiveTab('orders'); setMobileSidebarOpen(false); }}
             className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
               activeTab === 'orders'
-                ? 'bg-gray-900 text-white shadow-sm'
+                ? 'bg-gray-900 text-white shadow-xs'
                 : 'text-gray-600 hover:bg-gray-100'
             }`}
           >
@@ -303,7 +364,7 @@ export default function AdminDashboard() {
               <Printer size={16} />
               Pesanan Cetak Lab
             </span>
-            <span className="px-1.5 py-0.5 rounded-full text-[10px] font-mono bg-red-100 text-red-700">
+            <span className="px-1.5 py-0.5 rounded-full text-[10px] font-mono bg-red-100 text-red-700 font-bold">
               {orders.length}
             </span>
           </button>
@@ -312,7 +373,7 @@ export default function AdminDashboard() {
             onClick={() => { setActiveTab('config'); setMobileSidebarOpen(false); }}
             className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
               activeTab === 'config'
-                ? 'bg-gray-900 text-white shadow-sm'
+                ? 'bg-gray-900 text-white shadow-xs'
                 : 'text-gray-600 hover:bg-gray-100'
             }`}
           >
@@ -320,11 +381,42 @@ export default function AdminDashboard() {
             Tarif, Frame & Preset
           </button>
 
+          {/* NEW: Website Editor Tab */}
+          <button
+            onClick={() => { setActiveTab('website'); setMobileSidebarOpen(false); }}
+            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
+              activeTab === 'website'
+                ? 'bg-gray-900 text-white shadow-xs'
+                : 'text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            <Globe size={16} />
+            Website Editor
+          </button>
+
+          {/* NEW: Sticker Management Tab */}
+          <button
+            onClick={() => { setActiveTab('stickers'); setMobileSidebarOpen(false); }}
+            className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
+              activeTab === 'stickers'
+                ? 'bg-gray-900 text-white shadow-xs'
+                : 'text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            <span className="flex items-center gap-3">
+              <Smile size={16} />
+              Kelola Stiker Studio
+            </span>
+            <span className="px-1.5 py-0.5 rounded-full text-[10px] font-mono bg-purple-100 text-purple-700 font-bold">
+              {appConfig.customStickers?.length || 15}
+            </span>
+          </button>
+
           <button
             onClick={() => { setActiveTab('hardware'); setMobileSidebarOpen(false); }}
             className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
               activeTab === 'hardware'
-                ? 'bg-gray-900 text-white shadow-sm'
+                ? 'bg-gray-900 text-white shadow-xs'
                 : 'text-gray-600 hover:bg-gray-100'
             }`}
           >
@@ -355,26 +447,29 @@ export default function AdminDashboard() {
         </div>
       </aside>
 
-      {/* MAIN WORKSPACE */}
-      <main className="flex-1 flex flex-col h-full overflow-hidden">
+      {/* MAIN CONTENT AREA */}
+      <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
         
         {/* Top Header */}
-        <header className="h-16 border-b border-gray-200 bg-white flex items-center justify-between px-4 sm:px-8 shrink-0">
+        <header className="h-16 bg-white border-b border-gray-200 px-4 sm:px-8 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
             <button
               onClick={() => setMobileSidebarOpen(true)}
-              className="lg:hidden p-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+              className="lg:hidden p-2 rounded-lg text-gray-600 hover:bg-gray-100"
             >
               <Menu size={20} />
             </button>
-            <div className="text-xs font-mono text-gray-600 bg-gray-100 px-3 py-1.5 rounded-md flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-              STUDIO AKTIF • SNP-JKT-882
-            </div>
-            <div className="hidden sm:flex text-xs font-mono text-emerald-700 bg-emerald-50 border border-emerald-200/60 px-3 py-1.5 rounded-md items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-              FIRESTORE CLOUD SYNCED
-            </div>
+            <span className="text-xs font-bold text-gray-400 uppercase tracking-widest hidden sm:inline">
+              Control Center &bull;
+            </span>
+            <span className="text-xs font-semibold text-gray-700 capitalize">
+              {activeTab === 'console' && 'Studio Overview'}
+              {activeTab === 'orders' && 'Antrean Cetak Lab'}
+              {activeTab === 'config' && 'Tarif, Frame & Preset'}
+              {activeTab === 'website' && 'Website Editor'}
+              {activeTab === 'stickers' && 'Kelola Stiker Mandiri'}
+              {activeTab === 'hardware' && 'Mesin Cetak Lab'}
+            </span>
           </div>
 
           <div className="flex items-center gap-3">
@@ -392,15 +487,15 @@ export default function AdminDashboard() {
         <div className="flex-1 overflow-y-auto p-4 sm:p-8">
           <div className="max-w-6xl mx-auto space-y-6 pb-12">
             
-            {/* TAB 1: CONSOLE OVERVIEW */}
+            {/* TAB 1: CONSOLE OVERVIEW (No automated notifications) */}
             {activeTab === 'console' && (
               <div className="space-y-6">
                 <div>
                   <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">
-                    Studio Console & Telemetri Real-Time
+                    Studio Console & Operasional
                   </h1>
                   <p className="text-xs sm:text-sm text-gray-500 mt-1">
-                    Monitoring antrean cetak fisik, room WebRTC LDR aktif, dan performa omzet studio.
+                    Ringkasan performa studio foto, antrean cetak fisik, dan katalog aktif.
                   </p>
                 </div>
 
@@ -413,18 +508,18 @@ export default function AdminDashboard() {
                     </div>
                     <h3 className="text-2xl sm:text-3xl font-extrabold text-gray-900">{orders.length}</h3>
                     <p className="text-xs text-gray-500 mt-3 pt-3 border-t border-gray-100">
-                      {orders.filter(o => o.status === 'pending').length} pesanan baru menunggu
+                      {orders.filter(o => o.status === 'pending').length} pesanan baru menunggu proses
                     </p>
                   </div>
 
                   <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-xs">
                     <div className="flex justify-between items-start mb-3">
-                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Bilik LDR Aktif</p>
-                      <div className="p-2 bg-rose-50 text-rose-600 rounded-lg"><Smartphone size={16} /></div>
+                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Katalog Stiker</p>
+                      <div className="p-2 bg-purple-50 text-purple-600 rounded-lg"><Smile size={16} /></div>
                     </div>
-                    <h3 className="text-2xl sm:text-3xl font-extrabold text-gray-900">4 Sesi</h3>
-                    <p className="text-xs text-gray-500 mt-3 pt-3 border-t border-gray-100 flex items-center gap-1 text-emerald-600 font-semibold">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Latensi sinkron 18ms
+                    <h3 className="text-2xl sm:text-3xl font-extrabold text-gray-900">{appConfig.customStickers?.length || 15} Stiker</h3>
+                    <p className="text-xs text-gray-500 mt-3 pt-3 border-t border-gray-100 text-purple-700 font-semibold">
+                      Tersedia untuk photostrip
                     </p>
                   </div>
 
@@ -437,7 +532,7 @@ export default function AdminDashboard() {
                       Rp {appConfig.payment.price.toLocaleString('id-ID')}
                     </h3>
                     <p className="text-xs text-gray-500 mt-3 pt-3 border-t border-gray-100">
-                      Settlement otomatis QRIS
+                      Pembayaran QRIS Statis / Dinamis
                     </p>
                   </div>
 
@@ -450,46 +545,56 @@ export default function AdminDashboard() {
                       {appConfig.customFrames?.length || 7} Desain
                     </h3>
                     <p className="text-xs text-gray-500 mt-3 pt-3 border-t border-gray-100">
-                      Tersedia untuk pelanggan
+                      Dikelola eksklusif oleh Admin
                     </p>
                   </div>
                 </div>
 
-                {/* Live LDR Rooms simulation item */}
-                <div className="bg-white border border-gray-200 rounded-2xl p-5 sm:p-6 shadow-xs space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="text-base font-bold text-gray-900">Monitoring Bilik LDR Streaming</h3>
-                      <p className="text-xs text-gray-500">Koneksi WebRTC peer-to-peer antar perangkat pengguna</p>
-                    </div>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-700">
-                      Live
-                    </span>
-                  </div>
-
-                  <div className="border border-gray-100 rounded-xl p-4 bg-gray-50/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
-                        <Smartphone size={20} />
+                {/* Quick Shortcuts */}
+                <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-xs space-y-4">
+                  <h3 className="text-sm font-bold text-gray-900">Aksi Cepat Pengelolaan Studio</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <button
+                      onClick={() => setActiveTab('website')}
+                      className="p-4 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-xl text-left transition-colors flex items-start gap-3"
+                    >
+                      <div className="p-2 bg-blue-100 text-blue-700 rounded-lg shrink-0">
+                        <Globe size={18} />
                       </div>
                       <div>
-                        <p className="text-sm font-bold text-gray-900">Sesi Bilik #ROOM-9021</p>
-                        <p className="text-xs text-gray-500">Jakarta &bull; Melbourne (Dual Stream Aktif)</p>
+                        <p className="text-xs font-bold text-gray-900">Editor Konten Website</p>
+                        <p className="text-[11px] text-gray-500 mt-0.5">Ubah banner promo, kontak WA, tagline, dan status jam buka.</p>
                       </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-mono bg-white px-2.5 py-1 rounded border border-gray-200">
-                        Pose 2 / 3 Selesai
-                      </span>
-                      <button
-                        onClick={() => navigate('/capture')}
-                        className="text-xs font-bold px-3 py-1.5 bg-gray-900 text-white rounded-lg hover:bg-black"
-                      >
-                        Buka Booth
-                      </button>
-                    </div>
+                    </button>
+
+                    <button
+                      onClick={() => setActiveTab('stickers')}
+                      className="p-4 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-xl text-left transition-colors flex items-start gap-3"
+                    >
+                      <div className="p-2 bg-purple-100 text-purple-700 rounded-lg shrink-0">
+                        <Smile size={18} />
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-gray-900">Tambah Stiker Mandiri</p>
+                        <p className="text-[11px] text-gray-500 mt-0.5">Unggah gambar stiker PNG transparan atau tambah stiker emoji.</p>
+                      </div>
+                    </button>
+
+                    <button
+                      onClick={() => { setActiveTab('config'); setShowAddFrameModal(true); }}
+                      className="p-4 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-xl text-left transition-colors flex items-start gap-3"
+                    >
+                      <div className="p-2 bg-amber-100 text-amber-700 rounded-lg shrink-0">
+                        <Plus size={18} />
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-gray-900">Upload Frame Baru</p>
+                        <p className="text-[11px] text-gray-500 mt-0.5">Tambah bingkai bergambar dengan rasio 600x1800 px.</p>
+                      </div>
+                    </button>
                   </div>
                 </div>
+
               </div>
             )}
 
@@ -590,7 +695,7 @@ export default function AdminDashboard() {
                       Pengaturan Tarif, QRIS & Kustomisasi Frame
                     </h1>
                     <p className="text-xs sm:text-sm text-gray-500 mt-1">
-                      Kelola tarif photobooth, tambah bingkai bergambar kustom, dan panduan desain frame manual.
+                      Kelola tarif photobooth, tambah bingkai bergambar kustom, dan panduan spesifikasi frame.
                     </p>
                   </div>
 
@@ -600,108 +705,73 @@ export default function AdminDashboard() {
                       onClick={() => setShowGuideModal(true)}
                       className="px-3.5 py-2 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors"
                     >
-                      <BookOpen size={14} className="text-amber-600" />
-                      <span>Panduan Frame Manual</span>
+                      <BookOpen size={14} className="text-amber-700" />
+                      <span>Buka Panduan Frame</span>
                     </button>
+
                     <button
                       type="button"
                       onClick={() => setShowAddFrameModal(true)}
-                      className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-colors"
+                      className="px-3.5 py-2 bg-gray-900 hover:bg-black text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm"
                     >
                       <Plus size={14} />
-                      <span>+ Tambah Frame Manual</span>
+                      <span>+ Upload Frame Baru</span>
                     </button>
                   </div>
                 </div>
 
-                <form onSubmit={handleSaveConfig} className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Pricing Card */}
-                  <div className="bg-white border border-gray-200 rounded-2xl p-5 sm:p-6 shadow-xs space-y-4">
-                    <h3 className="font-bold text-sm text-gray-900 flex items-center gap-2">
-                      <DollarSign size={16} className="text-emerald-600" />
-                      Tarif Sesi & QRIS
-                    </h3>
+                {/* Form Tarif & QRIS */}
+                <form onSubmit={handleSaveConfig} className="bg-white border border-gray-200 rounded-2xl p-6 shadow-xs space-y-4">
+                  <h3 className="text-sm font-bold text-gray-900 border-b border-gray-100 pb-2">
+                    Tarif Sesi Bilik Foto & QRIS
+                  </h3>
 
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-semibold text-gray-700">Harga per Sesi Photobooth (Rp)</label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-gray-700">Harga Per Sesi (Rupiah)</label>
                       <input
                         type="number"
                         value={configPrice}
                         onChange={(e) => setConfigPrice(e.target.value)}
-                        className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-mono font-bold"
+                        className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-mono font-bold outline-none focus:border-gray-900"
+                        placeholder="15000"
                       />
                     </div>
 
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-semibold text-gray-700">URL Gambar QRIS</label>
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-gray-700">URL Gambar QRIS Statis</label>
                       <input
                         type="text"
                         value={configQrisUrl}
                         onChange={(e) => setConfigQrisUrl(e.target.value)}
-                        className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs"
+                        className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs outline-none focus:border-gray-900"
+                        placeholder="https://..."
                       />
                     </div>
                   </div>
 
-                  {/* Add Quick Simple Color Frame Card */}
-                  <div className="bg-white border border-gray-200 rounded-2xl p-5 sm:p-6 shadow-xs space-y-4">
-                    <h3 className="font-bold text-sm text-gray-900 flex items-center gap-2">
-                      <Palette size={16} className="text-rose-600" />
-                      Tambah Cepat Warna Frame Solid
-                    </h3>
-
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-semibold text-gray-700">Nama Frame</label>
-                      <input
-                        type="text"
-                        value={newFrameName}
-                        onChange={(e) => setNewFrameName(e.target.value)}
-                        placeholder="Contoh: Matcha Latte, Baby Blue"
-                        className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs"
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-semibold text-gray-700">Pilih Warna Frame</label>
-                      <div className="flex items-center gap-3">
-                        <input
-                          type="color"
-                          value={newFrameColor}
-                          onChange={(e) => setNewFrameColor(e.target.value)}
-                          className="w-10 h-10 rounded cursor-pointer border border-gray-300"
-                        />
-                        <span className="font-mono text-xs text-gray-600 uppercase">{newFrameColor}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="md:col-span-2 pt-2">
+                  <div className="pt-2">
                     <button
                       type="submit"
-                      className="px-6 py-3 bg-gray-900 hover:bg-black text-white rounded-xl text-xs font-bold transition-colors shadow-md"
+                      className="px-5 py-2.5 bg-gray-900 hover:bg-black text-white rounded-xl text-xs font-bold transition-colors"
                     >
-                      Simpan Pengaturan Tarif & QRIS
+                      Simpan Perubahan Tarif & QRIS
                     </button>
                   </div>
                 </form>
 
-                {/* Studio Frames Collection Manager */}
-                <div className="bg-white border border-gray-200 rounded-2xl p-5 sm:p-6 shadow-xs space-y-4">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
+                {/* Frame Management Grid (Admin Only) */}
+                <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-xs space-y-4">
+                  <div className="flex items-center justify-between border-b border-gray-100 pb-3">
                     <div>
-                      <h3 className="font-bold text-base text-gray-900 flex items-center gap-2">
-                        <Layers size={18} className="text-indigo-600" />
-                        Koleksi & Manajemen Frame Studio ({appConfig.customFrames?.length || 0} Desain)
-                      </h3>
-                      <p className="text-xs text-gray-500 mt-0.5">
-                        Daftar seluruh bingkai aktif yang dapat dipilih oleh pelanggan saat mencetak photostrip.
-                      </p>
+                      <h3 className="text-sm font-bold text-gray-900">Daftar Bingkai Terpasang ({appConfig.customFrames?.length || 0})</h3>
+                      <p className="text-xs text-gray-500">Bingkai ini akan tampil pada pemilih frame di editor pengguna.</p>
                     </div>
 
                     <button
                       type="button"
                       onClick={() => setShowAddFrameModal(true)}
-                      className="px-3.5 py-2 bg-gray-900 hover:bg-black text-white rounded-xl text-xs font-bold flex items-center gap-1.5 self-start sm:self-auto"
+                      className="px-3.5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5"
                     >
                       <Plus size={14} />
                       <span>Upload Frame Baru</span>
@@ -783,7 +853,430 @@ export default function AdminDashboard() {
               </div>
             )}
 
-            {/* TAB 4: HARDWARE LAB */}
+            {/* TAB 4: WEBSITE EDITOR */}
+            {activeTab === 'website' && (
+              <div className="space-y-6">
+                <div>
+                  <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight flex items-center gap-2">
+                    <Globe size={24} className="text-red-600" />
+                    Website Content & Branding Editor
+                  </h1>
+                  <p className="text-xs sm:text-sm text-gray-500 mt-1">
+                    Sesuaikan tampilan halaman publik, teks promosi, informasi kontak WhatsApp, dan identitas studio.
+                  </p>
+                </div>
+
+                <form onSubmit={handleSaveWebsiteEditor} className="space-y-6">
+                  
+                  {/* Section 1: Hero & Identitas Brand */}
+                  <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-xs space-y-4">
+                    <h3 className="text-sm font-bold text-gray-900 border-b border-gray-100 pb-2">
+                      1. Identitas Brand & Teks Hero
+                    </h3>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-gray-700">Nama Studio / Brand</label>
+                        <input
+                          type="text"
+                          value={webBrandName}
+                          onChange={(e) => setWebBrandName(e.target.value)}
+                          placeholder="snap.e"
+                          className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold outline-none focus:border-gray-900"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-gray-700">Warna Aksen Studio</label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="color"
+                            value={webAccentColor}
+                            onChange={(e) => setWebAccentColor(e.target.value)}
+                            className="w-10 h-10 rounded-xl border border-gray-200 cursor-pointer"
+                          />
+                          <input
+                            type="text"
+                            value={webAccentColor}
+                            onChange={(e) => setWebAccentColor(e.target.value)}
+                            className="w-full px-3.5 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-mono font-bold outline-none uppercase"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-gray-700">Tagline Judul Utama</label>
+                      <input
+                        type="text"
+                        value={webHeroTagline}
+                        onChange={(e) => setWebHeroTagline(e.target.value)}
+                        placeholder="Momen Berharga, Synchronized Distances"
+                        className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-gray-900"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-gray-700">Deskripsi Subtitle</label>
+                      <textarea
+                        rows={2}
+                        value={webHeroDesc}
+                        onChange={(e) => setWebHeroDesc(e.target.value)}
+                        placeholder="Deskripsi singkat yang tampil di bawah judul..."
+                        className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs outline-none focus:border-gray-900 resize-none"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Section 2: Banner Pengumuman Promo */}
+                  <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-xs space-y-4">
+                    <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+                      <h3 className="text-sm font-bold text-gray-900">
+                        2. Banner Promo & Pengumuman Berjalan
+                      </h3>
+                      <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-gray-700">
+                        <input
+                          type="checkbox"
+                          checked={webShowAnnouncement}
+                          onChange={(e) => setWebShowAnnouncement(e.target.checked)}
+                          className="rounded text-red-600 focus:ring-red-600"
+                        />
+                        Aktifkan Banner di Halaman Depan
+                      </label>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-gray-700">Teks Pengumuman Promo</label>
+                      <input
+                        type="text"
+                        value={webAnnouncement}
+                        onChange={(e) => setWebAnnouncement(e.target.value)}
+                        placeholder="✨ PROMO: Cetak 2 Strip Gratis Frame Scandinavian!"
+                        className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-gray-900"
+                      />
+                    </div>
+
+                    {/* Live Preview of Banner */}
+                    {webShowAnnouncement && (
+                      <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-800 flex items-center gap-2">
+                        <span className="font-bold bg-red-600 text-white text-[9px] px-1.5 py-0.5 rounded">PREVIEW BANNER</span>
+                        <span className="truncate">{webAnnouncement || 'Teks pengumuman akan tampil di sini'}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Section 3: Informasi Studio, WhatsApp & Jam Buka */}
+                  <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-xs space-y-4">
+                    <h3 className="text-sm font-bold text-gray-900 border-b border-gray-100 pb-2">
+                      3. Kontak Customer Service & Jam Operasional
+                    </h3>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">
+                          <MessageCircle size={14} className="text-emerald-600" />
+                          Nomor WhatsApp Admin / CS
+                        </label>
+                        <input
+                          type="text"
+                          value={webWhatsapp}
+                          onChange={(e) => setWebWhatsapp(e.target.value)}
+                          placeholder="0812-3456-7890"
+                          className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs outline-none focus:border-gray-900"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">
+                          <Instagram size={14} className="text-pink-600" />
+                          Akun Instagram
+                        </label>
+                        <input
+                          type="text"
+                          value={webInstagram}
+                          onChange={(e) => setWebInstagram(e.target.value)}
+                          placeholder="@snape.photobooth"
+                          className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs outline-none focus:border-gray-900"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">
+                          <Clock size={14} className="text-indigo-600" />
+                          Jam Operasional Studio
+                        </label>
+                        <input
+                          type="text"
+                          value={webOpeningHours}
+                          onChange={(e) => setWebOpeningHours(e.target.value)}
+                          placeholder="10:00 - 22:00 WIB"
+                          className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs outline-none focus:border-gray-900"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-gray-700">Status Operasional Studio</label>
+                        <select
+                          value={webIsOpen ? 'open' : 'closed'}
+                          onChange={(e) => setWebIsOpen(e.target.value === 'open')}
+                          className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold outline-none focus:border-gray-900"
+                        >
+                          <option value="open">🟢 Buka / Menerima Pengunjung</option>
+                          <option value="closed">🔴 Tutup Sementara / Maintenance</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">
+                        <MapPin size={14} className="text-red-500" />
+                        Alamat Fisik Studio
+                      </label>
+                      <input
+                        type="text"
+                        value={webAddress}
+                        onChange={(e) => setWebAddress(e.target.value)}
+                        placeholder="Jl. Senopati No. 88, Jakarta Selatan"
+                        className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs outline-none focus:border-gray-900"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end">
+                    <button
+                      type="submit"
+                      className="px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold shadow-md shadow-red-600/20 transition-colors flex items-center gap-2"
+                    >
+                      <Check size={16} />
+                      Simpan Konten Website ke Cloud
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
+
+            {/* TAB 5: KELOLA STIKER MANDIRI */}
+            {activeTab === 'stickers' && (
+              <div className="space-y-6">
+                <div>
+                  <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight flex items-center gap-2">
+                    <Smile size={24} className="text-purple-600" />
+                    Kelola Stiker Mandiri Studio
+                  </h1>
+                  <p className="text-xs sm:text-sm text-gray-500 mt-1">
+                    Tambah stiker emoji atau upload gambar stiker PNG transparan kustom untuk digunakan pelanggan di editor photostrip.
+                  </p>
+                </div>
+
+                {/* Form Tambah Stiker Baru */}
+                <form onSubmit={handleAddStickerSubmit} className="bg-white border border-gray-200 rounded-2xl p-6 shadow-xs space-y-4">
+                  <h3 className="text-sm font-bold text-gray-900 border-b border-gray-100 pb-2 flex items-center gap-1.5">
+                    <Plus size={16} className="text-purple-600" />
+                    Tambah Stiker Baru
+                  </h3>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    
+                    {/* Tipe Stiker */}
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-gray-700">Tipe Stiker</label>
+                      <div className="flex bg-gray-100 p-1 rounded-xl">
+                        <button
+                          type="button"
+                          onClick={() => setStickerType('emoji')}
+                          className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors ${
+                            stickerType === 'emoji' ? 'bg-white shadow-xs text-gray-900' : 'text-gray-500'
+                          }`}
+                        >
+                          Emoji / Icon
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setStickerType('image')}
+                          className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors ${
+                            stickerType === 'image' ? 'bg-white shadow-xs text-purple-600' : 'text-gray-500'
+                          }`}
+                        >
+                          Gambar PNG
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Nama Stiker */}
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-gray-700">Nama Stiker</label>
+                      <input
+                        type="text"
+                        value={stickerName}
+                        onChange={(e) => setStickerName(e.target.value)}
+                        placeholder="Contoh: Pita Pink Coquette"
+                        className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs outline-none focus:border-gray-900"
+                        required
+                      />
+                    </div>
+
+                    {/* Kategori */}
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-gray-700">Kategori</label>
+                      <select
+                        value={stickerCategory}
+                        onChange={(e) => setStickerCategory(e.target.value)}
+                        className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold outline-none focus:border-gray-900"
+                      >
+                        <option value="Aesthetic">Aesthetic</option>
+                        <option value="Love">Love & Romance</option>
+                        <option value="Cute">Cute & Kawaii</option>
+                        <option value="Party">Party & Birthday</option>
+                        <option value="Studio">Studio & Retro</option>
+                        <option value="Nature">Nature & Floral</option>
+                      </select>
+                    </div>
+
+                  </div>
+
+                  {/* Input Detail Berdasarkan Tipe */}
+                  {stickerType === 'emoji' ? (
+                    <div className="space-y-1 max-w-md">
+                      <label className="text-xs font-semibold text-gray-700">Karakter Emoji</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={stickerText}
+                          onChange={(e) => setStickerText(e.target.value)}
+                          placeholder="💖"
+                          className="w-20 text-center text-2xl px-2 py-2 bg-gray-50 border border-gray-200 rounded-xl outline-none"
+                          maxLength={3}
+                          required
+                        />
+                        <div className="flex items-center gap-1.5 overflow-x-auto text-lg bg-gray-50 p-2 rounded-xl border border-gray-200 flex-1">
+                          {['✨', '💖', '🎀', '⭐', '🍒', '🌸', '📸', '🧸', '🕶️', '👑', '🐱', '☕'].map((em, i) => (
+                            <button
+                              key={i}
+                              type="button"
+                              onClick={() => setStickerText(em)}
+                              className="hover:scale-125 transition-transform"
+                            >
+                              {em}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <label className="text-xs font-semibold text-gray-700">Upload Gambar Stiker (PNG Transparan Disarankan)</label>
+                      <div className="flex flex-col sm:flex-row items-center gap-3">
+                        <label className="flex items-center gap-2 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-xl text-xs font-bold cursor-pointer transition-colors border border-gray-300 shrink-0">
+                          <Upload size={15} />
+                          <span>Pilih File Gambar</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleStickerFileUpload}
+                            className="hidden"
+                          />
+                        </label>
+                        <input
+                          type="text"
+                          value={stickerImageUrl}
+                          onChange={(e) => setStickerImageUrl(e.target.value)}
+                          placeholder="Atau tempel URL gambar stiker..."
+                          className="flex-1 w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs outline-none focus:border-gray-900"
+                        />
+                      </div>
+
+                      {stickerImageUrl && (
+                        <div className="flex items-center gap-2 pt-1">
+                          <span className="text-[11px] text-gray-500 font-semibold">Preview:</span>
+                          <div className="w-12 h-12 rounded-xl bg-gray-100 border border-gray-200 p-1 flex items-center justify-center">
+                            <img src={stickerImageUrl} alt="Preview" className="max-w-full max-h-full object-contain" />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="pt-2">
+                    <button
+                      type="submit"
+                      className="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold shadow-md shadow-purple-600/20 transition-colors flex items-center gap-1.5"
+                    >
+                      <Plus size={14} />
+                      <span>Simpan & Pasang Stiker ke Studio</span>
+                    </button>
+                  </div>
+                </form>
+
+                {/* Galeri Stiker Aktif */}
+                <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-xs space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-3">
+                    <div>
+                      <h3 className="text-sm font-bold text-gray-900">
+                        Galeri Stiker Terpasang ({appConfig.customStickers?.length || 0})
+                      </h3>
+                      <p className="text-xs text-gray-500">Stiker yang aktif dapat langsung ditempel oleh pengunjung pada frame foto.</p>
+                    </div>
+
+                    {/* Filter Category Chips */}
+                    <div className="flex gap-1 overflow-x-auto text-[11px]">
+                      {['all', 'Aesthetic', 'Love', 'Cute', 'Party', 'Studio'].map((cat) => (
+                        <button
+                          key={cat}
+                          onClick={() => setStickerFilterCategory(cat)}
+                          className={`px-2.5 py-1 rounded-md font-semibold transition-colors ${
+                            stickerFilterCategory === cat
+                              ? 'bg-gray-900 text-white shadow-xs'
+                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          }`}
+                        >
+                          {cat === 'all' ? 'Semua' : cat}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
+                    {(appConfig.customStickers || []).filter(s => stickerFilterCategory === 'all' || s.category === stickerFilterCategory).map((stk) => (
+                      <div
+                        key={stk.id}
+                        className="p-3 bg-gray-50 border border-gray-200 rounded-2xl flex flex-col items-center justify-between text-center group hover:border-gray-300 transition-all relative"
+                      >
+                        {/* Display Sticker Icon / Image */}
+                        <div className="w-14 h-14 flex items-center justify-center my-1">
+                          {stk.type === 'image' && stk.imageUrl ? (
+                            <img src={stk.imageUrl} alt={stk.name} className="max-w-full max-h-full object-contain" />
+                          ) : (
+                            <span className="text-3xl select-none">{stk.text || '✨'}</span>
+                          )}
+                        </div>
+
+                        <div className="w-full truncate mt-1">
+                          <p className="text-[11px] font-bold text-gray-900 truncate">{stk.name || stk.text}</p>
+                          <span className="text-[9px] text-gray-400 font-mono uppercase">{stk.category || 'General'}</span>
+                        </div>
+
+                        {/* Delete Sticker */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (window.confirm(`Hapus stiker "${stk.name || stk.text}"?`)) {
+                              deleteCustomSticker(stk.id);
+                            }
+                          }}
+                          className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-red-50 text-red-600 hover:bg-red-600 hover:text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                          title="Hapus Stiker"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+              </div>
+            )}
+
+            {/* TAB 6: HARDWARE LAB */}
             {activeTab === 'hardware' && (
               <div className="space-y-6">
                 <div>
@@ -850,7 +1343,7 @@ export default function AdminDashboard() {
         </div>
       </main>
 
-      {/* Custom Frame Creation Modal */}
+      {/* Custom Frame Creation Modal (Exclusively accessible from Admin) */}
       <AddFrameModal
         isOpen={showAddFrameModal}
         onClose={() => setShowAddFrameModal(false)}

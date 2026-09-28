@@ -15,7 +15,11 @@ import {
   ShieldCheck, 
   Heart, 
   Layers, 
-  Zap
+  Zap,
+  MapPin,
+  Clock,
+  MessageCircle,
+  Instagram
 } from 'lucide-react';
 
 export default function BoothHome() {
@@ -122,22 +126,39 @@ export default function BoothHome() {
     <div className="min-h-screen flex flex-col bg-[#F9FAFB] text-gray-900 font-sans">
       <Topbar />
 
+      {/* Dynamic Announcement Banner configured from Admin Website Editor */}
+      {appConfig.website?.showAnnouncement && appConfig.website?.announcement && (
+        <div 
+          className="w-full text-white text-xs sm:text-sm py-2.5 px-4 text-center font-semibold shadow-xs flex items-center justify-center gap-2 transition-colors"
+          style={{ backgroundColor: appConfig.website?.accentColor || '#E11D48' }}
+        >
+          <Sparkles size={14} className="text-amber-300 animate-spin shrink-0" />
+          <span>{appConfig.website.announcement}</span>
+        </div>
+      )}
+
       <main className="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-10 flex flex-col items-center">
         
         {/* Header Hero */}
         <div className="text-center max-w-2xl mx-auto mb-8 sm:mb-10 space-y-3">
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-50 border border-red-100 text-red-600 text-xs font-semibold tracking-wide">
             <Sparkles size={14} className="animate-spin text-red-500" />
-            PHOTO BOOTH ONLINE & LDR DUAL-STREAM
+            <span>PHOTO BOOTH ONLINE & LDR DUAL-STREAM</span>
           </div>
           <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold text-gray-900 tracking-tight leading-tight">
-            Momen Berharga, <br className="hidden sm:block" />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-red-600 via-rose-500 to-amber-600">
-              Synchronized Distances
-            </span>
+            {appConfig.website?.heroTagline ? (
+              <span>{appConfig.website.heroTagline}</span>
+            ) : (
+              <>
+                Momen Berharga, <br className="hidden sm:block" />
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-red-600 via-rose-500 to-amber-600">
+                  Synchronized Distances
+                </span>
+              </>
+            )}
           </h1>
           <p className="text-sm sm:text-base text-gray-600 max-w-lg mx-auto leading-relaxed">
-            Foto bersama pasangan atau sahabat dari jarak jauh secara real-time, atau nikmati sesi solo dengan photostrip estetik gaya Korea.
+            {appConfig.website?.heroDescription || 'Foto bersama pasangan atau sahabat dari jarak jauh secara real-time, atau nikmati sesi solo dengan photostrip estetik gaya Korea.'}
           </p>
         </div>
 
@@ -497,14 +518,85 @@ export default function BoothHome() {
         </div>
       )}
 
-      {/* Footer - Public Only */}
-      <footer className="border-t border-gray-200 bg-white py-6 mt-auto">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-gray-500">
-          <div className="flex items-center gap-2">
-            <span className="font-bold text-gray-900">snap.e</span>
-            <span>— Tangible Memories, Synchronized Distances.</span>
+      {/* Footer - Dynamic Website Studio Info */}
+      <footer className="border-t border-gray-200 bg-white py-8 mt-auto">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 space-y-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 text-xs text-gray-600">
+            {/* Brand & Tagline */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-base text-gray-900 tracking-tight">
+                  {appConfig.website?.brandName || 'snap.e'}
+                </span>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                  appConfig.website?.isOpen !== false 
+                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+                    : 'bg-red-50 text-red-700 border border-red-200'
+                }`}>
+                  {appConfig.website?.isOpen !== false ? '● Buka' : '● Tutup'}
+                </span>
+              </div>
+              <p className="text-gray-500 text-[11px] leading-relaxed">
+                {appConfig.website?.heroTagline || 'Tangible Memories, Synchronized Distances.'}
+              </p>
+            </div>
+
+            {/* Studio Address */}
+            <div className="space-y-1.5">
+              <span className="font-bold text-gray-900 flex items-center gap-1.5">
+                <MapPin size={13} className="text-red-500" />
+                Alamat Studio
+              </span>
+              <p className="text-[11px] text-gray-500 leading-relaxed">
+                {appConfig.website?.studioAddress || 'Jl. Senopati No. 88, Kebayoran Baru, Jakarta Selatan'}
+              </p>
+            </div>
+
+            {/* Operational Hours */}
+            <div className="space-y-1.5">
+              <span className="font-bold text-gray-900 flex items-center gap-1.5">
+                <Clock size={13} className="text-indigo-500" />
+                Jam Buka
+              </span>
+              <p className="text-[11px] text-gray-500">
+                {appConfig.website?.openingHours || 'Setiap Hari: 10:00 - 22:00 WIB'}
+              </p>
+            </div>
+
+            {/* Contact CS / WhatsApp & IG */}
+            <div className="space-y-2">
+              <span className="font-bold text-gray-900 block">Hubungi Admin</span>
+              <div className="flex flex-col gap-1.5 text-[11px]">
+                {appConfig.website?.whatsappNumber && (
+                  <a
+                    href={`https://wa.me/${appConfig.website.whatsappNumber.replace(/[^0-9]/g, '')}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-1.5 text-emerald-600 hover:text-emerald-700 font-semibold"
+                  >
+                    <MessageCircle size={13} />
+                    <span>WhatsApp CS: {appConfig.website.whatsappNumber}</span>
+                  </a>
+                )}
+                {appConfig.website?.instagramHandle && (
+                  <a
+                    href={`https://instagram.com/${appConfig.website.instagramHandle.replace('@', '')}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-1.5 text-pink-600 hover:text-pink-700 font-semibold"
+                  >
+                    <Instagram size={13} />
+                    <span>{appConfig.website.instagramHandle}</span>
+                  </a>
+                )}
+              </div>
+            </div>
           </div>
-          <p>© {new Date().getFullYear()} snap.e Atelier. All rights reserved.</p>
+
+          <div className="pt-4 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] text-gray-400">
+            <p>© {new Date().getFullYear()} {appConfig.website?.brandName || 'snap.e'} Atelier. All rights reserved.</p>
+            <p className="font-mono text-[10px]">Cloud Synced • Real-Time WebRTC</p>
+          </div>
         </div>
       </footer>
     </div>

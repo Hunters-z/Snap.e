@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Topbar from '../components/Topbar';
 import { useBooth } from '../context/BoothContext';
@@ -20,7 +20,7 @@ import {
   ArrowRight,
   RotateCcw,
   ZoomIn,
-  BookOpen,
+  ZoomOut,
   Image as ImageIcon,
   Film,
   Clock,
@@ -29,7 +29,6 @@ import {
 import { FILTER_CATEGORIES, CAMERA_PRESETS } from '../data/cameraPresets';
 import { drawFrameGraphicDecorations } from '../data/defaultFrames';
 import { drawCover, formatSessionTime, generateGifFromFrames } from '../utils/photoCaptureHelper';
-import FrameGuideModal from '../components/FrameGuideModal';
 
 export default function EditorPhotostrip() {
   const navigate = useNavigate();
@@ -52,8 +51,6 @@ export default function EditorPhotostrip() {
   const [selectedFrameId, setSelectedFrameId] = useState(frames[0]?.id || 'cream');
   const activeFrame = frames.find(f => f.id === selectedFrameId) || frames[0] || { bg: '#F9F6F0', text: '#2A2521' };
 
-  // Frame Guide Modal
-  const [showGuideModal, setShowGuideModal] = useState(false);
   const [frameCategory, setFrameCategory] = useState('all'); // 'all' | 'graphic' | 'solid' | 'custom'
 
   // Live Photos / GIF Download Modal
@@ -79,11 +76,9 @@ export default function EditorPhotostrip() {
   // Filter presets & category
   const availablePresets = appConfig.customFilters?.length > 0 ? appConfig.customFilters : CAMERA_PRESETS;
   const [filterCategory, setFilterCategory] = useState('all');
+  const [editorStickerCategory, setEditorStickerCategory] = useState('all');
 
-  // Stickers library
-  const stickerList = ['✨', '💖', '🎀', '⭐', '🍒', '🌸', '📸', '💌', '🧸', '🕊️'];
-
-  // Tab for sidebar ('album' | 'frame' | 'filter' | 'sticker' | 'adjust' | 'text')
+  // Tab for sidebar ('album' | 'frame' | 'filter' | 'adjust' | 'sticker' | 'text')
   const [activeTab, setActiveTab] = useState('album');
 
   // Toast & Modals
@@ -111,9 +106,12 @@ export default function EditorPhotostrip() {
     }
   }, [currentUser, customerName]);
 
-  // Sync photos to context
+  // Sync photos to context (debounced by 500ms to eliminate disk I/O stuttering during live dragging)
   useEffect(() => {
-    updateCapturedPhotos(photos);
+    const timer = setTimeout(() => {
+      updateCapturedPhotos(photos);
+    }, 500);
+    return () => clearTimeout(timer);
   }, [photos, updateCapturedPhotos]);
 
   // Apply analog preset to single photo
@@ -161,46 +159,47 @@ export default function EditorPhotostrip() {
     }
   };
 
-  // Direct mouse & touch dragging on photo
+  // ==========================================
+  // DIRECT TOUCH & POINTER DRAG GESTURE HANDLER
+  // ==========================================
   const [dragState, setDragState] = useState(null);
 
-  // Drag start handler on photo in preview
-  const handlePhotoDragStart = (e, idx) => {
+  const handlePointerDown = (e, idx) => {
     if (e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
 
     setActivePhotoIdx(idx);
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    const container = e.currentTarget.getBoundingClientRect();
 
+    const container = e.currentTarget.getBoundingClientRect();
     const currentPhoto = photos[idx];
     setDragState({
       idx,
-      startX: clientX,
-      startY: clientY,
+      pointerId: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
       initOffsetX: currentPhoto?.offsetX || 0,
       initOffsetY: currentPhoto?.offsetY || 0,
       containerW: container.width || 250,
-      containerH: container.height || 180
+      containerH: container.height || 180,
+      zoom: currentPhoto?.zoom || 1.0
     });
   };
 
-  // Window listeners for smooth dragging
+  // Global window tracking so dragging never drops or stutters
   useEffect(() => {
     if (!dragState) return;
 
-    const handleMove = (e) => {
-      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-
-      const deltaX = clientX - dragState.startX;
-      const deltaY = clientY - dragState.startY;
+    const handleGlobalPointerMove = (e) => {
+      // 1:1 true responsive displacement
+      const deltaX = e.clientX - dragState.startX;
+      const deltaY = e.clientY - dragState.startY;
 
       const deltaPercentX = (deltaX / dragState.containerW) * 100;
       const deltaPercentY = (deltaY / dragState.containerH) * 100;
 
-      const newOffsetX = Math.max(-50, Math.min(50, Math.round((dragState.initOffsetX + deltaPercentX) * 10) / 10));
-      const newOffsetY = Math.max(-50, Math.min(50, Math.round((dragState.initOffsetY + deltaPercentY) * 10) / 10));
+      // Allow proportional pan range based on current zoom
+      const maxPan = Math.max(75, Math.round((dragState.zoom || 1.0) * 55));
+      const newOffsetX = Math.max(-maxPan, Math.min(maxPan, Math.round((dragState.initOffsetX + deltaPercentX) * 10) / 10));
+      const newOffsetY = Math.max(-maxPan, Math.min(maxPan, Math.round((dragState.initOffsetY + deltaPercentY) * 10) / 10));
 
       setPhotos((prev) => {
         const next = [...prev];
@@ -215,102 +214,97 @@ export default function EditorPhotostrip() {
       });
     };
 
-    const handleEnd = () => {
+    const handleGlobalPointerUp = () => {
       setDragState(null);
     };
 
-    window.addEventListener('mousemove', handleMove);
-    window.addEventListener('mouseup', handleEnd);
-    window.addEventListener('touchmove', handleMove, { passive: true });
-    window.addEventListener('touchend', handleEnd);
+    window.addEventListener('pointermove', handleGlobalPointerMove);
+    window.addEventListener('pointerup', handleGlobalPointerUp);
+    window.addEventListener('pointercancel', handleGlobalPointerUp);
 
     return () => {
-      window.removeEventListener('mousemove', handleMove);
-      window.removeEventListener('mouseup', handleEnd);
-      window.removeEventListener('touchmove', handleMove);
-      window.removeEventListener('touchend', handleEnd);
+      window.removeEventListener('pointermove', handleGlobalPointerMove);
+      window.removeEventListener('pointerup', handleGlobalPointerUp);
+      window.removeEventListener('pointercancel', handleGlobalPointerUp);
     };
   }, [dragState]);
 
   // Adjust active photo zoom
-  const handleZoomChange = (val, idx = activePhotoIdx) => {
-    const next = [...photos];
-    if (next[idx]) {
-      next[idx] = {
-        ...next[idx],
-        zoom: parseFloat(val)
-      };
-      setPhotos(next);
-    }
-  };
+  const handleZoomChange = useCallback((val, idx = activePhotoIdx) => {
+    const num = Math.max(0.8, Math.min(2.5, Math.round(parseFloat(val) * 100) / 100));
+    setPhotos(prev => {
+      const next = [...prev];
+      if (next[idx]) {
+        next[idx] = {
+          ...next[idx],
+          zoom: num
+        };
+      }
+      return next;
+    });
+  }, [activePhotoIdx]);
 
-  // Adjust horizontal offset X (-50% to +50%)
-  const handleOffsetXChange = (val, idx = activePhotoIdx) => {
-    const next = [...photos];
-    if (next[idx]) {
-      next[idx] = {
-        ...next[idx],
-        offsetX: parseFloat(val) || 0
-      };
-      setPhotos(next);
-    }
-  };
-
-  // Adjust vertical offset Y (-50% to +50%)
-  const handleOffsetYChange = (val, idx = activePhotoIdx) => {
-    const next = [...photos];
-    if (next[idx]) {
-      next[idx] = {
-        ...next[idx],
-        offsetY: parseFloat(val) || 0
-      };
-      setPhotos(next);
-    }
+  // Adjust zoom step
+  const handleZoomStep = (delta, idx = activePhotoIdx) => {
+    const curZoom = photos[idx]?.zoom || 1.0;
+    handleZoomChange(curZoom + delta, idx);
   };
 
   // Nudge step for D-pad
   const handleNudge = (deltaX, deltaY, idx = activePhotoIdx) => {
-    const next = [...photos];
-    if (next[idx]) {
-      const curX = next[idx].offsetX || 0;
-      const curY = next[idx].offsetY || 0;
-      next[idx] = {
-        ...next[idx],
-        offsetX: Math.max(-50, Math.min(50, Math.round((curX + deltaX) * 10) / 10)),
-        offsetY: Math.max(-50, Math.min(50, Math.round((curY + deltaY) * 10) / 10))
-      };
-      setPhotos(next);
-    }
+    setPhotos(prev => {
+      const next = [...prev];
+      if (next[idx]) {
+        const curX = next[idx].offsetX || 0;
+        const curY = next[idx].offsetY || 0;
+        const curZoom = next[idx].zoom || 1.0;
+        const maxPan = Math.max(75, Math.round(curZoom * 55));
+        next[idx] = {
+          ...next[idx],
+          offsetX: Math.max(-maxPan, Math.min(maxPan, Math.round((curX + deltaX) * 10) / 10)),
+          offsetY: Math.max(-maxPan, Math.min(maxPan, Math.round((curY + deltaY) * 10) / 10))
+        };
+      }
+      return next;
+    });
   };
 
   // Reset offset and zoom to center
   const handleResetPosition = (idx = activePhotoIdx) => {
-    const next = [...photos];
-    if (next[idx]) {
-      next[idx] = {
-        ...next[idx],
-        offsetX: 0,
-        offsetY: 0,
-        zoom: 1.0
-      };
-      setPhotos(next);
-      showToast(`Posisi & zoom Foto #${idx + 1} dikembalikan ke tengah`);
-    }
+    setPhotos(prev => {
+      const next = [...prev];
+      if (next[idx]) {
+        next[idx] = {
+          ...next[idx],
+          offsetX: 0,
+          offsetY: 0,
+          zoom: 1.0
+        };
+      }
+      return next;
+    });
+    showToast(`Posisi & zoom Foto #${idx + 1} dikembalikan ke tengah`);
   };
 
-  // Add sticker to active photo
-  const handleAddSticker = (emoji) => {
+  // Add sticker to active photo (supports emoji or custom image stickers)
+  const handleAddSticker = (stickerItem) => {
     const next = [...photos];
     if (!next[activePhotoIdx]) return;
     if (!next[activePhotoIdx].stickers) next[activePhotoIdx].stickers = [];
-    next[activePhotoIdx].stickers.push({
+
+    const isObj = typeof stickerItem === 'object';
+    const stickerData = {
       id: Date.now() + Math.random(),
-      text: emoji,
+      type: isObj ? (stickerItem.type || 'emoji') : 'emoji',
+      text: isObj ? (stickerItem.text || '✨') : stickerItem,
+      imageUrl: isObj ? (stickerItem.imageUrl || null) : null,
       x: 50 + (Math.random() * 20 - 10),
       y: 50 + (Math.random() * 20 - 10),
-    });
+    };
+
+    next[activePhotoIdx].stickers.push(stickerData);
     setPhotos(next);
-    showToast(`Stiker ${emoji} ditambahkan ke Foto ${activePhotoIdx + 1}`);
+    showToast(`Stiker ${stickerData.text || 'gambar'} ditambahkan ke Foto ${activePhotoIdx + 1}`);
   };
 
   // Remove sticker
@@ -469,18 +463,31 @@ export default function EditorPhotostrip() {
         ctx.restore();
       }
 
-      // Draw stickers
+      // Draw stickers (both emoji and custom image stickers)
       if (p?.stickers && p.stickers.length > 0) {
-        ctx.save();
-        ctx.font = `${rect.w * 0.14}px 'Segoe UI Emoji', sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        p.stickers.forEach(s => {
+        for (const s of p.stickers) {
           const sx = rect.x + (s.x / 100) * rect.w;
           const sy = rect.y + (s.y / 100) * rect.h;
-          ctx.fillText(s.text, sx, sy);
-        });
-        ctx.restore();
+
+          if (s.type === 'image' && s.imageUrl) {
+            const sImg = new Image();
+            sImg.crossOrigin = 'anonymous';
+            await new Promise(res => {
+              sImg.onload = res;
+              sImg.onerror = res;
+              sImg.src = s.imageUrl;
+            });
+            const sSize = rect.w * 0.22;
+            ctx.drawImage(sImg, sx - sSize / 2, sy - sSize / 2, sSize, sSize);
+          } else {
+            ctx.save();
+            ctx.font = `${rect.w * 0.14}px 'Segoe UI Emoji', sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(s.text || '✨', sx, sy);
+            ctx.restore();
+          }
+        }
       }
     }
 
@@ -508,7 +515,7 @@ export default function EditorPhotostrip() {
     // Brand Name
     ctx.font = "bold 52px 'Inter', sans-serif";
     ctx.textAlign = 'left';
-    ctx.fillText('snap.e', padding + 10, footerY + 50);
+    ctx.fillText(appConfig.website?.brandName || 'snap.e', padding + 10, footerY + 50);
 
     // Custom Text Caption
     ctx.font = "italic 500 44px 'Playfair Display', serif";
@@ -559,9 +566,7 @@ export default function EditorPhotostrip() {
     showToast('Sedang membuat Strip GIF bergerak...');
 
     try {
-      const frames = [];
-
-      // Generate 4-6 frames of the photostrip with subtle animated motion & highlights
+      const framesList = [];
       const gifWidth = layout === 'grid' ? 400 : 320;
       const gifHeight = layout === 'grid' ? 520 : 640;
 
@@ -592,13 +597,11 @@ export default function EditorPhotostrip() {
             ctx.rect(margin, y, innerW, itemH);
             ctx.clip();
 
-            // Load and draw photo
             const img = new Image();
             img.src = (f % 2 === 1 && p?.gifUrl) ? p.gifUrl : p?.dataUrl;
             await new Promise(res => { img.onload = res; img.onerror = res; });
             drawCover(ctx, img, margin, y, innerW, itemH, false);
 
-            // Shimmer effect on active animated slot
             if (f === s) {
               ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
               ctx.fillRect(margin, y, innerW, itemH);
@@ -631,14 +634,14 @@ export default function EditorPhotostrip() {
         // Mini footer
         ctx.fillStyle = activeFrame.text;
         ctx.font = "bold 13px 'Inter', sans-serif";
-        ctx.fillText('snap.e', margin + 4, canvas.height - 35);
+        ctx.fillText(appConfig.website?.brandName || 'snap.e', margin + 4, canvas.height - 35);
         ctx.font = "italic 11px 'Playfair Display', serif";
         ctx.fillText(customText, margin + 4, canvas.height - 18);
 
-        frames.push(canvas.toDataURL('image/jpeg', 0.85));
+        framesList.push(canvas.toDataURL('image/jpeg', 0.85));
       }
 
-      const gifData = await generateGifFromFrames(frames, gifWidth, gifHeight, 0.25);
+      const gifData = await generateGifFromFrames(framesList, gifWidth, gifHeight, 0.25);
       if (gifData) {
         const link = document.createElement('a');
         link.download = `snap_e_strip_${Date.now()}.gif`;
@@ -681,6 +684,9 @@ export default function EditorPhotostrip() {
 
     setOrderConfirmed(newOrder);
   };
+
+  // Active Photo object
+  const currentActivePhoto = photos[activePhotoIdx] || photos[0];
 
   return (
     <div className="min-h-screen flex flex-col bg-[#F8F9FA] text-gray-900 font-sans">
@@ -730,7 +736,7 @@ export default function EditorPhotostrip() {
               }`}
             >
               <ImageIcon size={13} />
-              Album & Seleksi
+              Album
             </button>
             <button
               onClick={() => setActiveTab('frame')}
@@ -748,14 +754,6 @@ export default function EditorPhotostrip() {
             >
               <Camera size={13} />
               Filter
-            </button>
-            <button
-              onClick={() => setActiveTab('adjust')}
-              className={`px-3 py-2 text-xs font-bold rounded-lg transition-colors whitespace-nowrap ${
-                activeTab === 'adjust' ? 'bg-white shadow-xs text-gray-900' : 'text-gray-500 hover:text-gray-900'
-              }`}
-            >
-              Atur Foto
             </button>
             <button
               onClick={() => setActiveTab('sticker')}
@@ -900,24 +898,12 @@ export default function EditorPhotostrip() {
               </div>
             )}
 
-            {/* Section 1: Frame Selection (Manual Add Frame is ONLY in Admin Dashboard) */}
+            {/* Section 1: Frame Selection (Exclusive Studio Curated Frames - NO add frame button) */}
             {activeTab === 'frame' && (
               <div className="space-y-4">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <h3 className="font-bold text-sm text-gray-900">Pilih Desain Frame</h3>
-                    <p className="text-xs text-gray-500 mt-0.5">Bingkai bergambar & solid dari studio</p>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => setShowGuideModal(true)}
-                    className="flex items-center gap-1 px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 text-[11px] font-bold rounded-lg border border-amber-200 transition-colors shrink-0"
-                    title="Buka Panduan & Spesifikasi Frame"
-                  >
-                    <BookOpen size={13} className="text-amber-600" />
-                    <span>Panduan Frame</span>
-                  </button>
+                <div>
+                  <h3 className="font-bold text-sm text-gray-900">Pilih Desain Frame</h3>
+                  <p className="text-xs text-gray-500 mt-0.5">Koleksi bingkai estetik berstandar studio</p>
                 </div>
 
                 {/* Category Filter Chips */}
@@ -1147,194 +1133,12 @@ export default function EditorPhotostrip() {
               </div>
             )}
 
-            {/* Section 3: Photo Adjustments (Pan / Zoom / Replace) */}
-            {activeTab === 'adjust' && (
-              <div className="space-y-4">
-                <div>
-                  <h3 className="font-bold text-sm text-gray-900">Sesuaikan Posisi & Zoom</h3>
-                  <p className="text-xs text-gray-500">Geser atau perbesar foto agar pas di dalam frame tanpa distorsi</p>
-                </div>
-
-                {/* Photo selector indicator */}
-                <div className="flex gap-1.5">
-                  {photos.slice(0, layout === 'grid' ? 4 : 3).map((_, i) => (
-                    <button
-                      key={i}
-                      onClick={() => setActivePhotoIdx(i)}
-                      className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                        activePhotoIdx === i
-                          ? 'bg-gray-900 text-white shadow-xs'
-                          : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-100'
-                      }`}
-                    >
-                      Foto {i + 1}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Pan Directional Controls (D-Pad) */}
-                <div className="bg-gray-50 border border-gray-200/80 rounded-2xl p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs font-bold text-gray-700 flex items-center gap-1.5">
-                      <Move size={14} className="text-red-500" />
-                      Kontrol Geser Posisi
-                    </span>
-                    <button
-                      onClick={() => handleResetPosition(activePhotoIdx)}
-                      className="text-[10px] font-bold text-gray-500 hover:text-red-600 flex items-center gap-1"
-                      title="Kembalikan posisi & zoom ke tengah"
-                    >
-                      <RotateCcw size={11} />
-                      Reset Posisi
-                    </button>
-                  </div>
-
-                  {/* D-Pad Buttons */}
-                  <div className="flex flex-col items-center gap-1.5 max-w-[170px] mx-auto">
-                    <button
-                      type="button"
-                      onClick={() => handleNudge(0, -6)}
-                      className="w-10 h-9 bg-white hover:bg-gray-100 border border-gray-200 rounded-lg flex items-center justify-center text-gray-700 active:scale-95 shadow-xs transition-transform"
-                      title="Geser ke Atas"
-                    >
-                      <ArrowUp size={16} />
-                    </button>
-                    <div className="flex items-center gap-1.5 w-full justify-center">
-                      <button
-                        type="button"
-                        onClick={() => handleNudge(-6, 0)}
-                        className="w-10 h-9 bg-white hover:bg-gray-100 border border-gray-200 rounded-lg flex items-center justify-center text-gray-700 active:scale-95 shadow-xs transition-transform"
-                        title="Geser ke Kiri"
-                      >
-                        <ArrowLeft size={16} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleResetPosition(activePhotoIdx)}
-                        className="w-10 h-9 bg-gray-900 hover:bg-black text-white rounded-lg flex items-center justify-center text-[10px] font-bold active:scale-95 shadow-xs transition-transform"
-                        title="Tengah (0, 0)"
-                      >
-                        ●
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleNudge(6, 0)}
-                        className="w-10 h-9 bg-white hover:bg-gray-100 border border-gray-200 rounded-lg flex items-center justify-center text-gray-700 active:scale-95 shadow-xs transition-transform"
-                        title="Geser ke Kanan"
-                      >
-                        <ArrowRight size={16} />
-                      </button>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleNudge(0, 6)}
-                      className="w-10 h-9 bg-white hover:bg-gray-100 border border-gray-200 rounded-lg flex items-center justify-center text-gray-700 active:scale-95 shadow-xs transition-transform"
-                      title="Geser ke Bawah"
-                    >
-                      <ArrowDown size={16} />
-                    </button>
-                  </div>
-
-                  {/* Sliders for fine-tuning */}
-                  <div className="space-y-3 mt-4 pt-3 border-t border-gray-200/60">
-                    <div>
-                      <div className="flex justify-between text-[11px] text-gray-600 mb-1">
-                        <span>Geser Horizontal (Sumbu X)</span>
-                        <span className="font-mono font-bold">
-                          {photos[activePhotoIdx]?.offsetX ? `${photos[activePhotoIdx].offsetX > 0 ? '+' : ''}${Math.round(photos[activePhotoIdx].offsetX)}%` : '0% (Tengah)'}
-                        </span>
-                      </div>
-                      <input
-                        type="range"
-                        min="-50"
-                        max="50"
-                        step="1"
-                        value={photos[activePhotoIdx]?.offsetX || 0}
-                        onChange={(e) => handleOffsetXChange(e.target.value)}
-                        className="w-full accent-gray-900 cursor-pointer h-1.5 bg-gray-200 rounded-lg"
-                      />
-                    </div>
-
-                    <div>
-                      <div className="flex justify-between text-[11px] text-gray-600 mb-1">
-                        <span>Geser Vertikal (Sumbu Y)</span>
-                        <span className="font-mono font-bold">
-                          {photos[activePhotoIdx]?.offsetY ? `${photos[activePhotoIdx].offsetY > 0 ? '+' : ''}${Math.round(photos[activePhotoIdx].offsetY)}%` : '0% (Tengah)'}
-                        </span>
-                      </div>
-                      <input
-                        type="range"
-                        min="-50"
-                        max="50"
-                        step="1"
-                        value={photos[activePhotoIdx]?.offsetY || 0}
-                        onChange={(e) => handleOffsetYChange(e.target.value)}
-                        className="w-full accent-gray-900 cursor-pointer h-1.5 bg-gray-200 rounded-lg"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Zoom Control Card */}
-                <div className="bg-gray-50 border border-gray-200/80 rounded-2xl p-4 space-y-3">
-                  <div className="flex items-center justify-between text-xs font-bold text-gray-700">
-                    <span className="flex items-center gap-1.5">
-                      <ZoomIn size={14} className="text-red-500" />
-                      Perbesar / Zoom Foto
-                    </span>
-                    <span className="font-mono font-bold text-gray-900">
-                      {photos[activePhotoIdx]?.zoom?.toFixed(2) || '1.00'}x
-                    </span>
-                  </div>
-
-                  <input
-                    type="range"
-                    min="0.8"
-                    max="2.5"
-                    step="0.05"
-                    value={photos[activePhotoIdx]?.zoom || 1.0}
-                    onChange={(e) => handleZoomChange(e.target.value)}
-                    className="w-full accent-gray-900 cursor-pointer h-1.5 bg-gray-200 rounded-lg"
-                  />
-
-                  <div className="flex gap-1.5 pt-1">
-                    {[1.0, 1.2, 1.5, 2.0].map((zVal) => (
-                      <button
-                        key={zVal}
-                        type="button"
-                        onClick={() => handleZoomChange(zVal)}
-                        className={`flex-1 py-1 text-[11px] font-bold rounded-md border transition-colors ${
-                          Math.abs((photos[activePhotoIdx]?.zoom || 1.0) - zVal) < 0.04
-                            ? 'bg-gray-900 text-white border-gray-900'
-                            : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-100'
-                        }`}
-                      >
-                        {zVal.toFixed(1)}x
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Replace Photo File Upload */}
-                <label className="flex items-center justify-center gap-2 w-full py-2.5 bg-white hover:bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 cursor-pointer transition-colors shadow-xs">
-                  <Upload size={14} className="text-gray-500" />
-                  Ganti Foto #{activePhotoIdx + 1} dari Perangkat
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => handleFileUpload(e, activePhotoIdx)}
-                    className="hidden"
-                  />
-                </label>
-              </div>
-            )}
-
-            {/* Section 4: Stickers */}
+            {/* Section 3: Stickers (Supports Custom Stickers from Admin) */}
             {activeTab === 'sticker' && (
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <div>
-                    <h3 className="font-bold text-sm text-gray-900">Stiker Esensial</h3>
+                    <h3 className="font-bold text-sm text-gray-900">Koleksi Stiker Studio</h3>
                     <p className="text-xs text-gray-500">Pasang pada Foto #{activePhotoIdx + 1}</p>
                   </div>
                   <button
@@ -1369,21 +1173,48 @@ export default function EditorPhotostrip() {
                   ))}
                 </div>
 
-                <div className="grid grid-cols-5 gap-2">
-                  {stickerList.map((s, idx) => (
+                {/* Category Filter Chips for Stickers */}
+                <div className="flex gap-1 overflow-x-auto pb-2 mb-2 text-[10px]">
+                  {['all', 'Aesthetic', 'Love', 'Cute', 'Party', 'Studio'].map((cat) => (
                     <button
-                      key={idx}
-                      onClick={() => handleAddSticker(s)}
-                      className="w-11 h-11 bg-gray-50 hover:bg-gray-100 border border-gray-200/60 rounded-xl flex items-center justify-center text-xl transition-transform active:scale-95 hover:scale-105"
+                      key={cat}
+                      type="button"
+                      onClick={() => setEditorStickerCategory(cat)}
+                      className={`px-2.5 py-1 rounded-md font-semibold whitespace-nowrap transition-colors ${
+                        editorStickerCategory === cat
+                          ? 'bg-gray-900 text-white shadow-xs'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
                     >
-                      {s}
+                      {cat === 'all' ? 'Semua' : cat}
                     </button>
                   ))}
+                </div>
+
+                {/* Stickers Grid from appConfig.customStickers */}
+                <div className="grid grid-cols-4 sm:grid-cols-5 gap-2 max-h-[280px] overflow-y-auto pr-1">
+                  {(appConfig.customStickers || [])
+                    .filter(s => editorStickerCategory === 'all' || s.category === editorStickerCategory)
+                    .map((s) => (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => handleAddSticker(s)}
+                        className="w-12 h-12 bg-gray-50 hover:bg-gray-100 border border-gray-200/80 rounded-xl flex items-center justify-center p-1 transition-transform active:scale-95 hover:scale-105"
+                        title={s.name || s.text}
+                      >
+                        {s.type === 'image' && s.imageUrl ? (
+                          <img src={s.imageUrl} alt={s.name} className="max-w-full max-h-full object-contain" />
+                        ) : (
+                          <span className="text-2xl">{s.text || '✨'}</span>
+                        )}
+                      </button>
+                    ))}
                 </div>
               </div>
             )}
 
-            {/* Section 5: Text & Caption */}
+            {/* Section 4: Text & Caption */}
             {activeTab === 'text' && (
               <div>
                 <h3 className="font-bold text-sm text-gray-900 mb-3">Teks & Footer Bawah</h3>
@@ -1405,7 +1236,7 @@ export default function EditorPhotostrip() {
                         onChange={(e) => setShowBadge(e.target.checked)}
                         className="rounded text-gray-900 focus:ring-gray-900"
                       />
-                      Logo snap.e
+                      Logo {appConfig.website?.brandName || 'snap.e'}
                     </label>
                     <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-gray-700">
                       <input
@@ -1424,13 +1255,13 @@ export default function EditorPhotostrip() {
           </div>
         </div>
 
-        {/* CENTER COLUMN: Interactive Photostrip Preview */}
-        <div className="flex-1 flex flex-col items-center justify-center w-full">
+        {/* CENTER COLUMN: Interactive Photostrip Preview & DOCKED ZOOM/PAN CONTROLLER (Berdampingan) */}
+        <div className="flex-1 flex flex-col lg:flex-row items-center lg:items-start justify-center gap-6 w-full min-w-0">
           
           {/* Photostrip Card Container */}
           <div
             ref={stripPreviewRef}
-            className={`shadow-2xl rounded-sm p-4 sm:p-5 relative transition-all duration-300 max-w-full overflow-hidden ${
+            className={`shadow-2xl rounded-sm p-4 sm:p-5 relative transition-all duration-300 max-w-full overflow-hidden shrink-0 ${
               layout === 'grid' ? 'w-[320px] sm:w-[380px]' : 'w-[280px] sm:w-[320px]'
             }`}
             style={{ 
@@ -1523,23 +1354,23 @@ export default function EditorPhotostrip() {
             <div className={layout === 'grid' ? 'grid grid-cols-2 gap-2' : 'space-y-2.5 sm:space-y-3'}>
               {photos.slice(0, layout === 'grid' ? 4 : 3).map((p, idx) => {
                 const isActive = activePhotoIdx === idx;
+                const isDraggingThis = dragState?.idx === idx;
                 return (
                   <div
                     key={idx}
                     onClick={() => setActivePhotoIdx(idx)}
-                    onMouseDown={(e) => handlePhotoDragStart(e, idx)}
-                    onTouchStart={(e) => handlePhotoDragStart(e, idx)}
-                    className={`aspect-[4/3] bg-gray-200 rounded-xs overflow-hidden relative group border-2 transition-colors select-none ${
-                      isActive ? 'border-red-500 shadow-md ring-2 ring-red-500/20' : 'border-transparent'
-                    } ${dragState?.idx === idx ? 'cursor-grabbing' : 'cursor-grab'}`}
-                    title="Klik untuk memilih foto. Seret foto untuk menggeser posisi."
+                    onPointerDown={(e) => handlePointerDown(e, idx)}
+                    className={`aspect-[4/3] bg-gray-200 rounded-xs overflow-hidden relative group border-2 transition-all select-none touch-none ${
+                      isActive ? 'border-red-500 shadow-md ring-2 ring-red-500/30' : 'border-transparent hover:border-gray-400/50'
+                    } ${isDraggingThis ? 'cursor-grabbing' : 'cursor-grab'}`}
+                    title="Klik untuk memilih foto. Geser / drag langsung pada foto untuk mengatur posisi."
                   >
                     <div 
-                      className="w-full h-full relative overflow-hidden"
+                      className="w-full h-full relative overflow-hidden pointer-events-none select-none"
                       style={{
                         transform: `translate(${p?.offsetX || 0}%, ${p?.offsetY || 0}%) scale(${p?.zoom || 1.0})`,
                         transformOrigin: 'center center',
-                        transition: dragState?.idx === idx ? 'none' : 'transform 0.1s ease-out'
+                        transition: isDraggingThis ? 'none' : 'transform 0.12s ease-out'
                       }}
                     >
                       <img
@@ -1553,10 +1384,46 @@ export default function EditorPhotostrip() {
                       />
                     </div>
 
+                    {/* Quick Floating Zoom & Reset Toolbar on Slot */}
+                    {isActive && (
+                      <div 
+                        onClick={(e) => e.stopPropagation()} 
+                        className="absolute top-1.5 right-1.5 z-20 flex items-center gap-1 bg-black/80 backdrop-blur-md px-1.5 py-1 rounded-lg border border-white/20 shadow-lg text-white animate-fadeIn"
+                      >
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); handleZoomStep(-0.1, idx); }}
+                          className="w-5 h-5 rounded flex items-center justify-center bg-white/20 hover:bg-white/30 text-white font-bold active:scale-95 transition-all text-xs"
+                          title="Perkecil Zoom"
+                        >
+                          -
+                        </button>
+                        <span className="font-mono text-[9px] font-bold px-1 text-amber-300">
+                          {(p?.zoom || 1.0).toFixed(1)}x
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); handleZoomStep(0.1, idx); }}
+                          className="w-5 h-5 rounded flex items-center justify-center bg-white/20 hover:bg-white/30 text-white font-bold active:scale-95 transition-all text-xs"
+                          title="Perbesar Zoom"
+                        >
+                          +
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); handleResetPosition(idx); }}
+                          className="w-5 h-5 ml-0.5 rounded flex items-center justify-center bg-white/10 hover:bg-red-600 text-white/80 hover:text-white active:scale-95 transition-all"
+                          title="Reset Posisi Tengah"
+                        >
+                          <RotateCcw size={10} />
+                        </button>
+                      </div>
+                    )}
+
                     {/* Move drag badge indicator */}
                     <div className="absolute top-1.5 left-1.5 bg-black/60 backdrop-blur-xs text-white text-[8px] font-medium px-1.5 py-0.5 rounded-full flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
                       <Move size={10} />
-                      <span>Geser</span>
+                      <span>Geser Foto</span>
                     </div>
 
                     {/* Pose index badge */}
@@ -1564,14 +1431,18 @@ export default function EditorPhotostrip() {
                       #{idx + 1}
                     </span>
 
-                    {/* Render stickers on this photo */}
+                    {/* Render stickers on this photo (both emoji and custom image stickers) */}
                     {p?.stickers?.map((stk) => (
                       <div
                         key={stk.id}
-                        className="absolute text-xl sm:text-2xl pointer-events-none select-none -translate-x-1/2 -translate-y-1/2 animate-scaleIn"
+                        className="absolute pointer-events-none select-none -translate-x-1/2 -translate-y-1/2 animate-scaleIn"
                         style={{ left: `${stk.x}%`, top: `${stk.y}%` }}
                       >
-                        {stk.text}
+                        {stk.type === 'image' && stk.imageUrl ? (
+                          <img src={stk.imageUrl} alt="" className="w-8 h-8 sm:w-10 sm:h-10 object-contain drop-shadow-md" />
+                        ) : (
+                          <span className="text-xl sm:text-2xl drop-shadow-md">{stk.text || '✨'}</span>
+                        )}
                       </div>
                     ))}
 
@@ -1598,73 +1469,259 @@ export default function EditorPhotostrip() {
               <div>
                 {showBadge && (
                   <div className="flex items-center gap-1.5 mb-1">
-                    <div className="w-3.5 h-3.5 rounded-full bg-red-600 flex items-center justify-center text-[8px] text-white font-bold">
-                      s
-                    </div>
-                    <span className="font-bold text-[11px] tracking-tight">snap.e atelier</span>
+                    <span className="font-bold text-sm sm:text-base tracking-tight leading-none">
+                      {appConfig.website?.brandName || 'snap.e'}
+                    </span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-red-600 animate-pulse"></span>
                   </div>
                 )}
-                <p className="text-[11px] sm:text-xs font-serif italic font-semibold leading-tight max-w-[180px] truncate">
+                <p className="font-serif italic text-xs sm:text-sm font-medium tracking-tight">
                   {customText}
                 </p>
-                <p className="text-[8px] sm:text-[9px] font-mono mt-0.5 opacity-70">
-                  {new Date().toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' })} • JAKARTA
+                <p className="text-[8px] sm:text-[9px] opacity-75 font-mono mt-0.5">
+                  {new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })} • ATELIER
                 </p>
               </div>
 
+              {/* Verified Mini QR */}
               {showQr && (
-                <div className="w-8 h-8 rounded border border-current/20 flex items-center justify-center p-1 bg-current/5">
-                  <div className="w-full h-full grid grid-cols-3 gap-0.5 opacity-80">
-                    <div className="bg-current rounded-[1px]"></div>
-                    <div className="bg-current rounded-[1px]"></div>
-                    <div className="bg-current rounded-[1px]"></div>
-                    <div className="bg-current rounded-[1px]"></div>
-                    <div className="border border-current rounded-[1px]"></div>
-                    <div className="bg-current rounded-[1px]"></div>
-                    <div className="bg-current rounded-[1px]"></div>
-                    <div className="bg-current rounded-[1px]"></div>
-                    <div className="bg-current rounded-[1px]"></div>
+                <div className="p-1 rounded-xs bg-white/10 border border-current opacity-80 shrink-0">
+                  <div className="w-6 h-6 sm:w-7 sm:h-7 grid grid-cols-3 gap-0.5">
+                    <div className="bg-current rounded-xs"></div>
+                    <div className="bg-transparent"></div>
+                    <div className="bg-current rounded-xs"></div>
+                    <div className="bg-transparent"></div>
+                    <div className="bg-current rounded-xs"></div>
+                    <div className="bg-transparent"></div>
+                    <div className="bg-current rounded-xs"></div>
+                    <div className="bg-transparent"></div>
+                    <div className="bg-current rounded-xs"></div>
                   </div>
                 </div>
               )}
             </div>
+
           </div>
 
-          <p className="text-xs text-gray-400 mt-4 text-center">
-            Tip: Klik salah satu foto di dalam bingkai untuk mengatur zoom, geser posisi, atau menambah stiker.
-          </p>
-        </div>
+          {/* DOCKED COMPANION CONTROLLER: Zoom & Geser Posisi Berdampingan Langsung dengan Frame */}
+          <div className="w-full max-w-[320px] bg-white border border-gray-200/90 rounded-2xl p-4 sm:p-5 shadow-lg space-y-4 shrink-0 lg:sticky lg:top-20">
+            
+            {/* Header info */}
+            <div className="flex items-center justify-between border-b border-gray-100 pb-2.5">
+              <div>
+                <h4 className="font-bold text-xs text-gray-900 flex items-center gap-1.5">
+                  <Move size={14} className="text-red-600" />
+                  <span>Atur Gambar Pose #{activePhotoIdx + 1}</span>
+                </h4>
+                <p className="text-[10px] text-gray-400 mt-0.5">
+                  Zoom & geser posisi berdampingan dengan frame
+                </p>
+              </div>
 
-        {/* RIGHT COLUMN: Actions & Print Order */}
-        <div className="w-full lg:w-80 shrink-0 space-y-6">
-          
-          {/* Download & Export Card */}
-          <div className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-gray-100 space-y-3">
-            <div>
-              <h3 className="font-bold text-sm text-gray-900">Simpan & Unduh</h3>
-              <p className="text-xs text-gray-500 mt-0.5">Ekspor strip foto HD, GIF animasi, dan foto live</p>
+              <button
+                type="button"
+                onClick={() => handleResetPosition(activePhotoIdx)}
+                className="text-[10px] font-bold text-gray-500 hover:text-red-600 flex items-center gap-1 bg-gray-50 hover:bg-red-50 px-2 py-1 rounded-md border border-gray-200 transition-colors"
+                title="Kembalikan ke posisi tengah & zoom normal"
+              >
+                <RotateCcw size={11} />
+                <span>Reset</span>
+              </button>
             </div>
 
-            {/* 1. HD Still Photo Strip Download */}
+            {/* Pose Slot Selector Chips */}
+            <div className="space-y-1">
+              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">
+                Pilih Pose yang Diatur:
+              </span>
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-1.5">
+                {photos.slice(0, layout === 'grid' ? 4 : 3).map((p, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setActivePhotoIdx(i)}
+                    className={`py-1.5 px-2 rounded-xl text-xs font-bold transition-all border flex items-center justify-center gap-1 ${
+                      activePhotoIdx === i
+                        ? 'bg-gray-900 text-white border-gray-900 shadow-xs scale-102'
+                        : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
+                    }`}
+                  >
+                    <span>#{i + 1}</span>
+                    {activePhotoIdx === i && <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Zoom Controller */}
+            <div className="space-y-2 bg-gray-50 p-3 rounded-xl border border-gray-100">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-bold text-gray-700 flex items-center gap-1">
+                  <ZoomIn size={13} className="text-gray-500" />
+                  Zoom Gambar:
+                </span>
+                <span className="font-mono font-bold text-red-600 bg-white px-2 py-0.5 rounded border border-gray-200 text-[11px]">
+                  {(currentActivePhoto?.zoom || 1.0).toFixed(2)}x
+                </span>
+              </div>
+
+              {/* Slider with [-] and [+] buttons */}
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => handleZoomStep(-0.1)}
+                  className="w-7 h-7 rounded-lg bg-white hover:bg-gray-100 border border-gray-300 flex items-center justify-center text-gray-700 font-bold active:scale-95 transition-transform"
+                  title="Perkecil Zoom"
+                >
+                  <ZoomOut size={13} />
+                </button>
+
+                <input
+                  type="range"
+                  min="0.8"
+                  max="2.5"
+                  step="0.05"
+                  value={currentActivePhoto?.zoom || 1.0}
+                  onChange={(e) => handleZoomChange(e.target.value)}
+                  className="flex-1 accent-red-600 cursor-pointer h-1.5 bg-gray-200 rounded-lg"
+                />
+
+                <button
+                  type="button"
+                  onClick={() => handleZoomStep(0.1)}
+                  className="w-7 h-7 rounded-lg bg-white hover:bg-gray-100 border border-gray-300 flex items-center justify-center text-gray-700 font-bold active:scale-95 transition-transform"
+                  title="Perbesar Zoom"
+                >
+                  <ZoomIn size={13} />
+                </button>
+              </div>
+
+              {/* Quick Zoom presets */}
+              <div className="flex gap-1 pt-1">
+                {[1.0, 1.2, 1.5, 2.0].map((zVal) => (
+                  <button
+                    key={zVal}
+                    type="button"
+                    onClick={() => handleZoomChange(zVal)}
+                    className={`flex-1 py-1 text-[10px] font-bold rounded-lg border transition-colors ${
+                      Math.abs((currentActivePhoto?.zoom || 1.0) - zVal) < 0.04
+                        ? 'bg-red-600 text-white border-red-600 shadow-xs'
+                        : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-100'
+                    }`}
+                  >
+                    {zVal.toFixed(1)}x
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* D-Pad Pan Directional Controls */}
+            <div className="space-y-2 bg-gray-50 p-3 rounded-xl border border-gray-100">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-bold text-gray-700 flex items-center gap-1">
+                  <Move size={13} className="text-gray-500" />
+                  Geser Posisi (Pan):
+                </span>
+                <span className="font-mono text-[10px] text-gray-500">
+                  X:{currentActivePhoto?.offsetX || 0}% Y:{currentActivePhoto?.offsetY || 0}%
+                </span>
+              </div>
+
+              {/* D-Pad Arrow Buttons */}
+              <div className="flex flex-col items-center gap-1 pt-1">
+                <button
+                  type="button"
+                  onClick={() => handleNudge(0, -6)}
+                  className="w-9 h-8 bg-white hover:bg-gray-100 border border-gray-200 rounded-lg flex items-center justify-center text-gray-700 active:scale-95 shadow-xs transition-transform"
+                  title="Geser ke Atas"
+                >
+                  <ArrowUp size={15} />
+                </button>
+                <div className="flex items-center gap-1 w-full justify-center">
+                  <button
+                    type="button"
+                    onClick={() => handleNudge(-6, 0)}
+                    className="w-9 h-8 bg-white hover:bg-gray-100 border border-gray-200 rounded-lg flex items-center justify-center text-gray-700 active:scale-95 shadow-xs transition-transform"
+                    title="Geser ke Kiri"
+                  >
+                    <ArrowLeft size={15} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleResetPosition(activePhotoIdx)}
+                    className="w-9 h-8 bg-gray-900 hover:bg-black text-white rounded-lg flex items-center justify-center text-[10px] font-bold active:scale-95 shadow-xs transition-transform"
+                    title="Reset ke Posisi Tengah"
+                  >
+                    ●
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleNudge(6, 0)}
+                    className="w-9 h-8 bg-white hover:bg-gray-100 border border-gray-200 rounded-lg flex items-center justify-center text-gray-700 active:scale-95 shadow-xs transition-transform"
+                    title="Geser ke Kanan"
+                  >
+                    <ArrowRight size={15} />
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleNudge(0, 6)}
+                  className="w-9 h-8 bg-white hover:bg-gray-100 border border-gray-200 rounded-lg flex items-center justify-center text-gray-700 active:scale-95 shadow-xs transition-transform"
+                  title="Geser ke Bawah"
+                >
+                  <ArrowDown size={15} />
+                </button>
+              </div>
+
+              <p className="text-[10px] text-gray-400 text-center pt-1 leading-tight">
+                💡 Tip: Anda juga dapat menyeret foto langsung pada frame.
+              </p>
+            </div>
+
+            {/* Replace Active Slot from File */}
+            <label className="flex items-center justify-center gap-2 w-full py-2.5 bg-white hover:bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 cursor-pointer transition-colors shadow-xs">
+              <Upload size={13} className="text-gray-500" />
+              <span>Ganti Foto #{activePhotoIdx + 1} dari File</span>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => handleFileUpload(e, activePhotoIdx)}
+                className="hidden"
+              />
+            </label>
+
+          </div>
+
+        </div>
+
+        {/* RIGHT COLUMN: Download & Print Actions */}
+        <div className="w-full lg:w-72 shrink-0 space-y-4">
+          
+          <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 space-y-4">
+            <div>
+              <h3 className="font-bold text-sm text-gray-900">Unduh & Bagikan Hasil</h3>
+              <p className="text-xs text-gray-500 mt-0.5">Ekspor strip foto siap cetak atau share ke media sosial</p>
+            </div>
+
+            {/* HD Download PNG */}
             <button
               onClick={handleDownloadHD}
-              className="w-full py-3 bg-gray-900 hover:bg-black text-white rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all shadow-md shadow-gray-900/10 active:scale-98"
+              className="w-full py-3 bg-gray-900 hover:bg-black text-white rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-md active:scale-98"
             >
-              <Download size={16} />
-              Unduh Strip Foto HD (PNG 300 DPI)
+              <Download size={15} />
+              <span>Unduh Foto Strip HD (PNG)</span>
             </button>
 
-            {/* 2. Animated Strip GIF Download */}
+            {/* Strip Animated GIF */}
             <button
               onClick={handleDownloadAnimatedStripGif}
               disabled={isGeneratingStripGif}
-              className="w-full py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-md shadow-purple-600/20 active:scale-98 disabled:opacity-50"
+              className="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-md shadow-purple-600/20 active:scale-98 disabled:opacity-50"
             >
               <Film size={15} />
-              <span>{isGeneratingStripGif ? 'Memproses Strip GIF...' : 'Unduh Strip Bergerak (GIF Animasi)'}</span>
+              <span>{isGeneratingStripGif ? 'Memproses Strip GIF...' : 'Unduh Strip Bergerak (GIF)'}</span>
             </button>
 
-            {/* 3. Individual Live Photos & GIF from Album */}
+            {/* Live Photos Per Pose Modal */}
             <button
               onClick={() => setShowLiveDownloadModal(true)}
               className="w-full py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-colors border border-gray-200"
@@ -1673,31 +1730,29 @@ export default function EditorPhotostrip() {
               <span>Unduh Foto Live / GIF Per Pose</span>
             </button>
 
-            {/* Share URL */}
-            <div className="flex bg-gray-50 border border-gray-200 rounded-xl overflow-hidden pt-1">
-              <input
-                type="text"
-                readOnly
-                value={window.location.href}
-                className="flex-1 bg-transparent px-3 py-2 text-xs text-gray-500 outline-none truncate"
-              />
+            {/* Copy Share Link */}
+            <button
+              onClick={handleCopyShareUrl}
+              className="w-full py-2.5 bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-colors"
+            >
+              <Copy size={15} />
+              <span>Salin Tautan Strip Foto</span>
+            </button>
+
+            <div className="border-t border-gray-100 pt-3">
               <button
-                onClick={handleCopyShareUrl}
-                className="px-3 py-2 bg-gray-100 hover:bg-gray-200 border-l border-gray-200 text-xs font-bold text-gray-700 flex items-center gap-1 transition-colors shrink-0"
+                onClick={() => navigate('/capture')}
+                className="w-full py-2 text-xs font-bold text-red-600 hover:text-red-700 flex items-center justify-center gap-1.5"
               >
-                <Copy size={12} />
-                Salin
+                <Camera size={13} />
+                <span>Foto Ulang / Retake Sesi</span>
               </button>
             </div>
           </div>
 
-          {/* Physical Print Order Card */}
-          <div className="bg-gradient-to-br from-white to-red-50/40 p-5 sm:p-6 rounded-2xl shadow-sm border border-red-100 relative overflow-hidden space-y-4">
-            <div className="absolute top-0 right-0 bg-red-500 text-white font-bold text-[10px] px-3 py-1 rounded-bl-xl shadow-xs">
-              Mulai Rp 35.000
-            </div>
-
-            <div className="pt-2">
+          {/* Physical Print Ordering */}
+          <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 space-y-3">
+            <div className="pt-1">
               <h3 className="font-bold text-sm text-gray-900 flex items-center gap-1.5">
                 <Printer size={16} className="text-red-600" />
                 Pesan Cetak Fisik
@@ -1917,20 +1972,14 @@ export default function EditorPhotostrip() {
         </div>
       )}
 
-      {/* Frame Design & Specifications Guide Modal (Informational Only) */}
-      <FrameGuideModal
-        isOpen={showGuideModal}
-        onClose={() => setShowGuideModal(false)}
-      />
-
       {/* Footer */}
       <footer className="border-t border-gray-200 bg-white py-6 mt-auto">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-gray-500">
           <div className="flex items-center gap-2">
-            <span className="font-bold text-gray-900">snap.e</span>
-            <span>— Tangible Memories, Synchronized Distances.</span>
+            <span className="font-bold text-gray-900">{appConfig.website?.brandName || 'snap.e'}</span>
+            <span>— {appConfig.website?.heroTagline || 'Tangible Memories, Synchronized Distances.'}</span>
           </div>
-          <p>© {new Date().getFullYear()} snap.e atelier. All rights reserved.</p>
+          <p>© {new Date().getFullYear()} {appConfig.website?.brandName || 'snap.e'} Atelier. All rights reserved.</p>
         </div>
       </footer>
     </div>
