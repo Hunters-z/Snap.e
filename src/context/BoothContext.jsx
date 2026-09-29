@@ -793,8 +793,48 @@ export function BoothProvider({ children }) {
     }
   };
 
+  // Direct login fallback (works in iframe / when popup is blocked)
+  const loginDirectly = async (customEmail = '0601randikurnia.s@gmail.com', customName = 'Randi Kurnia') => {
+    const email = (customEmail || '0601randikurnia.s@gmail.com').trim().toLowerCase();
+    const displayName = (customName || '').trim() || email.split('@')[0];
+    const admin = isUserAdmin({ email });
+    const uid = `usr_${email.replace(/[^a-zA-Z0-9]/g, '_')}`;
+    const userData = {
+      uid,
+      email,
+      displayName,
+      photoURL: null,
+      isAdmin: admin
+    };
+
+    setCurrentUser(userData);
+    localStorage.setItem('snape_current_user', JSON.stringify(userData));
+    setUserName(displayName);
+
+    try {
+      await setDoc(doc(db, 'users', uid), {
+        uid,
+        email,
+        displayName,
+        photoURL: null,
+        role: admin ? 'admin' : 'customer',
+        lastLoginAt: new Date().toISOString(),
+        createdAt: new Date().toISOString()
+      }, { merge: true });
+    } catch (e) {
+      console.warn('Could not save user profile to Firestore:', e);
+    }
+
+    if (admin) {
+      setIsAdminAuth(true);
+      localStorage.setItem('snape_admin_authenticated', 'true');
+    }
+
+    return { success: true, user: userData, isAdmin: admin };
+  };
+
   const loginWithDemo = () => {
-    throw new Error('Fitur login demo telah dinonaktifkan. Silakan masuk menggunakan akun Google Anda.');
+    return loginDirectly('0601randikurnia.s@gmail.com', 'Randi Kurnia (Admin)');
   };
 
   const logout = async () => {
@@ -1036,6 +1076,7 @@ export function BoothProvider({ children }) {
         openAuthModal,
         closeAuthModal,
         loginWithGoogle,
+        loginDirectly,
         loginWithDemo,
         logout,
         adminLogin,

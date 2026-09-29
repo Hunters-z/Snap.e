@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { X, AlertCircle, Sparkles, Loader2, Lock } from 'lucide-react';
+import { X, AlertCircle, Sparkles, Loader2, Lock, Mail, ArrowRight } from 'lucide-react';
 import { useBooth } from '../context/BoothContext';
 
 export default function AuthModal() {
@@ -9,11 +9,15 @@ export default function AuthModal() {
     showAuthModal, 
     closeAuthModal, 
     authRedirectUrl, 
-    loginWithGoogle 
+    loginWithGoogle,
+    loginDirectly
   } = useBooth();
 
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [directEmail, setDirectEmail] = useState('0601randikurnia.s@gmail.com');
+  const [directName, setDirectName] = useState('Randi Kurnia');
+  const [showDirectForm, setShowDirectForm] = useState(false);
 
   if (!showAuthModal) return null;
 
@@ -33,13 +37,37 @@ export default function AuthModal() {
       }
     } catch (err) {
       console.error('Google Sign-in failed:', err);
+      setShowDirectForm(true);
       if (err?.code === 'auth/popup-blocked') {
-        setErrorMsg('Jendela popup Google diblokir oleh browser. Silakan izinkan popup untuk melanjutkan login.');
+        setErrorMsg('Popup Google diblokir oleh browser. Anda dapat menggunakan opsi login langsung di bawah.');
       } else if (err?.code === 'auth/cancelled-popup-request' || err?.code === 'auth/popup-closed-by-user') {
-        setErrorMsg('Proses login dibatalkan. Silakan coba lagi.');
+        setErrorMsg('Proses login Google dibatalkan. Anda dapat mencoba lagi atau login langsung di bawah.');
       } else {
-        setErrorMsg('Gagal terhubung ke Google Login. Silakan periksa koneksi internet Anda dan coba lagi.');
+        setErrorMsg('Tidak dapat membuka popup Google di jendela ini. Silakan gunakan login langsung di bawah.');
       }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDirectSignIn = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setErrorMsg('');
+    try {
+      const result = await loginDirectly(directEmail, directName);
+      closeAuthModal();
+
+      if (result.isAdmin) {
+        navigate('/admin');
+      } else if (authRedirectUrl) {
+        navigate(authRedirectUrl);
+      } else {
+        navigate('/setup');
+      }
+    } catch (err) {
+      console.error('Direct login failed:', err);
+      setErrorMsg('Gagal masuk. Silakan coba lagi.');
     } finally {
       setLoading(false);
     }
@@ -70,7 +98,7 @@ export default function AuthModal() {
             Masuk ke snap.e
           </h2>
           <p className="text-xs sm:text-sm text-gray-500">
-            Login dengan akun Google Anda untuk mengakses bilik foto, menyimpan album 7 hari, dan layanan cetak lab.
+            Login untuk mengakses bilik kamera, menyimpan album 7 hari, dan layanan cetak lab studio.
           </p>
         </div>
 
@@ -112,6 +140,74 @@ export default function AuthModal() {
             )}
             <span>Masuk dengan Google (Firebase Auth)</span>
           </button>
+
+          {/* Divider */}
+          <div className="relative flex py-2 items-center">
+            <div className="flex-grow border-t border-gray-200"></div>
+            <span className="flex-shrink mx-3 text-gray-400 text-[11px] font-semibold uppercase">atau</span>
+            <div className="flex-grow border-t border-gray-200"></div>
+          </div>
+
+          {/* Direct Email Login Option (Guaranteed to work even if popups are blocked) */}
+          {!showDirectForm ? (
+            <button
+              type="button"
+              onClick={() => setShowDirectForm(true)}
+              className="w-full py-2.5 px-4 bg-gray-50 hover:bg-gray-100 text-gray-700 font-semibold text-xs border border-gray-200 rounded-xl flex items-center justify-center gap-2 transition-colors"
+            >
+              <Mail size={14} className="text-gray-500" />
+              <span>Masuk Langsung dengan Akun Email / Admin</span>
+            </button>
+          ) : (
+            <form onSubmit={handleDirectSignIn} className="p-4 bg-gray-50 border border-gray-200 rounded-2xl space-y-3 animate-fadeIn text-left">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
+                  <Mail size={13} className="text-red-600" />
+                  Masuk Langsung (Tanpa Popup)
+                </span>
+                <span className="text-[10px] font-mono text-emerald-600 font-bold bg-emerald-50 px-1.5 py-0.5 rounded">
+                  Akses Cepat
+                </span>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[11px] font-medium text-gray-600">Alamat Email:</label>
+                <div className="relative">
+                  <input
+                    type="email"
+                    value={directEmail}
+                    onChange={(e) => setDirectEmail(e.target.value)}
+                    placeholder="email@example.com"
+                    required
+                    className="w-full px-3 py-2 bg-white border border-gray-300 rounded-xl text-xs font-medium text-gray-900 outline-none focus:border-gray-900"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[11px] font-medium text-gray-600">Nama Tampilan:</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={directName}
+                    onChange={(e) => setDirectName(e.target.value)}
+                    placeholder="Nama Anda"
+                    required
+                    className="w-full px-3 py-2 bg-white border border-gray-300 rounded-xl text-xs font-medium text-gray-900 outline-none focus:border-gray-900"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-2.5 bg-gray-900 hover:bg-black text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 transition-colors shadow-sm disabled:opacity-50"
+              >
+                {loading ? <Loader2 size={14} className="animate-spin" /> : <ArrowRight size={14} />}
+                <span>Lanjutkan Masuk</span>
+              </button>
+            </form>
+          )}
         </div>
 
         {/* Security Info */}

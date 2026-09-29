@@ -14,11 +14,15 @@ export default function Topbar() {
   } = useBooth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const links = [
-    { name: 'Beranda & Setup', path: '/' },
-    { name: 'Mulai Booth', path: '/capture' },
-    { name: 'Galeri & Edit', path: '/editor' },
-  ];
+  const links = currentUser
+    ? [
+        { name: 'Beranda & Setup', path: '/' },
+        { name: 'Mulai Booth', path: '/capture' },
+        { name: 'Galeri & Edit', path: '/editor' },
+      ]
+    : [
+        { name: 'Beranda', path: '/' },
+      ];
 
   return (
     <header className="sticky top-0 z-40 w-full bg-white/95 backdrop-blur-md border-b border-gray-100 transition-all">
@@ -68,13 +72,15 @@ export default function Topbar() {
 
         {/* Right side Auth & CTA */}
         <div className="hidden sm:flex items-center gap-2.5">
-          <Link
-            to="/capture"
-            className="flex items-center gap-1.5 text-xs font-semibold px-3.5 py-1.5 rounded-full bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
-          >
-            <Camera size={14} />
-            Buka Booth
-          </Link>
+          {currentUser && (
+            <Link
+              to="/capture"
+              className="flex items-center gap-1.5 text-xs font-semibold px-3.5 py-1.5 rounded-full bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
+            >
+              <Camera size={14} />
+              Buka Booth
+            </Link>
+          )}
 
           {currentUser ? (
             <div className="flex items-center gap-2">

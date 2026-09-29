@@ -19,7 +19,8 @@ import {
   MapPin,
   Clock,
   MessageCircle,
-  Instagram
+  Instagram,
+  LogIn
 } from 'lucide-react';
 
 export default function BoothHome() {
@@ -365,13 +366,23 @@ export default function BoothHome() {
               <span className="text-xs text-emerald-600 ml-2 font-medium">● Termasuk HD Download & Album 7 Hari</span>
             </div>
 
-            <button
-              onClick={handleStartBooth}
-              className="w-full sm:w-auto px-8 py-3.5 bg-gray-900 hover:bg-black text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-md shadow-gray-900/10 group"
-            >
-              <span>{appConfig.website?.primaryCtaText || 'Mulai Sesi Booth Sekarang'}</span>
-              <ArrowRight size={16} className="group-hover:translate-x-0.5 transition-transform" />
-            </button>
+            {currentUser ? (
+              <button
+                onClick={handleStartBooth}
+                className="w-full sm:w-auto px-8 py-3.5 bg-gray-900 hover:bg-black text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-md shadow-gray-900/10 group"
+              >
+                <span>{appConfig.website?.primaryCtaText || 'Mulai Sesi Booth Sekarang'}</span>
+                <ArrowRight size={16} className="group-hover:translate-x-0.5 transition-transform" />
+              </button>
+            ) : (
+              <button
+                onClick={() => openAuthModal('/setup')}
+                className="w-full sm:w-auto px-8 py-3.5 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-md shadow-red-600/20 group"
+              >
+                <LogIn size={16} />
+                <span>Masuk untuk Mulai Booth</span>
+              </button>
+            )}
           </div>
         </div>
         )}
@@ -517,12 +528,22 @@ export default function BoothHome() {
                     <span>Dukungan LDR Shutter Sync WebRTC</span>
                   </li>
                 </ul>
-                <button
-                  onClick={handleStartBooth}
-                  className="w-full py-3 bg-gray-900 hover:bg-black text-white rounded-xl text-xs font-bold transition-colors"
-                >
-                  Mulai Sekarang
-                </button>
+                {currentUser ? (
+                  <button
+                    onClick={handleStartBooth}
+                    className="w-full py-3 bg-gray-900 hover:bg-black text-white rounded-xl text-xs font-bold transition-colors"
+                  >
+                    Mulai Sekarang
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => openAuthModal('/setup')}
+                    className="w-full py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5"
+                  >
+                    <LogIn size={14} />
+                    <span>Masuk untuk Memulai</span>
+                  </button>
+                )}
               </div>
 
               <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
@@ -549,12 +570,22 @@ export default function BoothHome() {
                     <span>Pengiriman rapi dengan amplop kaku & sleeve pelindung</span>
                   </li>
                 </ul>
-                <button
-                  onClick={() => navigate('/editor')}
-                  className="w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-900 rounded-xl text-xs font-bold transition-colors"
-                >
-                  Lihat Editor & Order Cetak
-                </button>
+                {currentUser ? (
+                  <button
+                    onClick={() => navigate('/editor')}
+                    className="w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-900 rounded-xl text-xs font-bold transition-colors"
+                  >
+                    Lihat Editor & Order Cetak
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => openAuthModal('/editor')}
+                    className="w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5"
+                  >
+                    <LogIn size={14} />
+                    <span>Masuk untuk Akses Editor</span>
+                  </button>
+                )}
               </div>
             </div>
           </section>

@@ -222,6 +222,73 @@ export default function EditorPhotostrip() {
     };
   }, [dragState]);
 
+  // Sticker dragging state: allows free dragging anywhere inside the frame slot
+  const [dragStickerState, setDragStickerState] = useState(null);
+
+  const handleStickerPointerDown = (e, photoIdx, sticker) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setActivePhotoIdx(photoIdx);
+
+    const slotElem = e.currentTarget.closest('[data-photo-slot]');
+    const rect = slotElem ? slotElem.getBoundingClientRect() : { width: 250, height: 180 };
+
+    setDragStickerState({
+      photoIdx,
+      stickerId: sticker.id,
+      startX: e.clientX,
+      startY: e.clientY,
+      initX: sticker.x ?? 50,
+      initY: sticker.y ?? 50,
+      containerW: rect.width || 250,
+      containerH: rect.height || 180,
+    });
+  };
+
+  useEffect(() => {
+    if (!dragStickerState) return;
+
+    const handleGlobalStickerMove = (e) => {
+      const deltaX = e.clientX - dragStickerState.startX;
+      const deltaY = e.clientY - dragStickerState.startY;
+
+      const deltaPercentX = (deltaX / dragStickerState.containerW) * 100;
+      const deltaPercentY = (deltaY / dragStickerState.containerH) * 100;
+
+      // Free range inside the photo box (clamp between 4% and 96%)
+      const newX = Math.max(4, Math.min(96, Math.round((dragStickerState.initX + deltaPercentX) * 10) / 10));
+      const newY = Math.max(4, Math.min(96, Math.round((dragStickerState.initY + deltaPercentY) * 10) / 10));
+
+      setPhotos((prev) => {
+        const next = [...prev];
+        const targetPhoto = next[dragStickerState.photoIdx];
+        if (targetPhoto && targetPhoto.stickers) {
+          next[dragStickerState.photoIdx] = {
+            ...targetPhoto,
+            stickers: targetPhoto.stickers.map((s) =>
+              s.id === dragStickerState.stickerId ? { ...s, x: newX, y: newY } : s
+            )
+          };
+        }
+        return next;
+      });
+    };
+
+    const handleGlobalStickerUp = () => {
+      setDragStickerState(null);
+    };
+
+    window.addEventListener('pointermove', handleGlobalStickerMove);
+    window.addEventListener('pointerup', handleGlobalStickerUp);
+    window.addEventListener('pointercancel', handleGlobalStickerUp);
+
+    return () => {
+      window.removeEventListener('pointermove', handleGlobalStickerMove);
+      window.removeEventListener('pointerup', handleGlobalStickerUp);
+      window.removeEventListener('pointercancel', handleGlobalStickerUp);
+    };
+  }, [dragStickerState]);
+
   // Adjust active photo zoom
   const handleZoomChange = useCallback((val, idx = activePhotoIdx) => {
     const num = Math.max(0.8, Math.min(2.5, Math.round(parseFloat(val) * 100) / 100));
@@ -1307,12 +1374,13 @@ export default function EditorPhotostrip() {
                 return (
                   <div
                     key={idx}
+                    data-photo-slot="true"
                     onClick={() => setActivePhotoIdx(idx)}
                     onPointerDown={(e) => handlePointerDown(e, idx)}
                     className={`aspect-[4/3] bg-gray-200 rounded-xs overflow-hidden relative group border-2 transition-all select-none touch-none ${
                       isActive ? 'border-red-500 shadow-md ring-2 ring-red-500/30' : 'border-transparent hover:border-gray-400/50'
                     } ${isDraggingThis ? 'cursor-grabbing' : 'cursor-grab'}`}
-                    title="Klik untuk memilih foto. Geser / drag langsung pada foto untuk mengatur posisi."
+                    title="Klik untuk memilih foto. Geser langsung pada foto untuk mengatur posisi, atau geser stiker."
                   >
                     <div 
                       className="w-full h-full relative overflow-hidden pointer-events-none select-none"
@@ -1372,7 +1440,7 @@ export default function EditorPhotostrip() {
                     {/* Move drag badge indicator */}
                     <div className="absolute top-1.5 left-1.5 bg-black/60 backdrop-blur-xs text-white text-[8px] font-medium px-1.5 py-0.5 rounded-full flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
                       <Move size={10} />
-                      <span>Geser Foto</span>
+                      <span>Geser Foto / Stiker</span>
                     </div>
 
                     {/* Pose index badge */}
@@ -1380,32 +1448,54 @@ export default function EditorPhotostrip() {
                       #{idx + 1}
                     </span>
 
-                    {/* Render stickers on this photo (both emoji and custom image stickers) */}
-                    {p?.stickers?.map((stk) => (
-                      <div
-                        key={stk.id}
-                        className="absolute pointer-events-none select-none -translate-x-1/2 -translate-y-1/2 animate-scaleIn"
-                        style={{ left: `${stk.x}%`, top: `${stk.y}%` }}
-                      >
-                        {stk.type === 'image' && stk.imageUrl ? (
-                          <img src={stk.imageUrl} alt="" className="w-8 h-8 sm:w-10 sm:h-10 object-contain drop-shadow-md" />
-                        ) : (
-                          <span className="text-xl sm:text-2xl drop-shadow-md">{stk.text || '✨'}</span>
-                        )}
-                      </div>
-                    ))}
+                    {/* Draggable stickers on this photo (both emoji and custom image stickers) */}
+                    {p?.stickers?.map((stk) => {
+                      const isDraggingThisSticker = dragStickerState?.stickerId === stk.id;
+                      return (
+                        <div
+                          key={stk.id}
+                          onPointerDown={(e) => handleStickerPointerDown(e, idx, stk)}
+                          onClick={(e) => e.stopPropagation()}
+                          className={`absolute select-none -translate-x-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing group/stk z-20 touch-none transition-transform ${
+                            isDraggingThisSticker ? 'scale-125 z-30 cursor-grabbing ring-2 ring-red-500 rounded-full' : 'hover:scale-110'
+                          }`}
+                          style={{ left: `${stk.x}%`, top: `${stk.y}%` }}
+                          title="Tahan dan geser stiker ini ke mana saja di dalam foto"
+                        >
+                          {stk.type === 'image' && stk.imageUrl ? (
+                            <img src={stk.imageUrl} alt="" className="w-8 h-8 sm:w-10 sm:h-10 object-contain drop-shadow-md pointer-events-none" />
+                          ) : (
+                            <span className="text-xl sm:text-2xl drop-shadow-md pointer-events-none">{stk.text || '✨'}</span>
+                          )}
 
-                    {/* Quick remove sticker indicator on hover */}
+                          {/* Quick delete button on sticker hover */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRemoveSticker(idx, stk.id);
+                            }}
+                            className="absolute -top-1 -right-1 bg-red-600 hover:bg-red-700 text-white w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold opacity-0 group-hover/stk:opacity-100 transition-opacity shadow-sm"
+                            title="Hapus Stiker Ini"
+                          >
+                            <X size={10} />
+                          </button>
+                        </div>
+                      );
+                    })}
+
+                    {/* Quick remove last sticker indicator on hover */}
                     {p?.stickers?.length > 0 && (
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           handleRemoveSticker(idx, p.stickers[p.stickers.length - 1].id);
                         }}
-                        className="absolute top-1 right-1 bg-red-600/80 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="absolute bottom-1 left-1 bg-red-600/80 hover:bg-red-700 text-white px-1.5 py-0.5 rounded text-[9px] font-bold opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1"
                         title="Hapus Stiker Terakhir"
                       >
                         <Trash2 size={10} />
+                        <span>Hapus Stiker</span>
                       </button>
                     )}
                   </div>
