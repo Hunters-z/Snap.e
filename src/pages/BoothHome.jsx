@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import Topbar from '../components/Topbar';
-import LoginScreen from '../components/LoginScreen';
 import { useBooth } from '../context/BoothContext';
 import { QRCodeSVG } from 'qrcode.react';
 import { 
@@ -153,10 +152,6 @@ export default function BoothHome() {
     );
   }
 
-  // 2. Unauthenticated: Sembunyikan Beranda pada halaman depan jadi HANYA tampilan login saja
-  if (!currentUser) {
-    return <LoginScreen />;
-  }
 
   return (
     <div className="min-h-screen flex flex-col bg-[#F9FAFB] text-gray-900 font-sans">

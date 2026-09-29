@@ -479,7 +479,7 @@ export default function LiveCapture() {
             className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
           >
             <ChevronLeft size={16} />
-            <span className="hidden sm:inline">Beranda</span>
+            <span className="hidden sm:inline">Kembali</span>
           </button>
 
           <div className="hidden sm:flex items-center gap-1.5 pl-2 border-l border-white/10">

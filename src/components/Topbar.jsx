@@ -14,13 +14,10 @@ export default function Topbar() {
   } = useBooth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const links = currentUser
-    ? [
-        { name: 'Beranda & Setup', path: '/' },
-        { name: 'Mulai Booth', path: '/capture' },
-        { name: 'Galeri & Edit', path: '/editor' },
-      ]
-    : [];
+  const links = [
+    { name: 'Mulai Booth', path: '/capture' },
+    { name: 'Galeri & Edit', path: '/editor' },
+  ];
 
   return (
     <header className="sticky top-0 z-40 w-full bg-white/95 backdrop-blur-md border-b border-gray-100 transition-all">
