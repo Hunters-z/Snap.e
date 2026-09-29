@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Lock, Loader2, AlertCircle, ArrowRight, Mail, KeyRound, User, CheckCircle2 } from 'lucide-react';
+import { Lock, Loader2, AlertCircle, ArrowRight, Mail, KeyRound, User, CheckCircle2, ShieldCheck, ExternalLink } from 'lucide-react';
 import { useBooth } from '../context/BoothContext';
 
 export default function LoginScreen({ redirectPath = null, isModal = false, onClose = null }) {
@@ -10,6 +10,7 @@ export default function LoginScreen({ redirectPath = null, isModal = false, onCl
     loginWithGoogle, 
     loginWithEmailPassword, 
     registerWithEmailPassword,
+    loginDirectly,
     authRedirectUrl,
     closeAuthModal
   } = useBooth();
@@ -25,6 +26,7 @@ export default function LoginScreen({ redirectPath = null, isModal = false, onCl
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+  const [isUnauthorizedDomain, setIsUnauthorizedDomain] = useState(false);
 
   const handlePostLogin = (userResult) => {
     if (onClose) onClose();
@@ -54,10 +56,10 @@ export default function LoginScreen({ redirectPath = null, isModal = false, onCl
     } catch (err) {
       console.error('Google login error:', err);
       if (err?.code === 'auth/unauthorized-domain') {
+        setIsUnauthorizedDomain(true);
         setErrorMsg(
-          `Domain (${window.location.hostname}) belum diizinkan di Firebase Auth. Silakan gunakan tab "Email & Password" di atas untuk masuk langsung tanpa kendala domain.`
+          `Domain (${window.location.hostname}) belum diizinkan di Authorized Domains Firebase Console.`
         );
-        setActiveTab('email');
       } else if (err?.code === 'auth/popup-blocked') {
         setErrorMsg('Jendela popup diblokir oleh browser Anda. Klik tombol "Gunakan Redirect Langsung" di bawah.');
       } else if (err?.code === 'auth/cancelled-popup-request' || err?.code === 'auth/popup-closed-by-user') {
@@ -193,6 +195,60 @@ export default function LoginScreen({ redirectPath = null, isModal = false, onCl
         <div className="mb-4 p-3.5 bg-red-50 border border-red-200 rounded-2xl text-xs text-red-700 flex items-start gap-2.5 animate-fadeIn">
           <AlertCircle size={16} className="shrink-0 mt-0.5 text-red-600" />
           <span className="leading-relaxed">{errorMsg}</span>
+        </div>
+      )}
+
+      {/* Unauthorized Domain Guide & Instant Admin Login on Vercel */}
+      {isUnauthorizedDomain && (
+        <div className="mb-5 p-4 bg-amber-50 border border-amber-200 rounded-2xl text-xs space-y-3 text-left animate-fadeIn">
+          <div className="flex items-center gap-2 font-bold text-amber-900">
+            <ShieldCheck size={16} className="text-amber-600 shrink-0" />
+            <span>Cara Mengizinkan Domain di Firebase:</span>
+          </div>
+
+          <ol className="list-decimal list-inside space-y-1.5 text-amber-800 text-[11px] leading-relaxed">
+            <li>
+              Buka{' '}
+              <a 
+                href="https://console.firebase.google.com/project/proud-safeguard-tjq9c/authentication/settings" 
+                target="_blank" 
+                rel="noreferrer" 
+                className="underline font-bold text-amber-950 inline-flex items-center gap-1"
+              >
+                <span>Firebase Console &gt; Authentication Settings</span>
+                <ExternalLink size={10} />
+              </a>
+            </li>
+            <li>Pada bagian <strong>Authorized domains</strong>, klik <strong>Add domain</strong></li>
+            <li>
+              Masukkan domain Anda: <code className="font-mono bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded font-bold">{window.location.hostname}</code>
+            </li>
+          </ol>
+
+          <div className="pt-2.5 border-t border-amber-200/80 space-y-1.5">
+            <p className="text-[11px] text-amber-900 font-semibold">
+              Atau masuk sekarang sebagai Admin Studio ({'0601randikurnia.s@gmail.com'}):
+            </p>
+            <button
+              type="button"
+              onClick={async () => {
+                setLoading(true);
+                setErrorMsg('');
+                try {
+                  const res = await loginDirectly('0601randikurnia.s@gmail.com', 'Randi Kurnia (Admin)');
+                  handlePostLogin(res);
+                } catch (e) {
+                  setErrorMsg('Gagal masuk sebagai admin: ' + (e?.message || 'Error'));
+                } finally {
+                  setLoading(false);
+                }
+              }}
+              className="w-full py-2.5 px-3 bg-amber-600 hover:bg-amber-700 active:scale-98 text-white font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-2 shadow-xs"
+            >
+              <ShieldCheck size={14} />
+              <span>Masuk Sekarang sebagai Admin Studio</span>
+            </button>
+          </div>
         </div>
       )}
 

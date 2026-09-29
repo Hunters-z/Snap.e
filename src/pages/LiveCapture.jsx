@@ -38,7 +38,6 @@ export default function LiveCapture() {
     capturedPhotos,
     sessionTimeRemaining,
     startOrResumeSession,
-    resetSession,
     sessionAlbum,
     addPhotoToAlbum,
     deletePhotoFromAlbum,
@@ -504,17 +503,6 @@ export default function LiveCapture() {
           >
             <Clock size={13} className={sessionTimeRemaining < 120 ? 'text-red-400' : 'text-gray-400'} />
             <span>Sisa Sesi: {formatSessionTime(sessionTimeRemaining)}</span>
-            <button
-              onClick={() => {
-                if (window.confirm('Mulai ulang hitungan waktu sesi 15 menit?')) {
-                  resetSession();
-                }
-              }}
-              className="text-gray-400 hover:text-white ml-1 p-0.5"
-              title="Reset waktu 15 menit"
-            >
-              <RotateCcw size={11} />
-            </button>
           </div>
         </div>
 

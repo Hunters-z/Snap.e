@@ -287,25 +287,15 @@ export function BoothProvider({ children }) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
           const now = Date.now();
-          // Filter out photos that have expired (> 7 days)
-          const validPhotos = parsed.filter(p => !p.expiresAt || new Date(p.expiresAt).getTime() > now);
-          if (validPhotos.length > 0) return validPhotos;
+          // Filter out photos that have expired (> 7 days) and filter out old default sample photos
+          const validPhotos = parsed.filter(p => p && !p.id?.startsWith('sample_') && !p.dataUrl?.includes('images.unsplash.com') && (!p.expiresAt || new Date(p.expiresAt).getTime() > now));
+          return validPhotos;
         }
       }
     } catch {
       // fallback
     }
-    const sampleExpiresAt = new Date(Date.now() + SEVEN_DAYS_MS).toISOString();
-    return DEFAULT_SAMPLE_PHOTOS.map((p, idx) => ({
-      id: `sample_${idx + 1}`,
-      ...p,
-      title: `Pose ${idx + 1}`,
-      capturedAt: '12:00',
-      createdAt: new Date().toISOString(),
-      expiresAt: sampleExpiresAt,
-      liveVideoUrl: null,
-      gifUrl: null
-    }));
+    return []; // Album starts completely empty!
   });
 
   // Photos captured in booth
@@ -314,12 +304,15 @@ export function BoothProvider({ children }) {
       const saved = localStorage.getItem('snape_captured_photos');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const validCaptured = parsed.filter(p => p && !p.id?.startsWith('sample_') && !p.dataUrl?.includes('images.unsplash.com'));
+          return validCaptured;
+        }
       }
     } catch {
       // fallback
     }
-    return DEFAULT_SAMPLE_PHOTOS;
+    return []; // Starts empty!
   });
 
   // Session ticker timer effect
@@ -337,7 +330,8 @@ export function BoothProvider({ children }) {
 
   const startOrResumeSession = useCallback(() => {
     let startTime = sessionStartTime;
-    if (!startTime) {
+    // If no start time OR if previous session is already expired, start fresh 15-minute session
+    if (!startTime || (Date.now() - startTime) >= SESSION_MAX_SECONDS * 1000) {
       startTime = Date.now();
       localStorage.setItem('snape_session_start_time', String(startTime));
       setSessionStartTime(startTime);

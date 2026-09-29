@@ -1382,24 +1382,32 @@ export default function EditorPhotostrip() {
                     } ${isDraggingThis ? 'cursor-grabbing' : 'cursor-grab'}`}
                     title="Klik untuk memilih foto. Geser langsung pada foto untuk mengatur posisi, atau geser stiker."
                   >
-                    <div 
-                      className="w-full h-full relative overflow-hidden pointer-events-none select-none"
-                      style={{
-                        transform: `translate(${p?.offsetX || 0}%, ${p?.offsetY || 0}%) scale(${p?.zoom || 1.0})`,
-                        transformOrigin: 'center center',
-                        transition: isDraggingThis ? 'none' : 'transform 0.12s ease-out'
-                      }}
-                    >
-                      <img
-                        src={p?.dataUrl}
-                        alt={`Photo ${idx + 1}`}
-                        className="w-full h-full object-cover pointer-events-none select-none"
+                    {p?.dataUrl ? (
+                      <div 
+                        className="w-full h-full relative overflow-hidden pointer-events-none select-none"
                         style={{
-                          filter: p?.filterCss || 'none'
+                          transform: `translate(${p?.offsetX || 0}%, ${p?.offsetY || 0}%) scale(${p?.zoom || 1.0})`,
+                          transformOrigin: 'center center',
+                          transition: isDraggingThis ? 'none' : 'transform 0.12s ease-out'
                         }}
-                        draggable={false}
-                      />
-                    </div>
+                      >
+                        <img
+                          src={p?.dataUrl}
+                          alt={`Photo ${idx + 1}`}
+                          className="w-full h-full object-cover pointer-events-none select-none"
+                          style={{
+                            filter: p?.filterCss || 'none'
+                          }}
+                          draggable={false}
+                        />
+                      </div>
+                    ) : (
+                      <div className="w-full h-full flex flex-col items-center justify-center bg-gray-100 text-gray-400 p-2 text-center pointer-events-none select-none">
+                        <Camera size={20} className="text-gray-300 mb-1" />
+                        <span className="text-[10px] font-bold font-mono text-gray-500">Slot #{idx + 1}</span>
+                        <span className="text-[9px] text-gray-400">Belum ada foto</span>
+                      </div>
+                    )}
 
                     {/* Quick Floating Zoom & Reset Toolbar on Slot */}
                     {isActive && (

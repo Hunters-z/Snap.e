@@ -14,10 +14,12 @@ export default function Topbar() {
   } = useBooth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const links = [
-    { name: 'Mulai Booth', path: '/capture' },
-    { name: 'Galeri & Edit', path: '/editor' },
-  ];
+  const links = currentUser
+    ? [
+        { name: 'Mulai Booth', path: '/capture' },
+        { name: 'Galeri & Edit', path: '/editor' },
+      ]
+    : [];
 
   return (
     <header className="sticky top-0 z-40 w-full bg-white/95 backdrop-blur-md border-b border-gray-100 transition-all">
@@ -34,51 +36,51 @@ export default function Topbar() {
           </div>
         </Link>
 
-        {/* Desktop Navigation */}
-        <nav className="hidden md:flex items-center gap-2">
-          {links.map((link) => {
-            const isActive = location.pathname === link.path;
-            return (
-              <Link
-                key={link.path}
-                to={link.path}
-                className={`text-xs font-semibold px-4 py-2 rounded-full transition-all ${
-                  isActive
-                    ? 'bg-gray-900 text-white shadow-xs'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100/70'
-                }`}
-              >
-                {link.name}
-              </Link>
-            );
-          })}
+        {/* Desktop Navigation - Only visible when logged in */}
+        {currentUser && (
+          <nav className="hidden md:flex items-center gap-2">
+            {links.map((link) => {
+              const isActive = location.pathname === link.path;
+              return (
+                <Link
+                  key={link.path}
+                  to={link.path}
+                  className={`text-xs font-semibold px-4 py-2 rounded-full transition-all ${
+                    isActive
+                      ? 'bg-gray-900 text-white shadow-xs'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100/70'
+                  }`}
+                >
+                  {link.name}
+                </Link>
+              );
+            })}
 
-          {/* Admin shortcut if logged in as Admin */}
-          {isAdmin && (
-            <Link
-              to="/admin"
-              className="text-xs font-bold px-3.5 py-1.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 flex items-center gap-1.5 transition-colors"
-            >
-              <ShieldCheck size={13} className="text-amber-600" />
-              <span>Admin Studio</span>
-            </Link>
-          )}
-        </nav>
+            {/* Admin shortcut if logged in as Admin */}
+            {isAdmin && (
+              <Link
+                to="/admin"
+                className="text-xs font-bold px-3.5 py-1.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 flex items-center gap-1.5 transition-colors"
+              >
+                <ShieldCheck size={13} className="text-amber-600" />
+                <span>Admin Studio</span>
+              </Link>
+            )}
+          </nav>
+        )}
 
         {/* Right side Auth & CTA */}
-        <div className="hidden sm:flex items-center gap-2.5">
-          {currentUser && (
-            <Link
-              to="/capture"
-              className="flex items-center gap-1.5 text-xs font-semibold px-3.5 py-1.5 rounded-full bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
-            >
-              <Camera size={14} />
-              Buka Booth
-            </Link>
-          )}
-
+        <div className="flex items-center gap-2.5">
           {currentUser ? (
             <div className="flex items-center gap-2">
+              <Link
+                to="/capture"
+                className="hidden sm:flex items-center gap-1.5 text-xs font-semibold px-3.5 py-1.5 rounded-full bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
+              >
+                <Camera size={14} />
+                Buka Booth
+              </Link>
+
               <div className="text-xs font-semibold text-gray-700 bg-gray-100 px-3 py-1.5 rounded-full flex items-center gap-2 border border-gray-200/60">
                 {currentUser.photoURL ? (
                   <img src={currentUser.photoURL} alt="" className="w-4 h-4 rounded-full object-cover" />
@@ -99,26 +101,26 @@ export default function Topbar() {
               >
                 <LogOut size={16} />
               </button>
+
+              {/* Mobile Hamburger Toggle for logged-in menu */}
+              <button
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                className="md:hidden p-1.5 rounded-lg text-gray-600 hover:text-gray-900 hover:bg-gray-100 ml-1"
+                aria-label="Toggle menu"
+              >
+                {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+              </button>
             </div>
           ) : (
             <button
               onClick={() => openAuthModal()}
-              className="flex items-center gap-1.5 text-xs font-bold px-4 py-1.5 rounded-full bg-gray-900 text-white hover:bg-black transition-colors shadow-xs"
+              className="flex items-center gap-1.5 text-xs font-bold px-4 py-2 rounded-full bg-gray-900 text-white hover:bg-black transition-colors shadow-xs"
             >
               <LogIn size={13} />
               <span>Masuk / Login</span>
             </button>
           )}
         </div>
-
-        {/* Mobile Hamburger Toggle */}
-        <button
-          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          className="md:hidden p-2 rounded-lg text-gray-600 hover:text-gray-900 hover:bg-gray-100"
-          aria-label="Toggle menu"
-        >
-          {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
-        </button>
       </div>
 
       {/* Mobile Drawer */}
