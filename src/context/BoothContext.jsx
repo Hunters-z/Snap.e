@@ -10,6 +10,10 @@ import {
 } from 'firebase/firestore';
 import { 
   signInWithPopup, 
+  signInWithRedirect,
+  getRedirectResult,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
   GoogleAuthProvider, 
   signOut, 
   onAuthStateChanged 
@@ -154,6 +158,8 @@ const defaultContextValue = {
   openAuthModal: () => {},
   closeAuthModal: () => {},
   loginWithGoogle: async () => ({ success: false }),
+  loginWithEmailPassword: async () => ({ success: false }),
+  registerWithEmailPassword: async () => ({ success: false }),
   loginDirectly: async () => ({ success: false }),
   loginWithDemo: async () => ({ success: false }),
   logout: async () => {},
@@ -420,8 +426,33 @@ export function BoothProvider({ children }) {
     return localStorage.getItem('snape_admin_authenticated') === 'true';
   });
 
-  // Synchronize Firebase Auth changes
+  // Synchronize Firebase Auth changes & catch redirect sign-in
   useEffect(() => {
+    getRedirectResult(auth)
+      .then(async (result) => {
+        if (result && result.user) {
+          const user = result.user;
+          const admin = isUserAdmin(user);
+          const userData = {
+            uid: user.uid,
+            email: user.email,
+            displayName: user.displayName || user.email?.split('@')[0] || 'User',
+            photoURL: user.photoURL || null,
+            isAdmin: admin
+          };
+          setCurrentUser(userData);
+          setUserName(userData.displayName);
+          localStorage.setItem('snape_current_user', JSON.stringify(userData));
+          if (admin) {
+            setIsAdminAuth(true);
+            localStorage.setItem('snape_admin_authenticated', 'true');
+          }
+        }
+      })
+      .catch((err) => {
+        console.warn('Redirect sign-in check:', err);
+      });
+
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       if (firebaseUser) {
         const admin = isUserAdmin(firebaseUser);
@@ -810,10 +841,17 @@ export function BoothProvider({ children }) {
   };
 
   // Authentication handlers
-  const loginWithGoogle = async () => {
+  const loginWithGoogle = async (useRedirect = false) => {
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: 'select_account' });
+
+    // Explicit redirect request (recommended for mobile browsers)
+    if (useRedirect) {
+      await signInWithRedirect(auth, provider);
+      return { redirected: true };
+    }
+
     try {
-      const provider = new GoogleAuthProvider();
-      provider.setCustomParameters({ prompt: 'select_account' });
       const result = await signInWithPopup(auth, provider);
       const user = result.user;
       const admin = isUserAdmin(user);
@@ -850,6 +888,96 @@ export function BoothProvider({ children }) {
       return { success: true, user: userData, isAdmin: admin };
     } catch (error) {
       console.error('Google sign-in error:', error);
+      // Auto-fallback to redirect if popup is blocked
+      if (error?.code === 'auth/popup-blocked') {
+        console.log('Popup was blocked by browser, attempting redirect flow...');
+        await signInWithRedirect(auth, provider);
+        return { redirected: true };
+      }
+      throw error;
+    }
+  };
+
+  // Firebase Email & Password Authentication
+  const loginWithEmailPassword = async (email, password) => {
+    try {
+      const result = await signInWithEmailAndPassword(auth, email.trim(), password);
+      const user = result.user;
+      const admin = isUserAdmin(user);
+      const userData = {
+        uid: user.uid,
+        email: user.email,
+        displayName: user.displayName || user.email?.split('@')[0] || 'User',
+        photoURL: user.photoURL || null,
+        isAdmin: admin
+      };
+      setCurrentUser(userData);
+      localStorage.setItem('snape_current_user', JSON.stringify(userData));
+      setUserName(userData.displayName);
+
+      try {
+        await setDoc(doc(db, 'users', user.uid), {
+          uid: user.uid,
+          email: user.email,
+          displayName: userData.displayName,
+          photoURL: userData.photoURL,
+          role: admin ? 'admin' : 'customer',
+          lastLoginAt: new Date().toISOString(),
+          createdAt: new Date().toISOString()
+        }, { merge: true });
+      } catch (e) {
+        console.warn('Could not save user profile to Firestore:', e);
+      }
+
+      if (admin) {
+        setIsAdminAuth(true);
+        localStorage.setItem('snape_admin_authenticated', 'true');
+      }
+      return { success: true, user: userData, isAdmin: admin };
+    } catch (error) {
+      console.error('Email login error:', error);
+      throw error;
+    }
+  };
+
+  const registerWithEmailPassword = async (email, password, displayName = '') => {
+    try {
+      const result = await createUserWithEmailAndPassword(auth, email.trim(), password);
+      const user = result.user;
+      const name = displayName.trim() || email.split('@')[0];
+      const admin = isUserAdmin(user);
+      const userData = {
+        uid: user.uid,
+        email: user.email,
+        displayName: name,
+        photoURL: null,
+        isAdmin: admin
+      };
+      setCurrentUser(userData);
+      localStorage.setItem('snape_current_user', JSON.stringify(userData));
+      setUserName(name);
+
+      try {
+        await setDoc(doc(db, 'users', user.uid), {
+          uid: user.uid,
+          email: user.email,
+          displayName: name,
+          photoURL: null,
+          role: admin ? 'admin' : 'customer',
+          lastLoginAt: new Date().toISOString(),
+          createdAt: new Date().toISOString()
+        }, { merge: true });
+      } catch (e) {
+        console.warn('Could not save user profile to Firestore:', e);
+      }
+
+      if (admin) {
+        setIsAdminAuth(true);
+        localStorage.setItem('snape_admin_authenticated', 'true');
+      }
+      return { success: true, user: userData, isAdmin: admin };
+    } catch (error) {
+      console.error('Email registration error:', error);
       throw error;
     }
   };
@@ -1137,6 +1265,8 @@ export function BoothProvider({ children }) {
         openAuthModal,
         closeAuthModal,
         loginWithGoogle,
+        loginWithEmailPassword,
+        registerWithEmailPassword,
         loginDirectly,
         loginWithDemo,
         logout,

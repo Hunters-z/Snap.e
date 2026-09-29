@@ -20,9 +20,7 @@ export default function Topbar() {
         { name: 'Mulai Booth', path: '/capture' },
         { name: 'Galeri & Edit', path: '/editor' },
       ]
-    : [
-        { name: 'Beranda', path: '/' },
-      ];
+    : [];
 
   return (
     <header className="sticky top-0 z-40 w-full bg-white/95 backdrop-blur-md border-b border-gray-100 transition-all">

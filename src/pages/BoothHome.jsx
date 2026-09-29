@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import Topbar from '../components/Topbar';
+import LoginScreen from '../components/LoginScreen';
 import { useBooth } from '../context/BoothContext';
 import { QRCodeSVG } from 'qrcode.react';
 import { 
@@ -20,7 +21,8 @@ import {
   Clock,
   MessageCircle,
   Instagram,
-  LogIn
+  LogIn,
+  Loader2
 } from 'lucide-react';
 
 export default function BoothHome() {
@@ -35,6 +37,7 @@ export default function BoothHome() {
     layout, 
     setLayout,
     currentUser,
+    authLoading,
     openAuthModal
   } = useBooth();
 
@@ -139,6 +142,21 @@ export default function BoothHome() {
     setUserName(inputName || currentUser.displayName || 'Tamu');
     navigate(`/capture?room=${partnerRoomCode.trim()}&role=guest`);
   };
+
+  // 1. Authentication loading state
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[#F9FAFB] text-gray-700">
+        <Loader2 size={36} className="animate-spin text-red-500 mb-3" />
+        <p className="text-sm font-medium">Memuat sesi studio...</p>
+      </div>
+    );
+  }
+
+  // 2. Unauthenticated: Sembunyikan Beranda pada halaman depan jadi HANYA tampilan login saja
+  if (!currentUser) {
+    return <LoginScreen />;
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-[#F9FAFB] text-gray-900 font-sans">
