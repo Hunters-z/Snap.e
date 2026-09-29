@@ -34,8 +34,6 @@ export function isUserAdmin(user) {
   return false;
 }
 
-const BoothContext = createContext(null);
-
 const DEFAULT_STICKERS = [
   { id: 'stk_1', type: 'emoji', text: '✨', name: 'Sparkles', category: 'Aesthetic' },
   { id: 'stk_2', type: 'emoji', text: '💖', name: 'Sparkle Heart', category: 'Love' },
@@ -144,6 +142,69 @@ const DEFAULT_SAMPLE_PHOTOS = [
     stickers: [{ text: '💖', x: 75, y: 75 }]
   }
 ];
+
+const defaultContextValue = {
+  appConfig: DEFAULT_CONFIG,
+  currentUser: null,
+  authLoading: false,
+  isAdminAuth: false,
+  isAdmin: false,
+  showAuthModal: false,
+  authRedirectUrl: null,
+  openAuthModal: () => {},
+  closeAuthModal: () => {},
+  loginWithGoogle: async () => ({ success: false }),
+  loginDirectly: async () => ({ success: false }),
+  loginWithDemo: async () => ({ success: false }),
+  logout: async () => {},
+  adminLogin: () => {},
+  adminLogout: () => {},
+  isFirebaseConnected: true,
+  cameraPresets: CAMERA_PRESETS,
+  defaultFrames: DEFAULT_FRAMES,
+  stickers: DEFAULT_STICKERS,
+  photos: DEFAULT_SAMPLE_PHOTOS,
+  setPhotos: () => {},
+  activePhotoIdx: 0,
+  setActivePhotoIdx: () => {},
+  activeFrame: DEFAULT_FRAMES[0],
+  setActiveFrame: () => {},
+  customText: '',
+  setCustomText: () => {},
+  layout: 'strip',
+  setLayout: () => {},
+  showBadge: true,
+  setShowBadge: () => {},
+  showQr: true,
+  setShowQr: () => {},
+  userName: '',
+  setUserName: () => {},
+  boothMode: 'solo',
+  setBoothMode: () => {},
+  sessionSecondsLeft: 900,
+  sessionAlbum: [],
+  orders: [],
+  registeredUsers: [],
+  registeredUsersCount: 0,
+  startOrResumeSession: () => {},
+  resetSession: () => {},
+  addPhotoToAlbum: () => {},
+  deletePhotoFromAlbum: () => {},
+  selectPhotoForSlot: () => {},
+  addOrder: () => {},
+  updateOrderStatus: () => {},
+  deleteOrder: () => {},
+  addCustomFrame: () => {},
+  deleteCustomFrame: () => {},
+  addCustomSticker: () => {},
+  deleteCustomSticker: () => {},
+  addCustomFilter: () => {},
+  deleteCustomFilter: () => {},
+  updatePaymentGatewayConfig: () => {},
+  updateWebsiteConfig: () => {},
+};
+
+export const BoothContext = createContext(defaultContextValue);
 
 const SESSION_MAX_SECONDS = 15 * 60; // 900s = 15 minutes
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
@@ -1091,8 +1152,5 @@ export function BoothProvider({ children }) {
 
 export function useBooth() {
   const context = useContext(BoothContext);
-  if (!context) {
-    throw new Error('useBooth must be used within BoothProvider');
-  }
-  return context;
+  return context || defaultContextValue;
 }

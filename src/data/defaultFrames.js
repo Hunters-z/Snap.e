@@ -329,7 +329,7 @@ export function drawFrameGraphicDecorations(ctx, frame, canvasWidth, canvasHeigh
     ctx.font = "bold 18px 'Playfair Display', serif";
     ctx.fillStyle = '#292524';
     ctx.textAlign = 'center';
-    ctx.fillText('THE ATELIER TIMES', canvasWidth / 2, 36);
+    ctx.fillText('THE PHOTO TIMES', canvasWidth / 2, 36);
 
     ctx.font = "italic 11px 'Playfair Display', serif";
     ctx.fillText('VOL. XXIV • SPECIAL PHOTO EDITION', canvasWidth / 2, 50);

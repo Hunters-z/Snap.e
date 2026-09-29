@@ -67,8 +67,8 @@ export default function AddFrameModal({ isOpen, onClose, onOpenGuide }) {
     }
   };
 
-  // Sample photo URLs for live preview
-  const samplePhoto = capturedPhotos[0]?.dataUrl || 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=300&h=225&fit=crop';
+  // Sample photo placeholder for live preview
+  const samplePhoto = capturedPhotos[0]?.dataUrl || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="225" viewBox="0 0 300 225"><rect width="300" height="225" fill="%23E5E7EB"/><text x="50%" y="50%" fill="%239CA3AF" font-family="sans-serif" font-size="14" font-weight="bold" text-anchor="middle" dominant-baseline="middle">PHOTO SLOT</text></svg>';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/70 backdrop-blur-xs animate-fadeIn text-gray-900">
@@ -320,7 +320,6 @@ export default function AddFrameModal({ isOpen, onClose, onOpenGuide }) {
               {/* Header */}
               <div className="flex justify-between items-center text-[8px] font-bold tracking-widest opacity-70 mb-2">
                 <span>SNAP.E</span>
-                <span className="font-mono">#SNP-TEST</span>
               </div>
 
               {/* Photos simulation */}

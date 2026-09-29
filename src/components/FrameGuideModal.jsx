@@ -75,7 +75,7 @@ export default function FrameGuideModal({ isOpen, onClose, onOpenAddFrame }) {
     ctx.fillText('FOOTER AREA (Branding, Tanggal, Caption)', 300, footerY + 90);
     ctx.font = '14px sans-serif';
     ctx.fillStyle = '#4B5563';
-    ctx.fillText('snap.e atelier • 600 × 1800 px Blueprint Template', 300, footerY + 125);
+    ctx.fillText('snap.e studio • 600 × 1800 px Blueprint Template', 300, footerY + 125);
 
     // Trigger download
     const link = document.createElement('a');

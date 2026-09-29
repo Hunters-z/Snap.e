@@ -672,7 +672,7 @@ export default function BoothHome() {
             <div className="bg-gray-50 border border-gray-100 p-2.5 rounded-xl space-y-1 text-left text-xs">
               <div className="flex items-center justify-between text-gray-500 text-[11px]">
                 <span>No. Transaksi</span>
-                <span className="font-mono font-bold text-gray-800">SNP-{Date.now().toString().slice(-6)}</span>
+                <span className="font-mono font-bold text-gray-800">INV-{Date.now().toString().slice(-6)}</span>
               </div>
               <div className="flex items-center justify-between text-gray-500 text-[11px]">
                 <span>Masa Aktif QR</span>
@@ -854,7 +854,7 @@ export default function BoothHome() {
             </div>
 
             <div className="pt-4 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] text-gray-400">
-              <p>© {new Date().getFullYear()} {appConfig.website?.brandName || 'snap.e'} Atelier. All rights reserved.</p>
+              <p>© {new Date().getFullYear()} {appConfig.website?.brandName || 'snap.e'} Studio. All rights reserved.</p>
               <p className="font-mono text-[10px]">Cloud Synced • Real-Time WebRTC</p>
             </div>
           </div>

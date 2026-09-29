@@ -1292,11 +1292,9 @@ export default function AdminDashboard() {
                                 className="w-10 h-10 rounded-lg overflow-hidden shrink-0 border border-gray-300"
                                 style={{ filter: filter.css }}
                               >
-                                <img 
-                                  src="https://images.unsplash.com/photo-1517841905240-472988babdf9?w=80&h=80&fit=crop" 
-                                  alt="Preview" 
-                                  className="w-full h-full object-cover"
-                                />
+                                <div className="w-full h-full bg-gradient-to-br from-amber-200 via-rose-300 to-indigo-300 flex items-center justify-center text-[10px] font-bold text-gray-700">
+                                  FX
+                                </div>
                               </div>
                               <div className="truncate">
                                 <p className="text-xs font-bold text-gray-900 truncate">{filter.name}</p>
