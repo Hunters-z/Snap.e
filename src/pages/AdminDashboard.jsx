@@ -149,6 +149,17 @@ export default function AdminDashboard() {
   const [webIsOpen, setWebIsOpen] = useState(appConfig.website?.isOpen ?? true);
   const [webAccentColor, setWebAccentColor] = useState(appConfig.website?.accentColor || '#E11D48');
 
+  // New CTA and SEO Metadata states
+  const [webPrimaryCtaText, setWebPrimaryCtaText] = useState(appConfig.website?.primaryCtaText || 'Mulai Sesi Booth Sekarang');
+  const [webSecondaryCtaText, setWebSecondaryCtaText] = useState(appConfig.website?.secondaryCtaText || 'Lihat Pilihan Frame');
+  const [webMetaTitle, setWebMetaTitle] = useState(appConfig.website?.metaTitle || 'snap.e - Tangible Memories, Synchronized Distances');
+  const [webMetaDescription, setWebMetaDescription] = useState(
+    appConfig.website?.metaDescription || 'Tangible Memories, Synchronized Distances - Online photobooth for solo and LDR couples with customizable photostrips and studio management.'
+  );
+  const [webMetaKeywords, setWebMetaKeywords] = useState(
+    appConfig.website?.metaKeywords || 'photobooth online, ldr photobooth, photo strip korea, cetak foto lab'
+  );
+
   // Synchronize local states when appConfig changes
   useEffect(() => {
     if (appConfig.website) {
@@ -175,6 +186,13 @@ export default function AdminDashboard() {
       setWebOpeningHours(appConfig.website.openingHours || '10:00 - 22:00 WIB');
       setWebIsOpen(appConfig.website.isOpen ?? true);
       setWebAccentColor(appConfig.website.accentColor || '#E11D48');
+      setWebPrimaryCtaText(appConfig.website.primaryCtaText || 'Mulai Sesi Booth Sekarang');
+      setWebSecondaryCtaText(appConfig.website.secondaryCtaText || 'Lihat Pilihan Frame');
+      setWebMetaTitle(appConfig.website.metaTitle || 'snap.e - Tangible Memories, Synchronized Distances');
+      setWebMetaDescription(
+        appConfig.website.metaDescription || 'Tangible Memories, Synchronized Distances - Online photobooth for solo and LDR couples with customizable photostrips and studio management.'
+      );
+      setWebMetaKeywords(appConfig.website.metaKeywords || 'photobooth online, ldr photobooth, photo strip korea, cetak foto lab');
     }
 
     if (appConfig.payment) {
@@ -332,7 +350,12 @@ export default function AdminDashboard() {
       studioAddress: webAddress.trim(),
       openingHours: webOpeningHours.trim(),
       isOpen: webIsOpen,
-      accentColor: webAccentColor
+      accentColor: webAccentColor,
+      primaryCtaText: webPrimaryCtaText.trim() || 'Mulai Sesi Booth Sekarang',
+      secondaryCtaText: webSecondaryCtaText.trim() || 'Lihat Pilihan Frame',
+      metaTitle: webMetaTitle.trim() || 'snap.e - Tangible Memories, Synchronized Distances',
+      metaDescription: webMetaDescription.trim(),
+      metaKeywords: webMetaKeywords.trim()
     });
     triggerToast('Perubahan Editor Website Berhasil Disimpan!');
   };
@@ -1745,6 +1768,131 @@ export default function AdminDashboard() {
                         placeholder="Jl. Senopati No. 88, Jakarta Selatan"
                         className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs outline-none focus:border-gray-900"
                       />
+                    </div>
+                  </div>
+
+                  {/* Section 5: Teks Tombol Call To Action (CTA) */}
+                  <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-xs space-y-4">
+                    <h3 className="text-sm font-bold text-gray-900 border-b border-gray-100 pb-2 flex items-center gap-2">
+                      <CreditCard size={16} className="text-indigo-600" />
+                      5. Teks Tombol Aksi Utama (Call To Action / CTA)
+                    </h3>
+                    <p className="text-xs text-gray-500">
+                      Kustomisasi kata-kata tombol pemicu sesi untuk menarik pengunjung berfoto di photobooth.
+                    </p>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-gray-700">Teks Tombol Utama (Primary CTA)</label>
+                        <input
+                          type="text"
+                          value={webPrimaryCtaText}
+                          onChange={(e) => setWebPrimaryCtaText(e.target.value)}
+                          placeholder="Mulai Sesi Booth Sekarang"
+                          className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold outline-none focus:border-gray-900"
+                        />
+                        <span className="text-[10px] text-gray-400">Contoh: &quot;Mulai Sesi Booth Sekarang&quot;, &quot;Masuk Bilik Foto&quot;, &quot;Jepret Foto Sekarang&quot;</span>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-gray-700">Teks Tombol Sekunder (Secondary CTA)</label>
+                        <input
+                          type="text"
+                          value={webSecondaryCtaText}
+                          onChange={(e) => setWebSecondaryCtaText(e.target.value)}
+                          placeholder="Lihat Pilihan Frame"
+                          className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-gray-900"
+                        />
+                        <span className="text-[10px] text-gray-400">Contoh: &quot;Lihat Pilihan Frame&quot;, &quot;Katalog Kertas Foto&quot;</span>
+                      </div>
+                    </div>
+
+                    {/* Preview of CTA button */}
+                    <div className="p-4 bg-gray-50 rounded-xl border border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-3">
+                      <div>
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Pratinjau Tampilan Tombol:</span>
+                        <p className="text-xs text-gray-600">Bagaimana tombol akan tampil di halaman setup photobooth pengunjung</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          className="px-6 py-3 bg-gray-900 text-white rounded-xl font-bold text-xs flex items-center gap-2 shadow-sm"
+                        >
+                          <span>{webPrimaryCtaText || 'Mulai Sesi Booth Sekarang'}</span>
+                          <span>&rarr;</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Section 6: SEO & Metadata Mesin Pencari */}
+                  <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-xs space-y-4">
+                    <h3 className="text-sm font-bold text-gray-900 border-b border-gray-100 pb-2 flex items-center gap-2">
+                      <Globe size={16} className="text-emerald-600" />
+                      6. Pengaturan SEO & Metadata Mesin Pencari
+                    </h3>
+                    <p className="text-xs text-gray-500">
+                      Optimalkan judul dan ringkasan website agar tampil menarik saat dibagikan ke media sosial (WhatsApp, Instagram) atau hasil pencarian Google.
+                    </p>
+
+                    <div className="space-y-3">
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-gray-700">Meta Title (Judul Tab & Pencarian)</label>
+                        <input
+                          type="text"
+                          value={webMetaTitle}
+                          onChange={(e) => setWebMetaTitle(e.target.value)}
+                          placeholder="snap.e - Tangible Memories, Synchronized Distances"
+                          className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-gray-900"
+                        />
+                        <span className="text-[10px] text-gray-400">Panjang ideal: 50-60 karakter. Saat ini: {webMetaTitle.length} karakter.</span>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-gray-700">Meta Description (Ringkasan Cuplikan Snippet)</label>
+                        <textarea
+                          rows={2}
+                          value={webMetaDescription}
+                          onChange={(e) => setWebMetaDescription(e.target.value)}
+                          placeholder="Deskripsi singkat yang tampil di Google atau link preview WhatsApp..."
+                          className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs outline-none focus:border-gray-900 resize-none"
+                        />
+                        <span className="text-[10px] text-gray-400">Panjang ideal: 120-160 karakter. Saat ini: {webMetaDescription.length} karakter.</span>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-gray-700">Meta Keywords (Kata Kunci Pencarian)</label>
+                        <input
+                          type="text"
+                          value={webMetaKeywords}
+                          onChange={(e) => setWebMetaKeywords(e.target.value)}
+                          placeholder="photobooth online, ldr photobooth, photo strip korea, cetak foto lab"
+                          className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-mono outline-none focus:border-gray-900"
+                        />
+                        <span className="text-[10px] text-gray-400">Pisahkan setiap kata kunci dengan koma (,).</span>
+                      </div>
+                    </div>
+
+                    {/* Google Search Snippet Card Preview */}
+                    <div className="p-4 bg-white rounded-xl border border-gray-200 space-y-1.5 shadow-xs">
+                      <span className="text-[10px] font-mono text-gray-400 uppercase tracking-widest block mb-1">
+                        Google Search Snippet Preview:
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-full bg-gray-900 text-white flex items-center justify-center text-[10px] font-bold">
+                          s
+                        </div>
+                        <div className="leading-tight">
+                          <p className="text-[12px] text-gray-800 font-semibold">{webBrandName || 'snap.e'} Photobooth</p>
+                          <p className="text-[10px] text-gray-500 font-mono">https://snape.studio &rsaquo; photobooth</p>
+                        </div>
+                      </div>
+                      <h4 className="text-sm font-semibold text-blue-800 hover:underline cursor-pointer">
+                        {webMetaTitle || 'snap.e - Tangible Memories, Synchronized Distances'}
+                      </h4>
+                      <p className="text-xs text-gray-600 line-clamp-2 leading-relaxed">
+                        {webMetaDescription || 'Online photobooth for solo and LDR couples with customizable photostrips, real-time sync, and lab-quality printing.'}
+                      </p>
                     </div>
                   </div>
 

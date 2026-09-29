@@ -101,7 +101,12 @@ const DEFAULT_CONFIG = {
     openingHours: '10:00 - 22:00 WIB',
     isOpen: true,
     accentColor: '#E11D48',
-    promoBadge: 'PROMO BULAN INI'
+    promoBadge: 'PHOTO BOOTH ONLINE & LDR DUAL-STREAM',
+    primaryCtaText: 'Mulai Sesi Booth Sekarang',
+    secondaryCtaText: 'Lihat Pilihan Frame',
+    metaTitle: 'snap.e - Tangible Memories, Synchronized Distances',
+    metaDescription: 'Tangible Memories, Synchronized Distances - Online photobooth for solo and LDR couples with customizable photostrips and studio management.',
+    metaKeywords: 'photobooth online, ldr photobooth, photo strip korea, cetak foto lab'
   }
 };
 

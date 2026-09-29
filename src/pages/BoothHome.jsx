@@ -72,6 +72,23 @@ export default function BoothHome() {
     }
   }, [mode, generatedRoomId]);
 
+  // Dynamic SEO & Metadata sync configured from Admin Website Editor
+  useEffect(() => {
+    if (appConfig.website?.metaTitle) {
+      document.title = appConfig.website.metaTitle;
+    }
+    if (appConfig.website?.metaDescription) {
+      const metaDesc = document.querySelector('meta[name="description"]');
+      if (metaDesc) {
+        metaDesc.setAttribute('content', appConfig.website.metaDescription);
+      }
+      const ogDesc = document.querySelector('meta[property="og:description"]');
+      if (ogDesc) {
+        ogDesc.setAttribute('content', appConfig.website.metaDescription);
+      }
+    }
+  }, [appConfig.website?.metaTitle, appConfig.website?.metaDescription]);
+
   const handleStartBooth = () => {
     if (!currentUser) {
       openAuthModal('/setup');
@@ -352,7 +369,7 @@ export default function BoothHome() {
               onClick={handleStartBooth}
               className="w-full sm:w-auto px-8 py-3.5 bg-gray-900 hover:bg-black text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-md shadow-gray-900/10 group"
             >
-              Mulai Sesi Booth Sekarang
+              <span>{appConfig.website?.primaryCtaText || 'Mulai Sesi Booth Sekarang'}</span>
               <ArrowRight size={16} className="group-hover:translate-x-0.5 transition-transform" />
             </button>
           </div>

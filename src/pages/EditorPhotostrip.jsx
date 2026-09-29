@@ -7,20 +7,13 @@ import {
   Printer, 
   Copy, 
   Sparkles, 
-  Upload, 
   Trash2, 
   CheckCircle2, 
   X,
   Camera,
   Calendar,
   Move,
-  ArrowUp,
-  ArrowDown,
-  ArrowLeft,
-  ArrowRight,
   RotateCcw,
-  ZoomIn,
-  ZoomOut,
   Image as ImageIcon,
   Film,
   Clock,
@@ -250,25 +243,6 @@ export default function EditorPhotostrip() {
     handleZoomChange(curZoom + delta, idx);
   };
 
-  // Nudge step for D-pad
-  const handleNudge = (deltaX, deltaY, idx = activePhotoIdx) => {
-    setPhotos(prev => {
-      const next = [...prev];
-      if (next[idx]) {
-        const curX = next[idx].offsetX || 0;
-        const curY = next[idx].offsetY || 0;
-        const curZoom = next[idx].zoom || 1.0;
-        const maxPan = Math.max(75, Math.round(curZoom * 55));
-        next[idx] = {
-          ...next[idx],
-          offsetX: Math.max(-maxPan, Math.min(maxPan, Math.round((curX + deltaX) * 10) / 10)),
-          offsetY: Math.max(-maxPan, Math.min(maxPan, Math.round((curY + deltaY) * 10) / 10))
-        };
-      }
-      return next;
-    });
-  };
-
   // Reset offset and zoom to center
   const handleResetPosition = (idx = activePhotoIdx) => {
     setPhotos(prev => {
@@ -314,28 +288,6 @@ export default function EditorPhotostrip() {
       next[photoIdx].stickers = next[photoIdx].stickers.filter(s => s.id !== stickerId);
       setPhotos(next);
     }
-  };
-
-  // Replace photo via file upload
-  const handleFileUpload = (e, idx) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const next = [...photos];
-      if (next[idx]) {
-        next[idx] = {
-          ...next[idx],
-          dataUrl: event.target.result,
-          zoom: 1.0,
-          offsetX: 0,
-          offsetY: 0
-        };
-        setPhotos(next);
-        showToast(`Foto #${idx + 1} berhasil diganti`);
-      }
-    };
-    reader.readAsDataURL(file);
   };
 
   // Assign photo from session album into selected slot
@@ -684,9 +636,6 @@ export default function EditorPhotostrip() {
 
     setOrderConfirmed(newOrder);
   };
-
-  // Active Photo object
-  const currentActivePhoto = photos[activePhotoIdx] || photos[0];
 
   return (
     <div className="min-h-screen flex flex-col bg-[#F8F9FA] text-gray-900 font-sans">
