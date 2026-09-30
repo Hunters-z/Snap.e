@@ -503,24 +503,11 @@ export function BoothProvider({ children }) {
           localStorage.setItem('snape_admin_authenticated', 'true');
         }
       } else {
-        // If not firebase user, check if we have an active demo session
-        const saved = localStorage.getItem('snape_current_user');
-        if (saved) {
-          try {
-            const parsed = JSON.parse(saved);
-            setCurrentUser(parsed);
-            if (parsed.isAdmin) {
-              setIsAdminAuth(true);
-              localStorage.setItem('snape_admin_authenticated', 'true');
-            }
-          } catch {
-            setCurrentUser(null);
-          }
-        } else {
-          setCurrentUser(null);
-          setIsAdminAuth(false);
-          localStorage.removeItem('snape_admin_authenticated');
-        }
+        // Authentic Firebase user is signed out
+        setCurrentUser(null);
+        setIsAdminAuth(false);
+        localStorage.removeItem('snape_current_user');
+        localStorage.removeItem('snape_admin_authenticated');
       }
       setAuthLoading(false);
     });

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Lock, Loader2, AlertCircle, ArrowRight, Mail, KeyRound, User, CheckCircle2, ShieldCheck } from 'lucide-react';
+import { Lock, Loader2, AlertCircle, ArrowRight, Mail, KeyRound, User, CheckCircle2 } from 'lucide-react';
 import { useBooth } from '../context/BoothContext';
 
 export default function LoginScreen({ redirectPath = null, isModal = false, onClose = null }) {
@@ -10,12 +10,12 @@ export default function LoginScreen({ redirectPath = null, isModal = false, onCl
     loginWithGoogle, 
     loginWithEmailPassword, 
     registerWithEmailPassword,
-    loginDirectly,
     authRedirectUrl,
     closeAuthModal
   } = useBooth();
 
-  const [activeTab, setActiveTab] = useState('google'); // 'google' | 'email'
+  // Set default to Email & Password so real users can always authenticate seamlessly without domain restrictions
+  const [activeTab, setActiveTab] = useState('email'); // 'email' | 'google'
   const [isRegisterMode, setIsRegisterMode] = useState(false);
   
   // Email/Password state
@@ -26,10 +26,6 @@ export default function LoginScreen({ redirectPath = null, isModal = false, onCl
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
-  const [showCustomGoogleInput, setShowCustomGoogleInput] = useState(false);
-  const [customGoogleEmail, setCustomGoogleEmail] = useState('');
-  const [customGoogleName, setCustomGoogleName] = useState('');
-  const [showDomainHelp, setShowDomainHelp] = useState(false);
 
   const handlePostLogin = (userResult) => {
     if (onClose) onClose();
@@ -45,23 +41,6 @@ export default function LoginScreen({ redirectPath = null, isModal = false, onCl
     }
   };
 
-  const handleDirectGoogleLogin = async (targetEmail, targetName) => {
-    setLoading(true);
-    setErrorMsg('');
-    try {
-      const result = await loginDirectly(targetEmail, targetName);
-      setSuccessMsg(`Selamat datang, ${result.user?.displayName || 'Pengguna'}!`);
-      setTimeout(() => {
-        handlePostLogin(result);
-      }, 350);
-    } catch (err) {
-      console.error('Direct login error:', err);
-      setErrorMsg('Gagal masuk: ' + (err?.message || 'Terjadi kesalahan'));
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleGoogleLogin = async (useRedirect = false) => {
     setLoading(true);
     setErrorMsg('');
@@ -74,22 +53,17 @@ export default function LoginScreen({ redirectPath = null, isModal = false, onCl
       }
       handlePostLogin(result);
     } catch (err) {
-      console.warn('Google OAuth notice:', err);
-      if (err?.code === 'auth/unauthorized-domain' || err?.code === 'auth/configuration-not-found') {
-        // Seamless fallback: Log in directly as Admin if on this domain, or show clean Google account selector
-        console.log('Domain whitelist notice - activating seamless Google account flow');
-        await handleDirectGoogleLogin('0601randikurnia.s@gmail.com', 'Randi Kurnia');
-        return;
+      console.error('Google OAuth error:', err);
+      if (err?.code === 'auth/unauthorized-domain') {
+        setErrorMsg(
+          'Domain ini belum diizinkan untuk Google OAuth. Silakan gunakan tab "Email & Sandi" di samping untuk masuk atau mendaftar dengan akun asli Anda.'
+        );
       } else if (err?.code === 'auth/popup-blocked') {
-        // Automatically fallback to direct login
-        await handleDirectGoogleLogin('0601randikurnia.s@gmail.com', 'Randi Kurnia');
-        return;
+        setErrorMsg('Jendela popup diblokir oleh browser Anda. Silakan coba lagi atau gunakan login Email & Sandi.');
       } else if (err?.code === 'auth/cancelled-popup-request' || err?.code === 'auth/popup-closed-by-user') {
-        setErrorMsg('');
+        setErrorMsg('Login Google dibatalkan.');
       } else {
-        // Fallback gracefully
-        await handleDirectGoogleLogin('0601randikurnia.s@gmail.com', 'Randi Kurnia');
-        return;
+        setErrorMsg(err?.message || 'Gagal masuk dengan Google. Silakan gunakan login Email & Sandi.');
       }
     } finally {
       setLoading(false);
@@ -170,6 +144,19 @@ export default function LoginScreen({ redirectPath = null, isModal = false, onCl
       <div className="flex bg-gray-100 p-1 rounded-2xl mb-5 text-xs font-bold">
         <button
           type="button"
+          onClick={() => { setActiveTab('email'); setErrorMsg(''); }}
+          className={`flex-1 py-2.5 rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+            activeTab === 'email' 
+              ? 'bg-white text-gray-900 shadow-xs' 
+              : 'text-gray-500 hover:text-gray-900'
+          }`}
+        >
+          <Mail size={14} className="text-red-500" />
+          <span>Email & Sandi</span>
+        </button>
+
+        <button
+          type="button"
           onClick={() => { setActiveTab('google'); setErrorMsg(''); }}
           className={`flex-1 py-2.5 rounded-xl transition-all flex items-center justify-center gap-1.5 ${
             activeTab === 'google' 
@@ -197,19 +184,6 @@ export default function LoginScreen({ redirectPath = null, isModal = false, onCl
           </svg>
           <span>Google Auth</span>
         </button>
-
-        <button
-          type="button"
-          onClick={() => { setActiveTab('email'); setErrorMsg(''); }}
-          className={`flex-1 py-2.5 rounded-xl transition-all flex items-center justify-center gap-1.5 ${
-            activeTab === 'email' 
-              ? 'bg-white text-gray-900 shadow-xs' 
-              : 'text-gray-500 hover:text-gray-900'
-          }`}
-        >
-          <Mail size={14} className="text-red-500" />
-          <span>Email & Sandi</span>
-        </button>
       </div>
 
       {/* Alerts */}
@@ -227,45 +201,12 @@ export default function LoginScreen({ redirectPath = null, isModal = false, onCl
         </div>
       )}
 
-      {/* Tab 1: Google Auth */}
+      {/* Tab 1: Google Auth (Real Firebase GoogleAuthProvider) */}
       {activeTab === 'google' && (
-        <div className="space-y-3.5">
-          {/* 1-Tap Instant Login for Studio Admin */}
-          <div className="p-3 bg-gradient-to-b from-gray-50 to-white border border-gray-200 rounded-2xl space-y-2 text-left">
-            <div className="flex items-center justify-between px-0.5">
-              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                Akses Instan Studio
-              </span>
-              <span className="text-[9px] bg-amber-100 text-amber-800 font-extrabold px-2 py-0.5 rounded-full flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
-                Admin Studio
-              </span>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => handleDirectGoogleLogin('0601randikurnia.s@gmail.com', 'Randi Kurnia')}
-              disabled={loading}
-              className="w-full p-2.5 bg-white hover:bg-amber-50/60 border border-gray-200 hover:border-amber-300 rounded-xl flex items-center gap-3 transition-all text-left shadow-xs active:scale-98 group"
-            >
-              <div className="w-8 h-8 rounded-full bg-red-600 text-white font-black flex items-center justify-center text-xs shadow-xs shrink-0">
-                R
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-bold text-gray-900 truncate group-hover:text-amber-800">Randi Kurnia</p>
-                <p className="text-[11px] text-gray-500 truncate font-mono">0601randikurnia.s@gmail.com</p>
-              </div>
-              <span className="text-[11px] font-bold text-gray-700 bg-gray-100 group-hover:bg-amber-600 group-hover:text-white px-2.5 py-1 rounded-lg transition-colors shrink-0">
-                Masuk
-              </span>
-            </button>
-          </div>
-
-          <div className="relative flex py-1 items-center">
-            <div className="flex-grow border-t border-gray-200"></div>
-            <span className="flex-shrink mx-2 text-[10px] text-gray-400 font-bold uppercase tracking-wider">atau</span>
-            <div className="flex-grow border-t border-gray-200"></div>
-          </div>
+        <div className="space-y-4">
+          <p className="text-xs text-gray-500 leading-relaxed text-center">
+            Masuk secara aman menggunakan akun Google Anda yang terdaftar di perangkat ini.
+          </p>
 
           {/* Standard Google OAuth Button */}
           <button
@@ -296,92 +237,13 @@ export default function LoginScreen({ redirectPath = null, isModal = false, onCl
                 />
               </svg>
             )}
-            <span>Masuk dengan Akun Google</span>
+            <span>Lanjutkan dengan Akun Google</span>
           </button>
 
-          {/* Toggle for other Google users */}
-          {!showCustomGoogleInput ? (
-            <button
-              type="button"
-              onClick={() => setShowCustomGoogleInput(true)}
-              className="text-xs text-gray-500 hover:text-gray-800 font-semibold underline block mx-auto pt-0.5"
-            >
-              + Gunakan Akun Google Lainnya
-            </button>
-          ) : (
-            <div className="p-3 bg-gray-50 border border-gray-200 rounded-xl space-y-2 text-left animate-fadeIn">
-              <span className="text-[11px] font-bold text-gray-700">Masuk Cepat dengan Email Google Anda:</span>
-              <div className="space-y-1.5">
-                <input
-                  type="text"
-                  placeholder="Nama Lengkap"
-                  value={customGoogleName}
-                  onChange={(e) => setCustomGoogleName(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs outline-none focus:border-gray-900"
-                />
-                <input
-                  type="email"
-                  placeholder="alamat@gmail.com"
-                  value={customGoogleEmail}
-                  onChange={(e) => setCustomGoogleEmail(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs outline-none focus:border-gray-900 font-mono"
-                />
-                <div className="flex gap-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!customGoogleEmail) {
-                        setErrorMsg('Mohon masukkan alamat email Google Anda.');
-                        return;
-                      }
-                      handleDirectGoogleLogin(customGoogleEmail, customGoogleName);
-                    }}
-                    className="flex-1 py-2 bg-gray-900 hover:bg-black text-white text-xs font-bold rounded-lg transition-colors"
-                  >
-                    Masuk Sekarang
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowCustomGoogleInput(false)}
-                    className="px-3 py-2 bg-gray-200 text-gray-700 text-xs font-bold rounded-lg hover:bg-gray-300 transition-colors"
-                  >
-                    Tutup
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Optional Domain Whitelist Settings Accordion for Admin */}
-          <div className="pt-2 text-center">
-            <button
-              type="button"
-              onClick={() => setShowDomainHelp(!showDomainHelp)}
-              className="text-[10px] text-gray-400 hover:text-gray-600 transition-colors flex items-center justify-center gap-1 mx-auto"
-            >
-              <span>{showDomainHelp ? '▲ Sembunyikan' : '▼ Info Domain Firebase Console'}</span>
-            </button>
-
-            {showDomainHelp && (
-              <div className="mt-2 p-3 bg-amber-50/70 border border-amber-200/80 rounded-xl text-left text-[11px] text-amber-900 space-y-1.5 animate-fadeIn">
-                <div className="flex items-center gap-1.5 font-bold">
-                  <ShieldCheck size={14} className="text-amber-600" />
-                  <span>Daftarkan domain di Firebase Console:</span>
-                </div>
-                <p className="text-[10px] text-amber-800 leading-relaxed">
-                  Buka{' '}
-                  <a
-                    href="https://console.firebase.google.com/project/proud-safeguard-tjq9c/authentication/settings"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="underline font-bold"
-                  >
-                    Firebase Console &gt; Auth Settings
-                  </a>{' '}
-                  lalu tambahkan domain: <code className="bg-amber-100 font-mono font-bold px-1 rounded">{window.location.hostname}</code>
-                </p>
-              </div>
-            )}
+          <div className="p-3 bg-gray-50 border border-gray-100 rounded-xl text-center">
+            <p className="text-[11px] text-gray-500 leading-normal">
+              Memiliki kendala saat otorisasi Google? Gunakan tab <button type="button" onClick={() => setActiveTab('email')} className="font-bold text-gray-900 underline">Email & Sandi</button> untuk masuk langsung menggunakan akun terdaftar Anda.
+            </p>
           </div>
         </div>
       )}
