@@ -1,5 +1,6 @@
 export const FILTER_CATEGORIES = [
   { id: 'all', name: 'Semua Preset' },
+  { id: 'instagram', name: 'Instagram Hits' },
   { id: 'fuji', name: 'Fujifilm Simulation' },
   { id: 'kodak', name: 'Kodak Analog' },
   { id: 'vintage', name: 'Vintage & Instant' },
@@ -268,7 +269,119 @@ export const CAMERA_PRESETS = [
     css: 'contrast(130%) saturate(118%) brightness(98%)'
   },
 
-  // 5. STANDARD RAW
+  // 5. INSTAGRAM POPULAR FILTERS
+  {
+    id: 'insta_clarendon',
+    name: 'Instagram Clarendon',
+    shortName: 'Clarendon',
+    brand: 'INSTA',
+    category: 'instagram',
+    description: 'Filter terpopuler Instagram dengan warna tajam, bayangan dingin, dan highlight cerah bersinar.',
+    tag: 'Vivid Glow',
+    accentColor: '#38BDF8',
+    css: 'contrast(125%) saturate(130%) brightness(106%) hue-rotate(4deg)'
+  },
+  {
+    id: 'insta_gingham',
+    name: 'Instagram Gingham',
+    shortName: 'Gingham',
+    brand: 'INSTA',
+    category: 'instagram',
+    description: 'Sentuhan vintage lembut dengan penurunan kontras dan rona hangat kekuningan estetik.',
+    tag: 'Soft Vintage',
+    accentColor: '#FBBF24',
+    css: 'brightness(110%) contrast(92%) sepia(16%) saturate(92%)'
+  },
+  {
+    id: 'insta_juno',
+    name: 'Instagram Juno',
+    shortName: 'Juno',
+    brand: 'INSTA',
+    category: 'instagram',
+    description: 'Menebalkan warna merah dan kuning hangat dengan ketajaman warna hijau yang memikat.',
+    tag: 'Warm Pop',
+    accentColor: '#F97316',
+    css: 'contrast(120%) saturate(135%) brightness(105%) sepia(10%) hue-rotate(-5deg)'
+  },
+  {
+    id: 'insta_lark',
+    name: 'Instagram Lark',
+    shortName: 'Lark',
+    brand: 'INSTA',
+    category: 'instagram',
+    description: 'Pencerah foto luar ruangan dengan langit biru segar dan nuansa dedaunan alami.',
+    tag: 'Fresh Day',
+    accentColor: '#2DD4BF',
+    css: 'contrast(98%) brightness(114%) saturate(118%) hue-rotate(-3deg)'
+  },
+  {
+    id: 'insta_valencia',
+    name: 'Instagram Valencia',
+    shortName: 'Valencia',
+    brand: 'INSTA',
+    category: 'instagram',
+    description: 'Nuansa hangat keemasan antik dengan bayangan lembut bernostalgia khas era 90-an.',
+    tag: 'Golden Fade',
+    accentColor: '#D97706',
+    css: 'contrast(108%) brightness(108%) sepia(28%) saturate(112%) hue-rotate(-8deg)'
+  },
+  {
+    id: 'insta_moon',
+    name: 'Instagram Moon',
+    shortName: 'Moon Mono',
+    brand: 'INSTA',
+    category: 'instagram',
+    description: 'Hitam-putih lembut dengan gradasi abu-abu elegan dan bayangan yang memudar halus.',
+    tag: 'Luminous B&W',
+    accentColor: '#6B7280',
+    css: 'grayscale(100%) contrast(112%) brightness(110%)'
+  },
+  {
+    id: 'insta_reyes',
+    name: 'Instagram Reyes',
+    shortName: 'Reyes',
+    brand: 'INSTA',
+    category: 'instagram',
+    description: 'Tampilan pastel berdebu dengan saturasi tenang dan pencahayaan cerah merata.',
+    tag: 'Dusty Pastel',
+    accentColor: '#E2E8F0',
+    css: 'sepia(24%) brightness(115%) contrast(86%) saturate(84%)'
+  },
+  {
+    id: 'insta_slumber',
+    name: 'Instagram Slumber',
+    shortName: 'Slumber',
+    brand: 'INSTA',
+    category: 'instagram',
+    description: 'Kabut kuning retro bernuansa mimpi dengan saturasi rendah dan nuansa romantis.',
+    tag: 'Dream Haze',
+    accentColor: '#A855F7',
+    css: 'saturate(78%) brightness(106%) sepia(32%) contrast(112%) hue-rotate(-10deg)'
+  },
+  {
+    id: 'insta_crema',
+    name: 'Instagram Crema',
+    shortName: 'Crema',
+    brand: 'INSTA',
+    category: 'instagram',
+    description: 'Tone krem lembut bagai secangkir latte hangat dengan warna kulit sejuk memikat.',
+    tag: 'Latte Cream',
+    accentColor: '#D97706',
+    css: 'sepia(20%) contrast(94%) brightness(108%) saturate(96%)'
+  },
+  {
+    id: 'insta_ludwig',
+    name: 'Instagram Ludwig',
+    shortName: 'Ludwig',
+    brand: 'INSTA',
+    category: 'instagram',
+    description: 'Gaya minimalis modern dengan penonjolan highlight terang dan warna tegas bersih.',
+    tag: 'Modern Clean',
+    accentColor: '#EC4899',
+    css: 'contrast(116%) brightness(106%) saturate(106%) sepia(8%)'
+  },
+
+  // 6. STANDARD RAW
   {
     id: 'none',
     name: 'Standard Natural',

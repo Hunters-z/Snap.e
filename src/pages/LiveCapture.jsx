@@ -137,29 +137,64 @@ export default function LiveCapture() {
     }
   };
 
-  // Start Camera
+  // Start Camera with resilient fallback and hardware release wait
   const startCamera = useCallback(async (facing = facingMode) => {
     try {
       if (localStreamRef.current) {
         localStreamRef.current.getTracks().forEach(t => t.stop());
+        localStreamRef.current = null;
+      }
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = null;
       }
 
       setCameraError(null);
       setIsSimulatedCam(false);
 
-      const constraints = {
-        video: {
-          facingMode: facing,
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
-        audio: false
-      };
+      // Give browser hardware driver a brief pause (100ms) to release previous camera hardware lock
+      await new Promise(r => setTimeout(r, 100));
 
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: facing },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
+          audio: false
+        });
+      } catch (err1) {
+        console.warn('Attempt with ideal facingMode failed, retrying plain facingMode:', err1);
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: facing },
+            audio: false
+          });
+        } catch (err2) {
+          console.warn('Attempt with plain facingMode failed, retrying generic video constraint:', err2);
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: false
+          });
+        }
+      }
+
       localStreamRef.current = stream;
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = stream;
+        localVideoRef.current.onloadedmetadata = async () => {
+          try {
+            await localVideoRef.current.play();
+          } catch (e) {
+            console.warn('Video play onloadedmetadata caught:', e);
+          }
+        };
+        try {
+          await localVideoRef.current.play();
+        } catch (playErr) {
+          console.warn('Initial video play caught:', playErr);
+        }
       }
     } catch (err) {
       console.warn("Camera access failed, activating simulated studio camera:", err);
@@ -169,10 +204,10 @@ export default function LiveCapture() {
   }, [facingMode]);
 
   // Toggle Camera (Front / Back)
-  const toggleCameraFacing = () => {
+  const toggleCameraFacing = async () => {
     const nextFacing = facingMode === 'user' ? 'environment' : 'user';
     setFacingMode(nextFacing);
-    startCamera(nextFacing);
+    await startCamera(nextFacing);
   };
 
   // Setup PeerJS for LDR
@@ -628,7 +663,7 @@ export default function LiveCapture() {
               autoPlay
               playsInline
               muted
-              className="w-full h-full object-cover transform scale-x-[-1]"
+              className={`w-full h-full object-cover transform transition-transform ${facingMode === 'user' ? 'scale-x-[-1]' : 'scale-x-100'}`}
             />
             <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-full text-[11px] font-semibold flex items-center gap-1.5 z-10">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>

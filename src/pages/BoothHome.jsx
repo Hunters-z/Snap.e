@@ -37,7 +37,8 @@ export default function BoothHome() {
     setLayout,
     currentUser,
     authLoading,
-    openAuthModal
+    openAuthModal,
+    startNewSession
   } = useBooth();
 
   // State for step modal or section
@@ -103,6 +104,7 @@ export default function BoothHome() {
 
   const handlePaymentSuccess = () => {
     setPaymentSuccess(true);
+    startNewSession();
     setTimeout(() => {
       setShowPaymentModal(false);
       if (mode === 'ldr') {

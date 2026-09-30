@@ -53,7 +53,6 @@ export default function EditorPhotostrip() {
   // Bottom text & styling
   const [customText, setCustomText] = useState('Long Distance Soulmate');
   const [showBadge, setShowBadge] = useState(true);
-  const [showQr, setShowQr] = useState(true);
 
   // Photos state copied from context
   const [photos, setPhotos] = useState(capturedPhotos);
@@ -327,7 +326,7 @@ export default function EditorPhotostrip() {
     showToast(`Posisi & zoom Foto #${idx + 1} dikembalikan ke tengah`);
   };
 
-  // Add sticker to active photo (supports emoji or custom image stickers)
+  // Add sticker to active photo (supports emoji or custom image stickers with adjustable scale)
   const handleAddSticker = (stickerItem) => {
     const next = [...photos];
     if (!next[activePhotoIdx]) return;
@@ -341,11 +340,34 @@ export default function EditorPhotostrip() {
       imageUrl: isObj ? (stickerItem.imageUrl || null) : null,
       x: 50 + (Math.random() * 20 - 10),
       y: 50 + (Math.random() * 20 - 10),
+      scale: 1.0,
     };
 
     next[activePhotoIdx].stickers.push(stickerData);
     setPhotos(next);
     showToast(`Stiker ${stickerData.text || 'gambar'} ditambahkan ke Foto ${activePhotoIdx + 1}`);
+  };
+
+  // Adjust sticker scale (perbesar / perkecil stiker)
+  const handleStickerScale = (photoIdx, stickerId, delta) => {
+    setPhotos(prev => {
+      const next = [...prev];
+      const targetPhoto = next[photoIdx];
+      if (targetPhoto && targetPhoto.stickers) {
+        next[photoIdx] = {
+          ...targetPhoto,
+          stickers: targetPhoto.stickers.map(s => {
+            if (s.id === stickerId) {
+              const cur = s.scale || 1.0;
+              const newScale = Math.max(0.4, Math.min(3.0, Math.round((cur + delta) * 10) / 10));
+              return { ...s, scale: newScale };
+            }
+            return s;
+          })
+        };
+      }
+      return next;
+    });
   };
 
   // Remove sticker
@@ -482,11 +504,12 @@ export default function EditorPhotostrip() {
         ctx.restore();
       }
 
-      // Draw stickers (both emoji and custom image stickers)
+      // Draw stickers (both emoji and custom image stickers with scale support)
       if (p?.stickers && p.stickers.length > 0) {
         for (const s of p.stickers) {
           const sx = rect.x + (s.x / 100) * rect.w;
           const sy = rect.y + (s.y / 100) * rect.h;
+          const sScale = s.scale || 1.0;
 
           if (s.type === 'image' && s.imageUrl) {
             const sImg = new Image();
@@ -496,11 +519,11 @@ export default function EditorPhotostrip() {
               sImg.onerror = res;
               sImg.src = s.imageUrl;
             });
-            const sSize = rect.w * 0.22;
+            const sSize = rect.w * 0.22 * sScale;
             ctx.drawImage(sImg, sx - sSize / 2, sy - sSize / 2, sSize, sSize);
           } else {
             ctx.save();
-            ctx.font = `${rect.w * 0.14}px 'Segoe UI Emoji', sans-serif`;
+            ctx.font = `${rect.w * 0.14 * sScale}px 'Segoe UI Emoji', sans-serif`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillText(s.text || '✨', sx, sy);
@@ -548,26 +571,7 @@ export default function EditorPhotostrip() {
     });
     ctx.font = "400 28px 'Inter', sans-serif";
     ctx.fillStyle = activeFrame.text === '#FFFFFF' ? '#A1A1AA' : '#6B7280';
-    ctx.fillText(`${dateStr} • STUDIO ATELIER`, padding + 10, footerY + 175);
-
-    // Mini QR code representation at bottom-right
-    if (showQr) {
-      const qrSize = 130;
-      const qrX = canvas.width - padding - qrSize - 10;
-      const qrY = footerY + 40;
-
-      ctx.fillStyle = activeFrame.text === '#FFFFFF' ? '#27272A' : '#E5E7EB';
-      ctx.fillRect(qrX, qrY, qrSize, qrSize);
-
-      ctx.fillStyle = activeFrame.text;
-      for (let r = 0; r < 5; r++) {
-        for (let c = 0; c < 5; c++) {
-          if ((r + c) % 2 === 0 || r === 0 || c === 0 || r === 4 || c === 4) {
-            ctx.fillRect(qrX + 15 + c * 20, qrY + 15 + r * 20, 16, 16);
-          }
-        }
-      }
-    }
+    ctx.fillText(`${dateStr} • PHOTO STUDIO`, padding + 10, footerY + 175);
 
     // Trigger download
     const link = document.createElement('a');
@@ -1254,15 +1258,6 @@ export default function EditorPhotostrip() {
                       />
                       Logo {appConfig.website?.brandName || 'snap.e'}
                     </label>
-                    <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-gray-700">
-                      <input
-                        type="checkbox"
-                        checked={showQr}
-                        onChange={(e) => setShowQr(e.target.checked)}
-                        className="rounded text-gray-900 focus:ring-gray-900"
-                      />
-                      Mini QR Verifikasi
-                    </label>
                   </div>
                 </div>
               </div>
@@ -1361,9 +1356,8 @@ export default function EditorPhotostrip() {
             )}
 
             {/* Strip Header */}
-            <div className="flex justify-between items-center mb-3 sm:mb-4 px-1 text-[9px] font-bold tracking-widest opacity-70">
+            <div className="flex justify-center items-center mb-3 sm:mb-4 px-1 text-[9px] font-bold tracking-widest opacity-70">
               <span>{activeFrame.overlayType === 'film' ? '► KODAK 400 35MM' : 'SNAP.E MEMORIES'}</span>
-              <span className="font-mono">#SNP-{Math.floor(1000 + Math.random() * 9000)}</span>
             </div>
 
             {/* Photos Layout (4:3 aspect ratio per box without stretching) */}
@@ -1456,18 +1450,24 @@ export default function EditorPhotostrip() {
                       #{idx + 1}
                     </span>
 
-                    {/* Draggable stickers on this photo (both emoji and custom image stickers) */}
+                    {/* Draggable stickers on this photo with scale & resize controls */}
                     {p?.stickers?.map((stk) => {
                       const isDraggingThisSticker = dragStickerState?.stickerId === stk.id;
+                      const sScale = stk.scale || 1.0;
                       return (
                         <div
                           key={stk.id}
                           onPointerDown={(e) => handleStickerPointerDown(e, idx, stk)}
                           onClick={(e) => e.stopPropagation()}
-                          className={`absolute select-none -translate-x-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing group/stk z-20 touch-none transition-transform ${
-                            isDraggingThisSticker ? 'scale-125 z-30 cursor-grabbing ring-2 ring-red-500 rounded-full' : 'hover:scale-110'
+                          className={`absolute select-none cursor-grab active:cursor-grabbing group/stk z-20 touch-none ${
+                            isDraggingThisSticker ? 'z-30 cursor-grabbing ring-2 ring-red-500 rounded-full' : ''
                           }`}
-                          style={{ left: `${stk.x}%`, top: `${stk.y}%` }}
+                          style={{
+                            left: `${stk.x}%`,
+                            top: `${stk.y}%`,
+                            transform: `translate(-50%, -50%) scale(${sScale})`,
+                            transformOrigin: 'center center'
+                          }}
                           title="Tahan dan geser stiker ini ke mana saja di dalam foto"
                         >
                           {stk.type === 'image' && stk.imageUrl ? (
@@ -1476,18 +1476,48 @@ export default function EditorPhotostrip() {
                             <span className="text-xl sm:text-2xl drop-shadow-md pointer-events-none">{stk.text || '✨'}</span>
                           )}
 
-                          {/* Quick delete button on sticker hover */}
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleRemoveSticker(idx, stk.id);
-                            }}
-                            className="absolute -top-1 -right-1 bg-red-600 hover:bg-red-700 text-white w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold opacity-0 group-hover/stk:opacity-100 transition-opacity shadow-sm"
-                            title="Hapus Stiker Ini"
+                          {/* Quick Scale & Delete Controls on sticker hover/touch */}
+                          <div 
+                            className="absolute -top-7 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-black/90 backdrop-blur-xs px-2 py-0.5 rounded-full opacity-0 group-hover/stk:opacity-100 transition-opacity shadow-lg pointer-events-auto z-30"
+                            onClick={(e) => e.stopPropagation()}
                           >
-                            <X size={10} />
-                          </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleStickerScale(idx, stk.id, -0.2);
+                              }}
+                              className="w-4 h-4 rounded-full bg-white/20 hover:bg-white/40 text-white font-bold text-[10px] flex items-center justify-center active:scale-90"
+                              title="Kecilkan Stiker"
+                            >
+                              -
+                            </button>
+                            <span className="text-[8px] font-mono text-amber-300 font-bold px-0.5">
+                              {sScale.toFixed(1)}x
+                            </span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleStickerScale(idx, stk.id, 0.2);
+                              }}
+                              className="w-4 h-4 rounded-full bg-white/20 hover:bg-white/40 text-white font-bold text-[10px] flex items-center justify-center active:scale-90"
+                              title="Besarkan Stiker"
+                            >
+                              +
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleRemoveSticker(idx, stk.id);
+                              }}
+                              className="w-4 h-4 ml-0.5 rounded-full bg-red-600 hover:bg-red-700 text-white font-bold text-[9px] flex items-center justify-center active:scale-90"
+                              title="Hapus Stiker"
+                            >
+                              <X size={8} />
+                            </button>
+                          </div>
                         </div>
                       );
                     })}
@@ -1526,26 +1556,9 @@ export default function EditorPhotostrip() {
                   {customText}
                 </p>
                 <p className="text-[8px] sm:text-[9px] opacity-75 font-mono mt-0.5">
-                  {new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })} • ATELIER
+                  {new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })} • PHOTO STUDIO
                 </p>
               </div>
-
-              {/* Verified Mini QR */}
-              {showQr && (
-                <div className="p-1 rounded-xs bg-white/10 border border-current opacity-80 shrink-0">
-                  <div className="w-6 h-6 sm:w-7 sm:h-7 grid grid-cols-3 gap-0.5">
-                    <div className="bg-current rounded-xs"></div>
-                    <div className="bg-transparent"></div>
-                    <div className="bg-current rounded-xs"></div>
-                    <div className="bg-transparent"></div>
-                    <div className="bg-current rounded-xs"></div>
-                    <div className="bg-transparent"></div>
-                    <div className="bg-current rounded-xs"></div>
-                    <div className="bg-transparent"></div>
-                    <div className="bg-current rounded-xs"></div>
-                  </div>
-                </div>
-              )}
             </div>
 
           </div>
@@ -1849,7 +1862,7 @@ export default function EditorPhotostrip() {
             <span className="font-bold text-gray-900">{appConfig.website?.brandName || 'snap.e'}</span>
             <span>— {appConfig.website?.heroTagline || 'Tangible Memories, Synchronized Distances.'}</span>
           </div>
-          <p>© {new Date().getFullYear()} {appConfig.website?.brandName || 'snap.e'} Atelier. All rights reserved.</p>
+          <p>© {new Date().getFullYear()} {appConfig.website?.brandName || 'snap.e'}. All rights reserved.</p>
         </div>
       </footer>
     </div>

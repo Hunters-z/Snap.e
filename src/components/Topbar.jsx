@@ -70,9 +70,9 @@ export default function Topbar() {
         )}
 
         {/* Right side Auth & CTA */}
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2 shrink-0">
           {currentUser ? (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 sm:gap-2">
               <Link
                 to="/capture"
                 className="hidden sm:flex items-center gap-1.5 text-xs font-semibold px-3.5 py-1.5 rounded-full bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
@@ -81,31 +81,43 @@ export default function Topbar() {
                 Buka Booth
               </Link>
 
-              <div className="text-xs font-semibold text-gray-700 bg-gray-100 px-3 py-1.5 rounded-full flex items-center gap-2 border border-gray-200/60">
+              {/* Desktop User Badge */}
+              <div className="hidden sm:flex text-xs font-semibold text-gray-700 bg-gray-100 px-3 py-1.5 rounded-full items-center gap-2 border border-gray-200/60">
                 {currentUser.photoURL ? (
                   <img src={currentUser.photoURL} alt="" className="w-4 h-4 rounded-full object-cover" />
                 ) : (
                   <User size={13} className="text-gray-500" />
                 )}
-                <span className="max-w-[110px] truncate">{currentUser.displayName || currentUser.email}</span>
+                <span className="max-w-[120px] truncate">{currentUser.displayName || currentUser.email}</span>
                 {isAdmin && (
                   <span className="text-[9px] bg-amber-500 text-white font-extrabold px-1.5 py-0.2 rounded-full">
                     ADMIN
                   </span>
                 )}
               </div>
+
+              {/* Desktop Logout Button */}
               <button
                 onClick={logout}
-                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors"
+                className="hidden sm:flex p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors"
                 title="Keluar / Logout"
               >
                 <LogOut size={16} />
               </button>
 
+              {/* Mobile Quick Avatar Indicator */}
+              <div className="sm:hidden flex items-center justify-center w-7 h-7 rounded-full bg-gray-100 border border-gray-200 overflow-hidden shrink-0">
+                {currentUser.photoURL ? (
+                  <img src={currentUser.photoURL} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <User size={14} className="text-gray-600" />
+                )}
+              </div>
+
               {/* Mobile Hamburger Toggle for logged-in menu */}
               <button
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="md:hidden p-1.5 rounded-lg text-gray-600 hover:text-gray-900 hover:bg-gray-100 ml-1"
+                className="md:hidden p-1.5 rounded-lg text-gray-600 hover:text-gray-900 hover:bg-gray-100 shrink-0"
                 aria-label="Toggle menu"
               >
                 {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
@@ -114,7 +126,7 @@ export default function Topbar() {
           ) : (
             <button
               onClick={() => openAuthModal()}
-              className="flex items-center gap-1.5 text-xs font-bold px-4 py-2 rounded-full bg-gray-900 text-white hover:bg-black transition-colors shadow-xs"
+              className="flex items-center gap-1.5 text-xs font-bold px-3.5 sm:px-4 py-1.5 rounded-full bg-gray-900 text-white hover:bg-black transition-colors shadow-xs shrink-0"
             >
               <LogIn size={13} />
               <span>Masuk / Login</span>
@@ -125,7 +137,25 @@ export default function Topbar() {
 
       {/* Mobile Drawer */}
       {mobileMenuOpen && (
-        <div className="md:hidden border-t border-gray-100 bg-white px-4 py-3 space-y-2 animate-fadeIn shadow-lg">
+        <div className="md:hidden border-t border-gray-100 bg-white px-4 py-3 space-y-3 animate-fadeIn shadow-lg">
+          {currentUser && (
+            <div className="p-3 bg-gray-50 border border-gray-200/80 rounded-xl space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-gray-900 truncate">
+                  {currentUser.displayName || 'Pengguna snap.e'}
+                </span>
+                {isAdmin && (
+                  <span className="text-[9px] bg-amber-500 text-white font-extrabold px-1.5 py-0.5 rounded-full">
+                    ADMIN
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-gray-500 font-mono truncate">
+                {currentUser.email}
+              </p>
+            </div>
+          )}
+
           {links.map((link) => {
             const isActive = location.pathname === link.path;
             return (
@@ -133,9 +163,9 @@ export default function Topbar() {
                 key={link.path}
                 to={link.path}
                 onClick={() => setMobileMenuOpen(false)}
-                className={`block text-sm font-medium px-4 py-2.5 rounded-lg transition-colors ${
+                className={`block text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors ${
                   isActive
-                    ? 'bg-gray-900 text-white'
+                    ? 'bg-gray-900 text-white shadow-xs'
                     : 'text-gray-700 hover:bg-gray-100'
                 }`}
               >
@@ -148,41 +178,26 @@ export default function Topbar() {
             <Link
               to="/admin"
               onClick={() => setMobileMenuOpen(false)}
-              className="block text-sm font-bold px-4 py-2.5 rounded-lg text-amber-800 bg-amber-50 border border-amber-200 transition-colors"
+              className="block text-sm font-bold px-4 py-2.5 rounded-xl text-amber-800 bg-amber-50 border border-amber-200 transition-colors"
             >
               🛡️ Dashboard Admin Studio
             </Link>
           )}
 
-          <div className="pt-2 border-t border-gray-100 flex items-center justify-between text-xs px-2">
-            {currentUser ? (
-              <>
-                <div className="flex items-center gap-1.5 truncate max-w-[180px]">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                  <span className="font-medium text-gray-700 truncate">{currentUser.displayName || currentUser.email}</span>
-                </div>
-                <button
-                  onClick={() => {
-                    logout();
-                    setMobileMenuOpen(false);
-                  }}
-                  className="font-bold text-red-600 hover:text-red-700 flex items-center gap-1"
-                >
-                  <LogOut size={13} /> Keluar
-                </button>
-              </>
-            ) : (
+          {currentUser && (
+            <div className="pt-1">
               <button
                 onClick={() => {
+                  logout();
                   setMobileMenuOpen(false);
-                  openAuthModal();
                 }}
-                className="w-full py-2 bg-gray-900 text-white font-bold rounded-lg text-center flex items-center justify-center gap-1.5"
+                className="w-full py-2.5 px-4 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors"
               >
-                <LogIn size={14} /> Masuk / Login
+                <LogOut size={14} />
+                <span>Keluar dari Akun</span>
               </button>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       )}
     </header>

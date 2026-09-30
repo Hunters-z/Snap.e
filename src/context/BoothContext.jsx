@@ -279,23 +279,38 @@ export function BoothProvider({ children }) {
     return SESSION_MAX_SECONDS;
   });
 
-  // Session Album (temporary 7-day storage for photos taken in session)
+  // Helper to get or initialize session ID (each session has its own isolated album storage)
+  const [currentSessionId, setCurrentSessionId] = useState(() => {
+    try {
+      const saved = localStorage.getItem('snape_current_session_id');
+      if (saved) return saved;
+      const initialId = `sess_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
+      localStorage.setItem('snape_current_session_id', initialId);
+      return initialId;
+    } catch {
+      return `sess_${Date.now()}`;
+    }
+  });
+
+  // Session Album: stored separately per session in `snape_album_${currentSessionId}`
   const [sessionAlbum, setSessionAlbum] = useState(() => {
     try {
-      const saved = localStorage.getItem('snape_session_album');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          const now = Date.now();
-          // Filter out photos that have expired (> 7 days) and filter out old default sample photos
-          const validPhotos = parsed.filter(p => p && !p.id?.startsWith('sample_') && !p.dataUrl?.includes('images.unsplash.com') && (!p.expiresAt || new Date(p.expiresAt).getTime() > now));
-          return validPhotos;
+      const sessId = localStorage.getItem('snape_current_session_id');
+      if (sessId) {
+        const saved = localStorage.getItem(`snape_album_${sessId}`);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            const now = Date.now();
+            const valid = parsed.filter(p => p && !p.id?.startsWith('sample_') && !p.dataUrl?.includes('images.unsplash.com') && (!p.expiresAt || new Date(p.expiresAt).getTime() > now));
+            return valid;
+          }
         }
       }
     } catch {
       // fallback
     }
-    return []; // Album starts completely empty!
+    return []; // Album starts completely empty for each new session!
   });
 
   // Photos captured in booth
@@ -347,11 +362,32 @@ export function BoothProvider({ children }) {
     setSessionTimeRemaining(SESSION_MAX_SECONDS);
   }, []);
 
-  // Album actions with 7-day expiration
+  // Start an entirely new session with its own distinct album storage
+  const startNewSession = useCallback(() => {
+    const now = Date.now();
+    const newSessionId = `sess_${now}_${Math.random().toString(36).substr(2, 4)}`;
+    try {
+      localStorage.setItem('snape_current_session_id', newSessionId);
+      localStorage.setItem('snape_session_start_time', String(now));
+      localStorage.setItem(`snape_album_${newSessionId}`, JSON.stringify([]));
+      localStorage.setItem('snape_captured_photos', JSON.stringify([]));
+    } catch (e) {
+      console.warn('Session init warning:', e);
+    }
+    setCurrentSessionId(newSessionId);
+    setSessionStartTime(now);
+    setSessionTimeRemaining(SESSION_MAX_SECONDS);
+    setSessionAlbum([]);
+    setCapturedPhotos([]);
+    return newSessionId;
+  }, []);
+
+  // Album actions with 7-day expiration (scoped per session storage)
   const addPhotoToAlbum = useCallback((newPhoto) => {
     const now = Date.now();
     const photoWithId = {
       id: newPhoto.id || `snap_${now}_${Math.random().toString(36).substr(2, 4)}`,
+      sessionId: currentSessionId,
       capturedAt: newPhoto.capturedAt || new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
       createdAt: new Date(now).toISOString(),
       expiresAt: new Date(now + SEVEN_DAYS_MS).toISOString(),
@@ -361,6 +397,7 @@ export function BoothProvider({ children }) {
     setSessionAlbum(prev => {
       const updated = [photoWithId, ...prev];
       try {
+        localStorage.setItem(`snape_album_${currentSessionId}`, JSON.stringify(updated.slice(0, 50)));
         localStorage.setItem('snape_session_album', JSON.stringify(updated.slice(0, 50)));
       } catch (e) {
         console.warn('Storage warning for album:', e);
@@ -369,19 +406,20 @@ export function BoothProvider({ children }) {
     });
 
     return photoWithId;
-  }, []);
+  }, [currentSessionId]);
 
   const deletePhotoFromAlbum = useCallback((photoId) => {
     setSessionAlbum(prev => {
       const updated = prev.filter(p => p.id !== photoId);
       try {
+        localStorage.setItem(`snape_album_${currentSessionId}`, JSON.stringify(updated));
         localStorage.setItem('snape_session_album', JSON.stringify(updated));
       } catch (err) {
         console.warn('Storage error:', err);
       }
       return updated;
     });
-  }, []);
+  }, [currentSessionId]);
 
   const selectPhotoForSlot = useCallback((slotIndex, photoItem) => {
     setCapturedPhotos(prev => {
@@ -1230,6 +1268,8 @@ export function BoothProvider({ children }) {
         capturedPhotos,
         updateCapturedPhotos,
         sessionTimeRemaining,
+        currentSessionId,
+        startNewSession,
         startOrResumeSession,
         resetSession,
         sessionAlbum,
