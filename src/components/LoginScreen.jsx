@@ -14,8 +14,8 @@ export default function LoginScreen({ redirectPath = null, isModal = false, onCl
     closeAuthModal
   } = useBooth();
 
-  // Set default to Email & Password so real users can always authenticate seamlessly without domain restrictions
-  const [activeTab, setActiveTab] = useState('email'); // 'email' | 'google'
+  // Users can use Google Auth or Email & Password with their personal Firebase project
+  const [activeTab, setActiveTab] = useState('google'); // 'google' | 'email'
   const [isRegisterMode, setIsRegisterMode] = useState(false);
   
   // Email/Password state
@@ -144,19 +144,6 @@ export default function LoginScreen({ redirectPath = null, isModal = false, onCl
       <div className="flex bg-gray-100 p-1 rounded-2xl mb-5 text-xs font-bold">
         <button
           type="button"
-          onClick={() => { setActiveTab('email'); setErrorMsg(''); }}
-          className={`flex-1 py-2.5 rounded-xl transition-all flex items-center justify-center gap-1.5 ${
-            activeTab === 'email' 
-              ? 'bg-white text-gray-900 shadow-xs' 
-              : 'text-gray-500 hover:text-gray-900'
-          }`}
-        >
-          <Mail size={14} className="text-red-500" />
-          <span>Email & Sandi</span>
-        </button>
-
-        <button
-          type="button"
           onClick={() => { setActiveTab('google'); setErrorMsg(''); }}
           className={`flex-1 py-2.5 rounded-xl transition-all flex items-center justify-center gap-1.5 ${
             activeTab === 'google' 
@@ -183,6 +170,19 @@ export default function LoginScreen({ redirectPath = null, isModal = false, onCl
             />
           </svg>
           <span>Google Auth</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => { setActiveTab('email'); setErrorMsg(''); }}
+          className={`flex-1 py-2.5 rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+            activeTab === 'email' 
+              ? 'bg-white text-gray-900 shadow-xs' 
+              : 'text-gray-500 hover:text-gray-900'
+          }`}
+        >
+          <Mail size={14} className="text-red-500" />
+          <span>Email & Sandi</span>
         </button>
       </div>
 
