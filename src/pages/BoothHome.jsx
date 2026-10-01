@@ -277,30 +277,104 @@ export default function BoothHome() {
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">
-                  2. Tata Letak Strip
+                  2. Tata Letak Frame (4R & Strip)
                 </label>
-                <span className="text-[11px] text-gray-400">Ukuran 2x6 / 4R</span>
+                <span className="text-[11px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full">
+                  Ukuran Cetak 4R (10x15cm)
+                </span>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 h-full">
+              <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
+                {/* 4R 4-Cut with Center Cut Line */}
+                <button
+                  type="button"
+                  onClick={() => setLayout('4r_4cut')}
+                  className={`p-3 sm:p-4 rounded-xl border flex flex-col items-center justify-center text-center gap-2.5 transition-all ${
+                    layout === '4r_4cut'
+                      ? 'border-gray-900 bg-gray-50/90 ring-2 ring-gray-900/10 shadow-sm'
+                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50/50'
+                  }`}
+                >
+                  <div className="w-16 h-20 bg-white border-2 border-gray-400 rounded p-1 relative flex">
+                    {/* Left Strip (2 photos) */}
+                    <div className="flex-1 flex flex-col justify-between pr-1">
+                      <div className="w-full h-7 bg-gray-200 rounded-xs mb-1"></div>
+                      <div className="w-full h-7 bg-gray-200 rounded-xs"></div>
+                    </div>
+                    {/* Dotted Center Cut Line */}
+                    <div className="w-0 border-r-2 border-dashed border-red-500 my-0.5 relative flex items-center justify-center">
+                      <span className="absolute text-[8px] text-red-500 font-bold bg-white px-0.5 rounded">✂</span>
+                    </div>
+                    {/* Right Strip (2 photos) */}
+                    <div className="flex-1 flex flex-col justify-between pl-1">
+                      <div className="w-full h-7 bg-gray-200 rounded-xs mb-1"></div>
+                      <div className="w-full h-7 bg-gray-200 rounded-xs"></div>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="font-bold text-xs text-gray-900 flex items-center justify-center gap-1">
+                      <span>4R (4 Foto)</span>
+                      <span className="text-[9px] bg-red-100 text-red-700 px-1 rounded font-bold">Potong ✂</span>
+                    </p>
+                    <p className="text-[10px] text-gray-500 mt-0.5">2 strip × 2 foto (Garis potong tengah)</p>
+                  </div>
+                </button>
+
+                {/* 4R 6-Cut with Center Cut Line */}
+                <button
+                  type="button"
+                  onClick={() => setLayout('4r_6cut')}
+                  className={`p-3 sm:p-4 rounded-xl border flex flex-col items-center justify-center text-center gap-2.5 transition-all ${
+                    layout === '4r_6cut'
+                      ? 'border-gray-900 bg-gray-50/90 ring-2 ring-gray-900/10 shadow-sm'
+                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50/50'
+                  }`}
+                >
+                  <div className="w-16 h-20 bg-white border-2 border-gray-400 rounded p-1 relative flex">
+                    {/* Left Strip (3 photos) */}
+                    <div className="flex-1 flex flex-col justify-between pr-1">
+                      <div className="w-full h-4.5 bg-gray-200 rounded-xs mb-0.5"></div>
+                      <div className="w-full h-4.5 bg-gray-200 rounded-xs mb-0.5"></div>
+                      <div className="w-full h-4.5 bg-gray-200 rounded-xs"></div>
+                    </div>
+                    {/* Dotted Center Cut Line */}
+                    <div className="w-0 border-r-2 border-dashed border-red-500 my-0.5 relative flex items-center justify-center">
+                      <span className="absolute text-[8px] text-red-500 font-bold bg-white px-0.5 rounded">✂</span>
+                    </div>
+                    {/* Right Strip (3 photos) */}
+                    <div className="flex-1 flex flex-col justify-between pl-1">
+                      <div className="w-full h-4.5 bg-gray-200 rounded-xs mb-0.5"></div>
+                      <div className="w-full h-4.5 bg-gray-200 rounded-xs mb-0.5"></div>
+                      <div className="w-full h-4.5 bg-gray-200 rounded-xs"></div>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="font-bold text-xs text-gray-900 flex items-center justify-center gap-1">
+                      <span>4R (6 Foto)</span>
+                      <span className="text-[9px] bg-red-100 text-red-700 px-1 rounded font-bold">Potong ✂</span>
+                    </p>
+                    <p className="text-[10px] text-gray-500 mt-0.5">2 strip × 3 foto (Garis potong tengah)</p>
+                  </div>
+                </button>
+
                 {/* Classic 3-Cut Strip */}
                 <button
                   type="button"
                   onClick={() => setLayout('strip')}
-                  className={`p-4 rounded-xl border flex flex-col items-center justify-center text-center gap-3 transition-all ${
+                  className={`p-2.5 sm:p-3 rounded-xl border flex items-center gap-2.5 transition-all text-left ${
                     layout === 'strip'
-                      ? 'border-gray-900 bg-gray-50/80 ring-2 ring-gray-900/10 shadow-sm'
+                      ? 'border-gray-900 bg-gray-50 ring-1 ring-gray-900/10 shadow-xs'
                       : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50/50'
                   }`}
                 >
-                  <div className="w-10 h-16 bg-white border-2 border-gray-400 rounded p-1 flex flex-col justify-between">
-                    <div className="w-full h-3 bg-gray-200 rounded-sm"></div>
-                    <div className="w-full h-3 bg-gray-200 rounded-sm"></div>
-                    <div className="w-full h-3 bg-gray-200 rounded-sm"></div>
+                  <div className="w-7 h-12 bg-white border border-gray-400 rounded p-0.5 flex flex-col justify-between shrink-0">
+                    <div className="w-full h-2.5 bg-gray-200 rounded-xs"></div>
+                    <div className="w-full h-2.5 bg-gray-200 rounded-xs"></div>
+                    <div className="w-full h-2.5 bg-gray-200 rounded-xs"></div>
                   </div>
                   <div>
-                    <p className="font-bold text-xs text-gray-900">Classic Strip</p>
-                    <p className="text-[10px] text-gray-500 mt-0.5">3 Pose Vertikal</p>
+                    <p className="font-bold text-[11px] text-gray-900">Strip Tunggal</p>
+                    <p className="text-[9px] text-gray-500">3 Pose 2x6&quot;</p>
                   </div>
                 </button>
 
@@ -308,21 +382,21 @@ export default function BoothHome() {
                 <button
                   type="button"
                   onClick={() => setLayout('grid')}
-                  className={`p-4 rounded-xl border flex flex-col items-center justify-center text-center gap-3 transition-all ${
+                  className={`p-2.5 sm:p-3 rounded-xl border flex items-center gap-2.5 transition-all text-left ${
                     layout === 'grid'
-                      ? 'border-gray-900 bg-gray-50/80 ring-2 ring-gray-900/10 shadow-sm'
+                      ? 'border-gray-900 bg-gray-50 ring-1 ring-gray-900/10 shadow-xs'
                       : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50/50'
                   }`}
                 >
-                  <div className="w-14 h-16 bg-white border-2 border-gray-400 rounded p-1 grid grid-cols-2 gap-1 items-center">
-                    <div className="w-full h-5 bg-gray-200 rounded-sm"></div>
-                    <div className="w-full h-5 bg-gray-200 rounded-sm"></div>
-                    <div className="w-full h-5 bg-gray-200 rounded-sm"></div>
-                    <div className="w-full h-5 bg-gray-200 rounded-sm"></div>
+                  <div className="w-9 h-12 bg-white border border-gray-400 rounded p-0.5 grid grid-cols-2 gap-0.5 items-center shrink-0">
+                    <div className="w-full h-4 bg-gray-200 rounded-xs"></div>
+                    <div className="w-full h-4 bg-gray-200 rounded-xs"></div>
+                    <div className="w-full h-4 bg-gray-200 rounded-xs"></div>
+                    <div className="w-full h-4 bg-gray-200 rounded-xs"></div>
                   </div>
                   <div>
-                    <p className="font-bold text-xs text-gray-900">2x2 Quad Grid</p>
-                    <p className="text-[10px] text-gray-500 mt-0.5">4 Pose Grid</p>
+                    <p className="font-bold text-[11px] text-gray-900">2x2 Quad Grid</p>
+                    <p className="text-[9px] text-gray-500">4 Pose Grid</p>
                   </div>
                 </button>
               </div>

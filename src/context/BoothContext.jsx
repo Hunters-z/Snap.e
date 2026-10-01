@@ -255,7 +255,14 @@ export function BoothProvider({ children }) {
     return localStorage.getItem('snape_user_name') || 'Pengguna';
   });
   const [mode, setMode] = useState('solo'); // 'solo' | 'ldr'
-  const [layout, setLayout] = useState('strip'); // 'strip' (3 shots) | 'grid' (4 shots)
+  const [layout, setLayout] = useState(() => {
+    try {
+      const saved = localStorage.getItem('snape_layout');
+      return saved || '4r_4cut';
+    } catch {
+      return '4r_4cut';
+    }
+  }); // 'strip' (3 cuts) | 'grid' (4 grid) | '4r_4cut' (4R 2x2 with center cut line) | '4r_6cut' (4R 2x3 with center cut line)
   
   // Session timer (15 minutes overall session)
   const [sessionStartTime, setSessionStartTime] = useState(() => {
@@ -1240,6 +1247,12 @@ export function BoothProvider({ children }) {
   useEffect(() => {
     localStorage.setItem('snape_user_name', userName);
   }, [userName]);
+
+  useEffect(() => {
+    if (layout) {
+      localStorage.setItem('snape_layout', layout);
+    }
+  }, [layout]);
 
   return (
     <BoothContext.Provider

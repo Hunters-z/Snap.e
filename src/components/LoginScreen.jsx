@@ -32,7 +32,10 @@ export default function LoginScreen({ redirectPath = null, isModal = false, onCl
     if (closeAuthModal) closeAuthModal();
 
     const target = redirectPath || authRedirectUrl;
-    if (userResult?.isAdmin) {
+    // If user clicked an explicit room or feature link, honor it
+    if (target && (target.includes('/capture') || target.includes('/editor'))) {
+      navigate(target);
+    } else if (userResult?.isAdmin) {
       navigate('/admin');
     } else if (target) {
       navigate(target);

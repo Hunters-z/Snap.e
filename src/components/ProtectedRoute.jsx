@@ -25,7 +25,7 @@ export default function ProtectedRoute({ children, requireAdmin = false }) {
 
   // 2. Unauthenticated: Render dedicated Login Screen directly
   if (!currentUser) {
-    return <LoginScreen redirectPath={location.pathname} />;
+    return <LoginScreen redirectPath={location.pathname + location.search} />;
   }
 
   // 3. User is logged in, but route requires Admin privileges

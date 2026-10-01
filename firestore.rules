@@ -84,5 +84,11 @@ service cloud.firestore {
       allow update: if isValidId(sessionId) && isValidPhotostrip(incoming());
       allow delete: if isValidId(sessionId);
     }
+
+    // 4. LDR Realtime Signaling & Rooms
+    match /ldr_rooms/{roomId} {
+      allow get, list: if true;
+      allow create, update, delete: if isValidId(roomId);
+    }
   }
 }
