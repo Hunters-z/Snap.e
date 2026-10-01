@@ -1,9 +1,24 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
-import localConfig from '../firebase-applet-config.json';
 
-// Support Vite environment variables (recommended for Vercel/production) with fallback to local JSON
+// Default project credentials for user's personal Firebase project: snap-e-55144
+const DEFAULT_FIREBASE_CONFIG = {
+  apiKey: "AIzaSyClayvri2RwofR_wpJVP0g8ZMlpAFV48RE",
+  authDomain: "snap-e-55144.firebaseapp.com",
+  projectId: "snap-e-55144",
+  storageBucket: "snap-e-55144.firebasestorage.app",
+  messagingSenderId: "618885882194",
+  appId: "1:618885882194:web:d971e380ded9f6559e5a8b",
+  measurementId: "G-T2PZ1X4XB7",
+  firestoreDatabaseId: "(default)"
+};
+
+// Resilient config loading via import.meta.glob so deletion of config file never breaks the build
+const configFiles = import.meta.glob('../firebase-applet-config.json', { eager: true });
+const localConfig = configFiles['../firebase-applet-config.json']?.default || DEFAULT_FIREBASE_CONFIG;
+
+// Support Vite environment variables (recommended for Vercel/production) with fallback to local JSON/defaults
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || localConfig.apiKey,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || localConfig.authDomain,
