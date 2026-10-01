@@ -356,49 +356,6 @@ export default function BoothHome() {
                     <p className="text-[10px] text-gray-500 mt-0.5">2 strip × 3 foto (Garis potong tengah)</p>
                   </div>
                 </button>
-
-                {/* Classic 3-Cut Strip */}
-                <button
-                  type="button"
-                  onClick={() => setLayout('strip')}
-                  className={`p-2.5 sm:p-3 rounded-xl border flex items-center gap-2.5 transition-all text-left ${
-                    layout === 'strip'
-                      ? 'border-gray-900 bg-gray-50 ring-1 ring-gray-900/10 shadow-xs'
-                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50/50'
-                  }`}
-                >
-                  <div className="w-7 h-12 bg-white border border-gray-400 rounded p-0.5 flex flex-col justify-between shrink-0">
-                    <div className="w-full h-2.5 bg-gray-200 rounded-xs"></div>
-                    <div className="w-full h-2.5 bg-gray-200 rounded-xs"></div>
-                    <div className="w-full h-2.5 bg-gray-200 rounded-xs"></div>
-                  </div>
-                  <div>
-                    <p className="font-bold text-[11px] text-gray-900">Strip Tunggal</p>
-                    <p className="text-[9px] text-gray-500">3 Pose 2x6&quot;</p>
-                  </div>
-                </button>
-
-                {/* 2x2 Quad Grid */}
-                <button
-                  type="button"
-                  onClick={() => setLayout('grid')}
-                  className={`p-2.5 sm:p-3 rounded-xl border flex items-center gap-2.5 transition-all text-left ${
-                    layout === 'grid'
-                      ? 'border-gray-900 bg-gray-50 ring-1 ring-gray-900/10 shadow-xs'
-                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50/50'
-                  }`}
-                >
-                  <div className="w-9 h-12 bg-white border border-gray-400 rounded p-0.5 grid grid-cols-2 gap-0.5 items-center shrink-0">
-                    <div className="w-full h-4 bg-gray-200 rounded-xs"></div>
-                    <div className="w-full h-4 bg-gray-200 rounded-xs"></div>
-                    <div className="w-full h-4 bg-gray-200 rounded-xs"></div>
-                    <div className="w-full h-4 bg-gray-200 rounded-xs"></div>
-                  </div>
-                  <div>
-                    <p className="font-bold text-[11px] text-gray-900">2x2 Quad Grid</p>
-                    <p className="text-[9px] text-gray-500">4 Pose Grid</p>
-                  </div>
-                </button>
               </div>
             </div>
           </div>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Lock, Loader2, AlertCircle, ArrowRight, Mail, KeyRound, User, CheckCircle2 } from 'lucide-react';
 import { useBooth } from '../context/BoothContext';
@@ -7,6 +7,7 @@ export default function LoginScreen({ redirectPath = null, isModal = false, onCl
   const navigate = useNavigate();
   const { 
     appConfig,
+    currentUser,
     loginWithGoogle, 
     loginWithEmailPassword, 
     registerWithEmailPassword,
@@ -27,20 +28,34 @@ export default function LoginScreen({ redirectPath = null, isModal = false, onCl
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
-  const handlePostLogin = (userResult) => {
+  // Auto-dismiss loading and immediately redirect to home (beranda) as soon as currentUser is authenticated
+  useEffect(() => {
+    if (currentUser) {
+      setLoading(false);
+      if (onClose) onClose();
+      if (closeAuthModal) closeAuthModal();
+
+      const target = redirectPath || authRedirectUrl;
+      // If user joined a specific LDR room link, go to that room, otherwise directly to beranda
+      if (target && target.includes('/capture') && target.includes('room=')) {
+        navigate(target, { replace: true });
+      } else {
+        navigate('/', { replace: true });
+      }
+    }
+  }, [currentUser, onClose, closeAuthModal, redirectPath, authRedirectUrl, navigate]);
+
+  const handlePostLogin = () => {
+    setLoading(false);
     if (onClose) onClose();
     if (closeAuthModal) closeAuthModal();
 
     const target = redirectPath || authRedirectUrl;
-    // If user clicked an explicit room or feature link, honor it
-    if (target && (target.includes('/capture') || target.includes('/editor'))) {
-      navigate(target);
-    } else if (userResult?.isAdmin) {
-      navigate('/admin');
-    } else if (target) {
-      navigate(target);
+    // If user clicked an explicit room link, honor it, otherwise enter beranda directly
+    if (target && target.includes('/capture') && target.includes('room=')) {
+      navigate(target, { replace: true });
     } else {
-      navigate('/');
+      navigate('/', { replace: true });
     }
   };
 

@@ -119,7 +119,7 @@ const DEFAULT_SAMPLE_PHOTOS = [
     offsetX: 0,
     offsetY: 0,
     filterCss: 'none',
-    stickers: [{ text: '✨', x: 25, y: 25 }]
+    stickers: []
   },
   {
     dataUrl: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=600&h=450&fit=crop',
@@ -143,7 +143,7 @@ const DEFAULT_SAMPLE_PHOTOS = [
     offsetX: 0,
     offsetY: 0,
     filterCss: 'none',
-    stickers: [{ text: '💖', x: 75, y: 75 }]
+    stickers: []
   }
 ];
 
@@ -258,11 +258,12 @@ export function BoothProvider({ children }) {
   const [layout, setLayout] = useState(() => {
     try {
       const saved = localStorage.getItem('snape_layout');
-      return saved || '4r_4cut';
+      if (saved === '4r_6cut') return '4r_6cut';
+      return '4r_4cut';
     } catch {
       return '4r_4cut';
     }
-  }); // 'strip' (3 cuts) | 'grid' (4 grid) | '4r_4cut' (4R 2x2 with center cut line) | '4r_6cut' (4R 2x3 with center cut line)
+  }); // Exclusively 4R: '4r_4cut' (2x2 with center cut line) | '4r_6cut' (2x3 with center cut line)
   
   // Session timer (15 minutes overall session)
   const [sessionStartTime, setSessionStartTime] = useState(() => {
@@ -433,10 +434,10 @@ export function BoothProvider({ children }) {
       const next = [...prev];
       next[slotIndex] = {
         ...photoItem,
-        zoom: photoItem.zoom ?? 1.0,
-        offsetX: photoItem.offsetX ?? 0,
-        offsetY: photoItem.offsetY ?? 0,
-        stickers: photoItem.stickers || []
+        zoom: 1.0,
+        offsetX: 0,
+        offsetY: 0,
+        stickers: []
       };
       try {
         localStorage.setItem('snape_captured_photos', JSON.stringify(next));
@@ -892,20 +893,18 @@ export function BoothProvider({ children }) {
       localStorage.setItem('snape_current_user', JSON.stringify(userData));
       setUserName(userData.displayName);
 
-      // Register or update user record in Firestore
-      try {
-        await setDoc(doc(db, 'users', user.uid), {
-          uid: user.uid,
-          email: user.email,
-          displayName: userData.displayName,
-          photoURL: userData.photoURL,
-          role: admin ? 'admin' : 'customer',
-          lastLoginAt: new Date().toISOString(),
-          createdAt: new Date().toISOString()
-        }, { merge: true });
-      } catch (e) {
+      // Register or update user record in Firestore asynchronously without blocking auth flow
+      setDoc(doc(db, 'users', user.uid), {
+        uid: user.uid,
+        email: user.email,
+        displayName: userData.displayName,
+        photoURL: userData.photoURL,
+        role: admin ? 'admin' : 'customer',
+        lastLoginAt: new Date().toISOString(),
+        createdAt: new Date().toISOString()
+      }, { merge: true }).catch((e) => {
         console.warn('Could not save user profile to Firestore:', e);
-      }
+      });
 
       if (admin) {
         setIsAdminAuth(true);
@@ -941,19 +940,18 @@ export function BoothProvider({ children }) {
       localStorage.setItem('snape_current_user', JSON.stringify(userData));
       setUserName(userData.displayName);
 
-      try {
-        await setDoc(doc(db, 'users', user.uid), {
-          uid: user.uid,
-          email: user.email,
-          displayName: userData.displayName,
-          photoURL: userData.photoURL,
-          role: admin ? 'admin' : 'customer',
-          lastLoginAt: new Date().toISOString(),
-          createdAt: new Date().toISOString()
-        }, { merge: true });
-      } catch (e) {
+      // Async Firestore profile update
+      setDoc(doc(db, 'users', user.uid), {
+        uid: user.uid,
+        email: user.email,
+        displayName: userData.displayName,
+        photoURL: userData.photoURL,
+        role: admin ? 'admin' : 'customer',
+        lastLoginAt: new Date().toISOString(),
+        createdAt: new Date().toISOString()
+      }, { merge: true }).catch((e) => {
         console.warn('Could not save user profile to Firestore:', e);
-      }
+      });
 
       if (admin) {
         setIsAdminAuth(true);
@@ -983,19 +981,18 @@ export function BoothProvider({ children }) {
       localStorage.setItem('snape_current_user', JSON.stringify(userData));
       setUserName(name);
 
-      try {
-        await setDoc(doc(db, 'users', user.uid), {
-          uid: user.uid,
-          email: user.email,
-          displayName: name,
-          photoURL: null,
-          role: admin ? 'admin' : 'customer',
-          lastLoginAt: new Date().toISOString(),
-          createdAt: new Date().toISOString()
-        }, { merge: true });
-      } catch (e) {
+      // Async Firestore profile update
+      setDoc(doc(db, 'users', user.uid), {
+        uid: user.uid,
+        email: user.email,
+        displayName: name,
+        photoURL: null,
+        role: admin ? 'admin' : 'customer',
+        lastLoginAt: new Date().toISOString(),
+        createdAt: new Date().toISOString()
+      }, { merge: true }).catch((e) => {
         console.warn('Could not save user profile to Firestore:', e);
-      }
+      });
 
       if (admin) {
         setIsAdminAuth(true);

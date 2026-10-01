@@ -1,9 +1,9 @@
-import { initializeApp } from 'firebase/app';
+import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import { getFirestore } from 'firebase/firestore';
 
-// Default project credentials for user's personal Firebase project: snap-e-55144
-const DEFAULT_FIREBASE_CONFIG = {
+// Locked directly to user's Firebase project: snap-e-55144
+export const firebaseConfig = {
   apiKey: "AIzaSyClayvri2RwofR_wpJVP0g8ZMlpAFV48RE",
   authDomain: "snap-e-55144.firebaseapp.com",
   projectId: "snap-e-55144",
@@ -14,63 +14,22 @@ const DEFAULT_FIREBASE_CONFIG = {
   firestoreDatabaseId: "(default)"
 };
 
-// Resilient config loading via import.meta.glob so deletion of config file never breaks the build
-const configFiles = import.meta.glob('../firebase-applet-config.json', { eager: true });
-const localConfig = configFiles['../firebase-applet-config.json']?.default || DEFAULT_FIREBASE_CONFIG;
+// Initialize single Firebase App instance
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
-// Support Vite environment variables (recommended for Vercel/production) with fallback to local JSON/defaults
-const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || localConfig.apiKey,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || localConfig.authDomain,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || localConfig.projectId,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || localConfig.storageBucket,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || localConfig.messagingSenderId,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || localConfig.appId,
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || localConfig.measurementId,
-  firestoreDatabaseId: import.meta.env.VITE_FIREBASE_DATABASE_ID || localConfig.firestoreDatabaseId || '(default)'
-};
-
-const app = initializeApp(firebaseConfig);
-
-// Initialize Firestore: handles '(default)' or specific database ID
-export const db = (firebaseConfig.firestoreDatabaseId && firebaseConfig.firestoreDatabaseId !== '(default)')
-  ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
-  : getFirestore(app);
+export const db = getFirestore(app);
 export const auth = getAuth(app);
 
-// Error handler conforming to FirestoreErrorInfo standard
+// Standard error handler for Firestore operations
 export function handleFirestoreError(error, operationType, path) {
   const errInfo = {
     error: error instanceof Error ? error.message : String(error),
     authInfo: {
       userId: auth.currentUser?.uid || null,
-      email: auth.currentUser?.email || null,
-      emailVerified: auth.currentUser?.emailVerified || null,
-      isAnonymous: auth.currentUser?.isAnonymous || null,
-      tenantId: auth.currentUser?.tenantId || null,
-      providerInfo: auth.currentUser?.providerData?.map(p => ({
-        providerId: p.providerId,
-        email: p.email,
-      })) || []
+      email: auth.currentUser?.email || null
     },
     operationType,
     path
   };
-  console.error('Firestore Error:', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
+  console.warn('Firestore Operation:', errInfo);
 }
-
-// Test connection on boot as specified in Firestore guidelines
-export async function testConnection() {
-  try {
-    await getDocFromServer(doc(db, 'studio_config', 'main'));
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.warn('Firebase connection check: client appears offline.');
-    }
-  }
-}
-
-testConnection();
-
-export default app;

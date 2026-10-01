@@ -60,7 +60,8 @@ export default function LiveCapture() {
     }
   }, [roomParam, mode, setMode]);
 
-  const totalShots = (layout === '4r_6cut') ? 6 : ((layout === 'grid' || layout === '4r_4cut') ? 4 : 3);
+  // Only 4R formats: 6 cuts or 4 cuts
+  const totalShots = layout === '4r_6cut' ? 6 : 4;
 
   // Active slot being captured (0 = Pose 1, 1 = Pose 2, etc.)
   const [activeSlotIndex, setActiveSlotIndex] = useState(0);
