@@ -258,12 +258,13 @@ export function BoothProvider({ children }) {
   const [layout, setLayout] = useState(() => {
     try {
       const saved = localStorage.getItem('snape_layout');
+      if (['strip_3cut', 'strip_4cut', '4r_4cut', '4r_6cut'].includes(saved)) return saved;
       if (saved === '4r_6cut') return '4r_6cut';
       return '4r_4cut';
     } catch {
       return '4r_4cut';
     }
-  }); // Exclusively 4R: '4r_4cut' (2x2 with center cut line) | '4r_6cut' (2x3 with center cut line)
+  }); // Mode Portrait: 'strip_3cut' (1x3 vertikal) | 'strip_4cut' (1x4 vertikal) | '4r_4cut' (2x2 dual strip 4R) | '4r_6cut' (2x3 dual strip 4R)
   
   // Session timer (15 minutes overall session)
   const [sessionStartTime, setSessionStartTime] = useState(() => {
