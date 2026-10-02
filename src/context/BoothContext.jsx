@@ -434,10 +434,10 @@ export function BoothProvider({ children }) {
       const next = [...prev];
       next[slotIndex] = {
         ...photoItem,
-        zoom: 1.0,
-        offsetX: 0,
-        offsetY: 0,
-        stickers: []
+        zoom: photoItem.zoom ?? 1.0,
+        offsetX: photoItem.offsetX ?? 0,
+        offsetY: photoItem.offsetY ?? 0,
+        stickers: Array.isArray(photoItem.stickers) ? photoItem.stickers : []
       };
       try {
         localStorage.setItem('snape_captured_photos', JSON.stringify(next));

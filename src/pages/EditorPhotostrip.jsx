@@ -15,11 +15,14 @@ import {
   Image as ImageIcon,
   Film,
   Clock,
-  Play
+  Play,
+  ZoomIn,
+  RotateCcw,
+  Move
 } from 'lucide-react';
 import { FILTER_CATEGORIES, CAMERA_PRESETS } from '../data/cameraPresets';
 import { drawFrameGraphicDecorations } from '../data/defaultFrames';
-import { drawCover, formatSessionTime, generateGifFromFrames } from '../utils/photoCaptureHelper';
+import { formatSessionTime, generateGifFromFrames } from '../utils/photoCaptureHelper';
 
 export default function EditorPhotostrip() {
   const navigate = useNavigate();
@@ -246,16 +249,281 @@ export default function EditorPhotostrip() {
     showToast('Template frame PNG ukuran fix 4R (1800x1200) berhasil diunduh!');
   };
 
+  // ==========================================
+  // DIRECT TOUCH & POINTER DRAG & ZOOM GESTURE HANDLER
+  // ==========================================
+  const [dragState, setDragState] = useState(null);
+  const [selectedStickerId, setSelectedStickerId] = useState(null);
+  const [stickerFilterCategory, setStickerFilterCategory] = useState('all');
+
+  // Pointer drag listener on window for ultra-smooth live pan and sticker placement
+  useEffect(() => {
+    if (!dragState) return;
+
+    const handlePointerMove = (e) => {
+      if (dragState.type === 'pan') {
+        const deltaPxX = e.clientX - dragState.startX;
+        const deltaPxY = e.clientY - dragState.startY;
+        
+        // Convert to percentage of slot size
+        const deltaPercentX = (deltaPxX / (dragState.slotW || 200)) * 100;
+        const deltaPercentY = (deltaPxY / (dragState.slotH || 150)) * 100;
+
+        const newX = Math.max(-80, Math.min(80, dragState.startOffsetX + deltaPercentX));
+        const newY = Math.max(-80, Math.min(80, dragState.startOffsetY + deltaPercentY));
+
+        setPhotos(prev => {
+          const next = [...prev];
+          if (next[dragState.slotIdx]) {
+            next[dragState.slotIdx] = {
+              ...next[dragState.slotIdx],
+              offsetX: Math.round(newX * 10) / 10,
+              offsetY: Math.round(newY * 10) / 10
+            };
+          }
+          return next;
+        });
+      } else if (dragState.type === 'sticker') {
+        const deltaPxX = e.clientX - dragState.startX;
+        const deltaPxY = e.clientY - dragState.startY;
+
+        const deltaPercentX = (deltaPxX / (dragState.slotW || 200)) * 100;
+        const deltaPercentY = (deltaPxY / (dragState.slotH || 150)) * 100;
+
+        const newX = Math.max(5, Math.min(95, dragState.startStkX + deltaPercentX));
+        const newY = Math.max(5, Math.min(95, dragState.startStkY + deltaPercentY));
+
+        setPhotos(prev => {
+          const next = [...prev];
+          if (next[dragState.slotIdx]) {
+            const nextStickers = (next[dragState.slotIdx].stickers || []).map(stk => {
+              if (stk.id === dragState.stickerId) {
+                return {
+                  ...stk,
+                  x: Math.round(newX * 10) / 10,
+                  y: Math.round(newY * 10) / 10
+                };
+              }
+              return stk;
+            });
+            next[dragState.slotIdx] = {
+              ...next[dragState.slotIdx],
+              stickers: nextStickers
+            };
+          }
+          return next;
+        });
+      }
+    };
+
+    const handlePointerUp = () => {
+      setDragState(null);
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+    window.addEventListener('pointercancel', handlePointerUp);
+
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointercancel', handlePointerUp);
+    };
+  }, [dragState]);
+
+  // Pointer down on photo slot for panning
+  const handlePhotoPointerDown = (e, slotIdx) => {
+    // If clicking a sticker or button inside slot, do not start photo pan
+    if (e.target.closest('[data-sticker-item]') || e.target.closest('button')) return;
+    setActivePhotoIdx(slotIdx);
+
+    const slotEl = e.currentTarget;
+    const rect = slotEl.getBoundingClientRect();
+    const curP = photos[slotIdx] || {};
+
+    setDragState({
+      type: 'pan',
+      slotIdx,
+      startX: e.clientX,
+      startY: e.clientY,
+      startOffsetX: curP.offsetX || 0,
+      startOffsetY: curP.offsetY || 0,
+      slotW: rect.width || 200,
+      slotH: rect.height || 150
+    });
+  };
+
+  // Pointer down on sticker item for sticker drag
+  const handleStickerPointerDown = (e, slotIdx, stickerId) => {
+    e.stopPropagation();
+    setActivePhotoIdx(slotIdx);
+    setSelectedStickerId(stickerId);
+
+    const slotEl = e.currentTarget.closest('[data-photo-slot]');
+    const rect = slotEl ? slotEl.getBoundingClientRect() : { width: 200, height: 150 };
+    const curStk = (photos[slotIdx]?.stickers || []).find(s => s.id === stickerId);
+    if (!curStk) return;
+
+    setDragState({
+      type: 'sticker',
+      slotIdx,
+      stickerId,
+      startX: e.clientX,
+      startY: e.clientY,
+      startStkX: curStk.x ?? 50,
+      startStkY: curStk.y ?? 50,
+      slotW: rect.width || 200,
+      slotH: rect.height || 150
+    });
+  };
+
+  // Wheel zoom
+  const handleSlotWheel = (e, slotIdx) => {
+    e.preventDefault();
+    setActivePhotoIdx(slotIdx);
+    const p = photos[slotIdx] || {};
+    const curZoom = p.zoom || 1.0;
+    const delta = e.deltaY < 0 ? 0.08 : -0.08;
+    handleZoomChange(slotIdx, curZoom + delta);
+  };
+
+  // Zoom change
+  const handleZoomChange = (slotIdx, val) => {
+    const clamped = Math.max(1.0, Math.min(3.0, parseFloat(Number(val).toFixed(2))));
+    setPhotos(prev => {
+      const next = [...prev];
+      if (next[slotIdx]) {
+        next[slotIdx] = { ...next[slotIdx], zoom: clamped };
+      }
+      return next;
+    });
+  };
+
+  // Step zoom (+ / -)
+  const handleStepZoom = (slotIdx, step) => {
+    const p = photos[slotIdx] || {};
+    const cur = p.zoom || 1.0;
+    handleZoomChange(slotIdx, cur + step);
+  };
+
+  // Pan nudge (d-pad arrow buttons)
+  const handlePanNudge = (slotIdx, dirX, dirY) => {
+    setPhotos(prev => {
+      const next = [...prev];
+      if (next[slotIdx]) {
+        const curX = next[slotIdx].offsetX || 0;
+        const curY = next[slotIdx].offsetY || 0;
+        next[slotIdx] = {
+          ...next[slotIdx],
+          offsetX: Math.max(-80, Math.min(80, curX + dirX)),
+          offsetY: Math.max(-80, Math.min(80, curY + dirY))
+        };
+      }
+      return next;
+    });
+  };
+
+  // Reset photo pan & zoom
+  const handleResetPhotoAdjust = (slotIdx = activePhotoIdx) => {
+    setPhotos(prev => {
+      const next = [...prev];
+      if (next[slotIdx]) {
+        next[slotIdx] = {
+          ...next[slotIdx],
+          zoom: 1.0,
+          offsetX: 0,
+          offsetY: 0
+        };
+      }
+      return next;
+    });
+    showToast(`Posisi dan zoom Foto #${slotIdx + 1} diatur ulang`);
+  };
+
+  // Available stickers from appConfig or default
+  const availableStickers = appConfig.customStickers?.length > 0 ? appConfig.customStickers : (appConfig.stickers || []);
+
+  const handleAddSticker = (stkItem, slotIdx = activePhotoIdx) => {
+    setPhotos(prev => {
+      const next = [...prev];
+      if (!next[slotIdx]) return prev;
+      const curList = Array.isArray(next[slotIdx].stickers) ? next[slotIdx].stickers : [];
+      const newStk = {
+        id: `stk_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+        type: stkItem.type || 'emoji',
+        text: stkItem.text || '✨',
+        imageUrl: stkItem.imageUrl || null,
+        name: stkItem.name || 'Stiker',
+        x: 50 + (Math.random() * 16 - 8),
+        y: 50 + (Math.random() * 16 - 8),
+        size: 32,
+        rotation: 0
+      };
+      next[slotIdx] = {
+        ...next[slotIdx],
+        stickers: [...curList, newStk]
+      };
+      setSelectedStickerId(newStk.id);
+      return next;
+    });
+    showToast(`Stiker ${stkItem.text || stkItem.name} ditambahkan ke Foto #${slotIdx + 1}`);
+  };
+
+  const handleRemoveSticker = (slotIdx, stkId) => {
+    setPhotos(prev => {
+      const next = [...prev];
+      if (!next[slotIdx]) return prev;
+      next[slotIdx] = {
+        ...next[slotIdx],
+        stickers: (next[slotIdx].stickers || []).filter(s => s.id !== stkId)
+      };
+      return next;
+    });
+    if (selectedStickerId === stkId) setSelectedStickerId(null);
+    showToast('Stiker dihapus');
+  };
+
+  const handleClearSlotStickers = (slotIdx = activePhotoIdx) => {
+    setPhotos(prev => {
+      const next = [...prev];
+      if (!next[slotIdx]) return prev;
+      next[slotIdx] = {
+        ...next[slotIdx],
+        stickers: []
+      };
+      return next;
+    });
+    setSelectedStickerId(null);
+    showToast(`Semua stiker Foto #${slotIdx + 1} dibersihkan`);
+  };
+
+  const handleChangeStickerSize = (slotIdx, stkId, delta) => {
+    setPhotos(prev => {
+      const next = [...prev];
+      if (!next[slotIdx]) return prev;
+      next[slotIdx] = {
+        ...next[slotIdx],
+        stickers: (next[slotIdx].stickers || []).map(s => {
+          if (s.id === stkId) {
+            return { ...s, size: Math.max(16, Math.min(72, (s.size || 32) + delta)) };
+          }
+          return s;
+        })
+      };
+      return next;
+    });
+  };
+
   // Assign photo from session album into selected slot
   const handleAssignPhotoToSlot = (photoItem, slotIdx) => {
     selectPhotoForSlot(slotIdx, photoItem);
     const next = [...photos];
     next[slotIdx] = {
       ...photoItem,
-      zoom: 1.0,
-      offsetX: 0,
-      offsetY: 0,
-      stickers: []
+      zoom: photoItem.zoom ?? 1.0,
+      offsetX: photoItem.offsetX ?? 0,
+      offsetY: photoItem.offsetY ?? 0,
+      stickers: Array.isArray(photoItem.stickers) ? photoItem.stickers : []
     };
     setPhotos(next);
     showToast(`Foto berhasil dipasang pada Slot #${slotIdx + 1}`);
@@ -358,7 +626,7 @@ export default function EditorPhotostrip() {
       })
     );
 
-    // Draw photos (clean, un-stretched aspect ratio, no zoom or pan)
+    // Draw photos (with zoom, pan offset, filters and stickers)
     for (const item of loadedImages) {
       const { img, rect } = item;
       const p = rect.photo;
@@ -373,11 +641,30 @@ export default function EditorPhotostrip() {
       // Apply filter
       ctx.filter = p?.filterCss || 'none';
 
-      // Draw using drawCover to guarantee aspect ratio is never stretched!
-      drawCover(ctx, img, rect.x, rect.y, rect.w, rect.h, false);
+      const zoom = p?.zoom || 1.0;
+      const offX = ((p?.offsetX || 0) / 100) * rect.w;
+      const offY = ((p?.offsetY || 0) / 100) * rect.h;
 
+      const sWidth = img.naturalWidth || img.width || rect.w;
+      const sHeight = img.naturalHeight || img.height || rect.h;
+      const targetRatio = rect.w / rect.h;
+      const sourceRatio = sWidth / sHeight;
+
+      let baseW = rect.w;
+      let baseH = rect.h;
+      if (sourceRatio > targetRatio) {
+        baseW = rect.h * sourceRatio;
+      } else {
+        baseH = rect.w / sourceRatio;
+      }
+
+      const drawW = baseW * zoom;
+      const drawH = baseH * zoom;
+      const drawX = rect.x + (rect.w - drawW) / 2 + offX;
+      const drawY = rect.y + (rect.h - drawH) / 2 + offY;
+
+      ctx.drawImage(img, drawX, drawY, drawW, drawH);
       ctx.filter = 'none';
-      ctx.restore();
 
       // Draw retro date stamp on high-res canvas if enabled
       if (p?.dateStamp) {
@@ -390,6 +677,33 @@ export default function EditorPhotostrip() {
         ctx.fillText(p.dateStamp, rect.x + rect.w - 18, rect.y + rect.h - 18);
         ctx.restore();
       }
+
+      // Draw stickers for this slot onto HD canvas
+      if (p?.stickers && p.stickers.length > 0) {
+        const scaleFactor = rect.w / 200; // ratio from preview slot to HD canvas
+        for (const stk of p.stickers) {
+          ctx.save();
+          const stkX = rect.x + ((stk.x ?? 50) / 100) * rect.w;
+          const stkY = rect.y + ((stk.y ?? 50) / 100) * rect.h;
+          const stkSize = (stk.size || 32) * scaleFactor;
+
+          if (stk.type === 'emoji' || stk.text) {
+            ctx.font = `${Math.round(stkSize)}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(stk.text, stkX, stkY);
+          } else if (stk.imageUrl) {
+            const stkImg = new Image();
+            stkImg.crossOrigin = 'anonymous';
+            stkImg.src = stk.imageUrl;
+            await new Promise(r => { stkImg.onload = r; stkImg.onerror = r; });
+            ctx.drawImage(stkImg, stkX - stkSize / 2, stkY - stkSize / 2, stkSize, stkSize);
+          }
+          ctx.restore();
+        }
+      }
+
+      ctx.restore();
     }
 
     // Draw Frame Graphic Decorations
@@ -515,7 +829,43 @@ export default function EditorPhotostrip() {
           const img = new Image();
           img.src = (f % 2 === 1 && p?.gifUrl) ? p.gifUrl : p?.dataUrl;
           await new Promise(res => { img.onload = res; img.onerror = res; });
-          drawCover(ctx, img, col1X, y, itemW, itemH, false);
+
+          const zoom = p?.zoom || 1.0;
+          const offX = ((p?.offsetX || 0) / 100) * itemW;
+          const offY = ((p?.offsetY || 0) / 100) * itemH;
+          const sW = img.naturalWidth || img.width || itemW;
+          const sH = img.naturalHeight || img.height || itemH;
+          const targetR = itemW / itemH;
+          const sourceR = sW / sH;
+          let bW = itemW;
+          let bH = itemH;
+          if (sourceR > targetR) {
+            bW = itemH * sourceR;
+          } else {
+            bH = itemW / sourceR;
+          }
+          const dW = bW * zoom;
+          const dH = bH * zoom;
+          const dX = col1X + (itemW - dW) / 2 + offX;
+          const dY = y + (itemH - dH) / 2 + offY;
+          ctx.drawImage(img, dX, dY, dW, dH);
+
+          // Stickers on GIF
+          if (p?.stickers && p.stickers.length > 0) {
+            const sc = itemW / 200;
+            for (const stk of p.stickers) {
+              const stkX = col1X + ((stk.x ?? 50) / 100) * itemW;
+              const stkY = y + ((stk.y ?? 50) / 100) * itemH;
+              const stkSize = (stk.size || 28) * sc;
+              if (stk.type === 'emoji' || stk.text) {
+                ctx.font = `${Math.round(stkSize)}px sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(stk.text, stkX, stkY);
+              }
+            }
+          }
+
           ctx.restore();
         }
 
@@ -531,7 +881,43 @@ export default function EditorPhotostrip() {
           const img = new Image();
           img.src = (f % 2 === 1 && p?.gifUrl) ? p.gifUrl : p?.dataUrl;
           await new Promise(res => { img.onload = res; img.onerror = res; });
-          drawCover(ctx, img, col2X, y, itemW, itemH, false);
+
+          const zoom = p?.zoom || 1.0;
+          const offX = ((p?.offsetX || 0) / 100) * itemW;
+          const offY = ((p?.offsetY || 0) / 100) * itemH;
+          const sW = img.naturalWidth || img.width || itemW;
+          const sH = img.naturalHeight || img.height || itemH;
+          const targetR = itemW / itemH;
+          const sourceR = sW / sH;
+          let bW = itemW;
+          let bH = itemH;
+          if (sourceR > targetR) {
+            bW = itemH * sourceR;
+          } else {
+            bH = itemW / sourceR;
+          }
+          const dW = bW * zoom;
+          const dH = bH * zoom;
+          const dX = col2X + (itemW - dW) / 2 + offX;
+          const dY = y + (itemH - dH) / 2 + offY;
+          ctx.drawImage(img, dX, dY, dW, dH);
+
+          // Stickers on GIF
+          if (p?.stickers && p.stickers.length > 0) {
+            const sc = itemW / 200;
+            for (const stk of p.stickers) {
+              const stkX = col2X + ((stk.x ?? 50) / 100) * itemW;
+              const stkY = y + ((stk.y ?? 50) / 100) * itemH;
+              const stkSize = (stk.size || 28) * sc;
+              if (stk.type === 'emoji' || stk.text) {
+                ctx.font = `${Math.round(stkSize)}px sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(stk.text, stkX, stkY);
+              }
+            }
+          }
+
           ctx.restore();
         }
 
@@ -669,6 +1055,15 @@ export default function EditorPhotostrip() {
             >
               <Camera size={13} />
               Filter
+            </button>
+            <button
+              onClick={() => setActiveTab('sticker')}
+              className={`px-3 py-2 text-xs font-bold rounded-lg transition-colors whitespace-nowrap flex items-center gap-1 ${
+                activeTab === 'sticker' ? 'bg-white shadow-xs text-amber-600 font-extrabold' : 'text-gray-500 hover:text-gray-900'
+              }`}
+            >
+              <Sparkles size={13} />
+              Stiker
             </button>
             <button
               onClick={() => setActiveTab('text')}
@@ -1040,6 +1435,178 @@ export default function EditorPhotostrip() {
               </div>
             )}
 
+            {/* Section 3: STICKERS & DECORATIONS */}
+            {activeTab === 'sticker' && (
+              <div className="space-y-4">
+                <div>
+                  <h3 className="font-bold text-sm text-gray-900 flex items-center gap-1.5">
+                    <Sparkles size={15} className="text-amber-500" />
+                    Koleksi Stiker & Dekorasi
+                  </h3>
+                  <p className="text-xs text-gray-500">
+                    Klik stiker untuk menempelkan ke foto. Drag pada foto untuk memindahkan posisi.
+                  </p>
+                </div>
+
+                {/* Target Photo Slot Selector for Stickers */}
+                <div className="bg-gray-50 p-2.5 rounded-xl space-y-2 border border-gray-100">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-gray-700">Target Foto Stiker:</span>
+                    <span className="text-[10px] text-amber-600 font-semibold font-mono bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200/50">
+                      {photos[activePhotoIdx]?.stickers?.length || 0} Terpasang
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {photos.slice(0, layout === '4r_6cut' ? 6 : 4).map((_, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => setActivePhotoIdx(i)}
+                        className={`flex-1 min-w-[50px] py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                          activePhotoIdx === i
+                            ? 'bg-gray-900 text-white shadow-xs'
+                            : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-100'
+                        }`}
+                      >
+                        Foto {i + 1}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Sticker Category Filter Chips */}
+                <div className="flex gap-1 overflow-x-auto hide-scrollbar pb-1 border-b border-gray-100 text-[11px]">
+                  {[
+                    { id: 'all', label: 'Semua' },
+                    { id: 'Aesthetic', label: '✨ Aesthetic' },
+                    { id: 'Love', label: '💖 Love' },
+                    { id: 'Cute', label: '🎀 Cute' },
+                    { id: 'Nature', label: '🌸 Nature' },
+                    { id: 'Studio', label: '📸 Studio' },
+                    { id: 'Party', label: '🎉 Party' }
+                  ].map((cat) => (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => setStickerFilterCategory(cat.id)}
+                      className={`px-2.5 py-1 rounded-md font-semibold whitespace-nowrap transition-colors ${
+                        stickerFilterCategory === cat.id
+                          ? 'bg-gray-900 text-white shadow-xs'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                    >
+                      {cat.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Stickers Grid */}
+                <div className="grid grid-cols-4 gap-2 max-h-[260px] overflow-y-auto pr-1">
+                  {availableStickers
+                    .filter((s) => stickerFilterCategory === 'all' || s.category === stickerFilterCategory)
+                    .map((stk) => (
+                      <button
+                        key={stk.id}
+                        type="button"
+                        onClick={() => handleAddSticker(stk, activePhotoIdx)}
+                        className="h-16 p-1.5 rounded-xl border border-gray-200 hover:border-amber-400 hover:bg-amber-50/50 bg-white flex flex-col items-center justify-center transition-all group active:scale-95 shadow-2xs"
+                        title={`Tambah stiker ${stk.name || stk.text} ke Foto #${activePhotoIdx + 1}`}
+                      >
+                        {stk.type === 'emoji' || stk.text ? (
+                          <span className="text-2xl group-hover:scale-110 transition-transform">
+                            {stk.text}
+                          </span>
+                        ) : (
+                          <img
+                            src={stk.imageUrl}
+                            alt={stk.name}
+                            className="w-8 h-8 object-contain group-hover:scale-110 transition-transform"
+                          />
+                        )}
+                        <span className="text-[9px] font-semibold text-gray-500 truncate w-full text-center mt-1">
+                          {stk.name || stk.text}
+                        </span>
+                      </button>
+                    ))}
+                </div>
+
+                {/* Manage Active Stickers on Current Slot */}
+                {(photos[activePhotoIdx]?.stickers?.length || 0) > 0 && (
+                  <div className="bg-amber-50/60 rounded-xl p-3 border border-amber-200/80 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-gray-800">
+                        Kelola Stiker (Foto #{activePhotoIdx + 1})
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleClearSlotStickers(activePhotoIdx)}
+                        className="text-[10px] font-bold text-red-600 hover:text-red-700 underline"
+                      >
+                        Hapus Semua
+                      </button>
+                    </div>
+
+                    <div className="flex flex-wrap gap-1.5 max-h-[120px] overflow-y-auto pr-1">
+                      {photos[activePhotoIdx]?.stickers?.map((stk, sIndex) => {
+                        const isSelected = selectedStickerId === stk.id;
+                        return (
+                          <div
+                            key={stk.id}
+                            onClick={() => setSelectedStickerId(stk.id)}
+                            className={`flex items-center gap-1.5 px-2 py-1 rounded-lg border text-xs font-semibold cursor-pointer transition-all ${
+                              isSelected
+                                ? 'bg-white border-amber-500 text-gray-900 shadow-2xs ring-1 ring-amber-400'
+                                : 'bg-white/80 border-gray-200 text-gray-600 hover:bg-white'
+                            }`}
+                          >
+                            <span>{stk.text || '🎨'}</span>
+                            <span className="text-[10px]">#{sIndex + 1}</span>
+
+                            {/* Resize buttons */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleChangeStickerSize(activePhotoIdx, stk.id, -4);
+                              }}
+                              className="text-[10px] w-4 h-4 bg-gray-100 hover:bg-gray-200 rounded flex items-center justify-center font-bold"
+                              title="Perkecil stiker"
+                            >
+                              -
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleChangeStickerSize(activePhotoIdx, stk.id, 4);
+                              }}
+                              className="text-[10px] w-4 h-4 bg-gray-100 hover:bg-gray-200 rounded flex items-center justify-center font-bold"
+                              title="Perbesar stiker"
+                            >
+                              +
+                            </button>
+
+                            {/* Delete button */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleRemoveSticker(activePhotoIdx, stk.id);
+                              }}
+                              className="text-gray-400 hover:text-red-600 ml-0.5"
+                              title="Hapus stiker ini"
+                            >
+                              <X size={12} />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Section 4: Text & Caption */}
             {activeTab === 'text' && (
               <div>
@@ -1262,28 +1829,98 @@ export default function EditorPhotostrip() {
                         key={idx}
                         data-photo-slot="true"
                         onClick={() => setActivePhotoIdx(idx)}
-                        className={`flex-1 aspect-[4/3] bg-gray-200 rounded-xs overflow-hidden relative group border-2 transition-all select-none cursor-pointer ${
+                        onPointerDown={(e) => handlePhotoPointerDown(e, idx)}
+                        onWheel={(e) => handleSlotWheel(e, idx)}
+                        className={`flex-1 aspect-[4/3] bg-gray-200 rounded-xs overflow-hidden relative group border-2 transition-all select-none cursor-grab active:cursor-grabbing touch-none ${
                           isActive ? 'border-red-500 shadow-sm ring-1 ring-red-500/40' : 'border-transparent hover:border-gray-400/50'
                         }`}
-                        title={`Klik untuk memilih Foto #${idx + 1}`}
+                        title={`Foto #${idx + 1}: Drag untuk geser posisi, scroll untuk zoom`}
                       >
                         {p?.dataUrl ? (
-                          <img
-                            src={p?.dataUrl}
-                            alt={`Photo ${idx + 1}`}
-                            className="w-full h-full object-cover pointer-events-none select-none"
-                            style={{ filter: p?.filterCss || 'none' }}
-                            draggable={false}
-                          />
+                          <div className="w-full h-full relative overflow-hidden pointer-events-none">
+                            <img
+                              src={p?.dataUrl}
+                              alt={`Photo ${idx + 1}`}
+                              className="w-full h-full object-cover select-none"
+                              style={{
+                                filter: p?.filterCss || 'none',
+                                transform: `scale(${p?.zoom || 1.0}) translate(${p?.offsetX || 0}%, ${p?.offsetY || 0}%)`,
+                                transformOrigin: 'center center',
+                                transition: dragState?.slotIdx === idx ? 'none' : 'transform 0.1s ease-out'
+                              }}
+                              draggable={false}
+                            />
+
+                            {/* Render Stickers placed on this photo slot */}
+                            {p?.stickers?.map((stk) => {
+                              const isStkActive = selectedStickerId === stk.id;
+                              return (
+                                <div
+                                  key={stk.id}
+                                  data-sticker-item="true"
+                                  onPointerDown={(e) => handleStickerPointerDown(e, idx, stk.id)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setActivePhotoIdx(idx);
+                                    setSelectedStickerId(stk.id);
+                                  }}
+                                  className={`absolute select-none cursor-move transform -translate-x-1/2 -translate-y-1/2 z-20 group/stk touch-none pointer-events-auto ${
+                                    isStkActive ? 'ring-2 ring-amber-400 rounded' : ''
+                                  }`}
+                                  style={{
+                                    left: `${stk.x ?? 50}%`,
+                                    top: `${stk.y ?? 50}%`,
+                                    fontSize: `${stk.size || 32}px`,
+                                    lineHeight: 1
+                                  }}
+                                  title="Geser stiker ke posisi mana saja"
+                                >
+                                  {stk.type === 'emoji' || stk.text ? (
+                                    <span className="drop-shadow-sm select-none">{stk.text}</span>
+                                  ) : (
+                                    <img
+                                      src={stk.imageUrl}
+                                      alt={stk.name || 'sticker'}
+                                      className="object-contain pointer-events-none select-none drop-shadow-sm"
+                                      style={{ width: `${stk.size || 32}px`, height: `${stk.size || 32}px` }}
+                                      draggable={false}
+                                    />
+                                  )}
+
+                                  {/* Delete quick-action badge on sticker */}
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleRemoveSticker(idx, stk.id);
+                                    }}
+                                    className="absolute -top-2 -right-2 w-4 h-4 bg-red-600 text-white rounded-full flex items-center justify-center opacity-0 group-hover/stk:opacity-100 transition-opacity text-[10px] font-bold shadow-md hover:scale-110 pointer-events-auto"
+                                    title="Hapus stiker ini"
+                                  >
+                                    ×
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
                         ) : (
                           <div className="w-full h-full flex flex-col items-center justify-center bg-gray-100 text-gray-400 p-1 text-center pointer-events-none select-none">
                             <Camera size={13} className="text-gray-300" />
                             <span className="text-[8px] font-bold font-mono text-gray-500">#{idx + 1}</span>
                           </div>
                         )}
-                        <span className="absolute bottom-0.5 right-0.5 bg-black/60 text-white text-[7px] font-mono px-1 rounded pointer-events-none">
-                          #{idx + 1}
-                        </span>
+
+                        {/* Top indicators: Zoom badge & Slot index */}
+                        <div className="absolute bottom-0.5 right-0.5 flex items-center gap-0.5 pointer-events-none">
+                          {(p?.zoom || 1.0) > 1.02 && (
+                            <span className="bg-amber-500/90 text-white text-[6.5px] font-mono font-bold px-1 rounded">
+                              {(p.zoom).toFixed(1)}x
+                            </span>
+                          )}
+                          <span className="bg-black/60 text-white text-[7px] font-mono px-1 rounded">
+                            #{idx + 1}
+                          </span>
+                        </div>
                       </div>
                     );
                   })}
@@ -1310,28 +1947,98 @@ export default function EditorPhotostrip() {
                         key={idx}
                         data-photo-slot="true"
                         onClick={() => setActivePhotoIdx(idx)}
-                        className={`flex-1 aspect-[4/3] bg-gray-200 rounded-xs overflow-hidden relative group border-2 transition-all select-none cursor-pointer ${
+                        onPointerDown={(e) => handlePhotoPointerDown(e, idx)}
+                        onWheel={(e) => handleSlotWheel(e, idx)}
+                        className={`flex-1 aspect-[4/3] bg-gray-200 rounded-xs overflow-hidden relative group border-2 transition-all select-none cursor-grab active:cursor-grabbing touch-none ${
                           isActive ? 'border-red-500 shadow-sm ring-1 ring-red-500/40' : 'border-transparent hover:border-gray-400/50'
                         }`}
-                        title={`Klik untuk memilih Foto #${idx + 1}`}
+                        title={`Foto #${idx + 1}: Drag untuk geser posisi, scroll untuk zoom`}
                       >
                         {p?.dataUrl ? (
-                          <img
-                            src={p?.dataUrl}
-                            alt={`Photo ${idx + 1}`}
-                            className="w-full h-full object-cover pointer-events-none select-none"
-                            style={{ filter: p?.filterCss || 'none' }}
-                            draggable={false}
-                          />
+                          <div className="w-full h-full relative overflow-hidden pointer-events-none">
+                            <img
+                              src={p?.dataUrl}
+                              alt={`Photo ${idx + 1}`}
+                              className="w-full h-full object-cover select-none"
+                              style={{
+                                filter: p?.filterCss || 'none',
+                                transform: `scale(${p?.zoom || 1.0}) translate(${p?.offsetX || 0}%, ${p?.offsetY || 0}%)`,
+                                transformOrigin: 'center center',
+                                transition: dragState?.slotIdx === idx ? 'none' : 'transform 0.1s ease-out'
+                              }}
+                              draggable={false}
+                            />
+
+                            {/* Render Stickers placed on this photo slot */}
+                            {p?.stickers?.map((stk) => {
+                              const isStkActive = selectedStickerId === stk.id;
+                              return (
+                                <div
+                                  key={stk.id}
+                                  data-sticker-item="true"
+                                  onPointerDown={(e) => handleStickerPointerDown(e, idx, stk.id)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setActivePhotoIdx(idx);
+                                    setSelectedStickerId(stk.id);
+                                  }}
+                                  className={`absolute select-none cursor-move transform -translate-x-1/2 -translate-y-1/2 z-20 group/stk touch-none pointer-events-auto ${
+                                    isStkActive ? 'ring-2 ring-amber-400 rounded' : ''
+                                  }`}
+                                  style={{
+                                    left: `${stk.x ?? 50}%`,
+                                    top: `${stk.y ?? 50}%`,
+                                    fontSize: `${stk.size || 32}px`,
+                                    lineHeight: 1
+                                  }}
+                                  title="Geser stiker ke posisi mana saja"
+                                >
+                                  {stk.type === 'emoji' || stk.text ? (
+                                    <span className="drop-shadow-sm select-none">{stk.text}</span>
+                                  ) : (
+                                    <img
+                                      src={stk.imageUrl}
+                                      alt={stk.name || 'sticker'}
+                                      className="object-contain pointer-events-none select-none drop-shadow-sm"
+                                      style={{ width: `${stk.size || 32}px`, height: `${stk.size || 32}px` }}
+                                      draggable={false}
+                                    />
+                                  )}
+
+                                  {/* Delete quick-action badge on sticker */}
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleRemoveSticker(idx, stk.id);
+                                    }}
+                                    className="absolute -top-2 -right-2 w-4 h-4 bg-red-600 text-white rounded-full flex items-center justify-center opacity-0 group-hover/stk:opacity-100 transition-opacity text-[10px] font-bold shadow-md hover:scale-110 pointer-events-auto"
+                                    title="Hapus stiker ini"
+                                  >
+                                    ×
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
                         ) : (
                           <div className="w-full h-full flex flex-col items-center justify-center bg-gray-100 text-gray-400 p-1 text-center pointer-events-none select-none">
                             <Camera size={13} className="text-gray-300" />
                             <span className="text-[8px] font-bold font-mono text-gray-500">#{idx + 1}</span>
                           </div>
                         )}
-                        <span className="absolute bottom-0.5 right-0.5 bg-black/60 text-white text-[7px] font-mono px-1 rounded pointer-events-none">
-                          #{idx + 1}
-                        </span>
+
+                        {/* Top indicators: Zoom badge & Slot index */}
+                        <div className="absolute bottom-0.5 right-0.5 flex items-center gap-0.5 pointer-events-none">
+                          {(p?.zoom || 1.0) > 1.02 && (
+                            <span className="bg-amber-500/90 text-white text-[6.5px] font-mono font-bold px-1 rounded">
+                              {(p.zoom).toFixed(1)}x
+                            </span>
+                          )}
+                          <span className="bg-black/60 text-white text-[7px] font-mono px-1 rounded">
+                            #{idx + 1}
+                          </span>
+                        </div>
                       </div>
                     );
                   })}
@@ -1347,6 +2054,152 @@ export default function EditorPhotostrip() {
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* DOCKED PHOTO POSITION & ZOOM CONTROLLER */}
+          <div className="w-full max-w-[480px] bg-white border border-gray-200 rounded-2xl p-3 sm:p-4 shadow-sm space-y-3">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+              <div className="flex items-center gap-1.5">
+                <Move size={14} className="text-red-600" />
+                <span className="text-xs font-bold text-gray-900">
+                  Sesuaikan Posisi & Zoom (Foto #{activePhotoIdx + 1})
+                </span>
+              </div>
+
+              {/* Reset button */}
+              <button
+                type="button"
+                onClick={() => handleResetPhotoAdjust(activePhotoIdx)}
+                className="text-[11px] font-bold text-gray-500 hover:text-red-600 flex items-center gap-1 transition-colors"
+                title="Kembalikan posisi dan zoom ke semula"
+              >
+                <RotateCcw size={12} />
+                <span>Reset</span>
+              </button>
+            </div>
+
+            {/* Active Slot Selector Pills */}
+            <div className="flex items-center gap-1 overflow-x-auto hide-scrollbar">
+              <span className="text-[10px] font-bold text-gray-400 mr-1 uppercase tracking-wider shrink-0">Slot:</span>
+              {Array.from({ length: layout === '4r_6cut' ? 6 : 4 }).map((_, sIdx) => (
+                <button
+                  key={sIdx}
+                  type="button"
+                  onClick={() => setActivePhotoIdx(sIdx)}
+                  className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all shrink-0 ${
+                    activePhotoIdx === sIdx
+                      ? 'bg-gray-900 text-white shadow-xs'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  Foto {sIdx + 1}
+                </button>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
+              {/* Zoom Controller */}
+              <div className="space-y-1.5 bg-gray-50 p-2.5 rounded-xl border border-gray-100">
+                <div className="flex items-center justify-between text-[11px] font-semibold text-gray-700">
+                  <span className="flex items-center gap-1">
+                    <ZoomIn size={12} className="text-gray-500" />
+                    Zoom Foto:
+                  </span>
+                  <span className="font-mono font-bold text-red-600">
+                    {(photos[activePhotoIdx]?.zoom || 1.0).toFixed(2)}x
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleStepZoom(activePhotoIdx, -0.1)}
+                    disabled={(photos[activePhotoIdx]?.zoom || 1.0) <= 1.0}
+                    className="w-7 h-7 rounded-lg bg-white border border-gray-200 hover:bg-gray-100 text-gray-700 flex items-center justify-center text-xs font-bold disabled:opacity-40 transition-colors shadow-2xs"
+                    title="Zoom Out"
+                  >
+                    -
+                  </button>
+
+                  <input
+                    type="range"
+                    min="1.0"
+                    max="2.5"
+                    step="0.05"
+                    value={photos[activePhotoIdx]?.zoom || 1.0}
+                    onChange={(e) => handleZoomChange(activePhotoIdx, parseFloat(e.target.value))}
+                    className="flex-1 accent-red-600 h-1.5 bg-gray-200 rounded-lg cursor-pointer"
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() => handleStepZoom(activePhotoIdx, 0.1)}
+                    disabled={(photos[activePhotoIdx]?.zoom || 1.0) >= 2.5}
+                    className="w-7 h-7 rounded-lg bg-white border border-gray-200 hover:bg-gray-100 text-gray-700 flex items-center justify-center text-xs font-bold disabled:opacity-40 transition-colors shadow-2xs"
+                    title="Zoom In"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+
+              {/* Pan / Geser Controller (D-Pad & Drag Guide) */}
+              <div className="space-y-1.5 bg-gray-50 p-2.5 rounded-xl border border-gray-100">
+                <div className="flex items-center justify-between text-[11px] font-semibold text-gray-700">
+                  <span className="flex items-center gap-1">
+                    <Move size={12} className="text-gray-500" />
+                    Geser Posisi:
+                  </span>
+                  <span className="text-[10px] text-gray-400">
+                    X: {Math.round(photos[activePhotoIdx]?.offsetX || 0)}% Y: {Math.round(photos[activePhotoIdx]?.offsetY || 0)}%
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => handlePanNudge(activePhotoIdx, -5, 0)}
+                    className="w-7 h-7 rounded-lg bg-white border border-gray-200 hover:bg-gray-100 text-gray-700 flex items-center justify-center text-xs font-bold transition-colors shadow-2xs"
+                    title="Geser Kiri"
+                  >
+                    ◀
+                  </button>
+
+                  <div className="flex flex-col gap-1">
+                    <button
+                      type="button"
+                      onClick={() => handlePanNudge(activePhotoIdx, 0, -5)}
+                      className="w-7 h-7 rounded-lg bg-white border border-gray-200 hover:bg-gray-100 text-gray-700 flex items-center justify-center text-xs font-bold transition-colors shadow-2xs"
+                      title="Geser Atas"
+                    >
+                      ▲
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handlePanNudge(activePhotoIdx, 0, 5)}
+                      className="w-7 h-7 rounded-lg bg-white border border-gray-200 hover:bg-gray-100 text-gray-700 flex items-center justify-center text-xs font-bold transition-colors shadow-2xs"
+                      title="Geser Bawah"
+                    >
+                      ▼
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => handlePanNudge(activePhotoIdx, 5, 0)}
+                    className="w-7 h-7 rounded-lg bg-white border border-gray-200 hover:bg-gray-100 text-gray-700 flex items-center justify-center text-xs font-bold transition-colors shadow-2xs"
+                    title="Geser Kanan"
+                  >
+                    ▶
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Tip banner */}
+            <p className="text-[10px] text-gray-500 text-center leading-tight">
+              💡 <b>Sentuh & geser</b> foto langsung pada bingkai dengan mouse/layar sentuh, atau scroll untuk zoom.
+            </p>
           </div>
 
           {/* 7-Day Temporary Storage Notice Badge */}
