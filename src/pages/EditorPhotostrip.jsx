@@ -17,7 +17,10 @@ import {
   Clock,
   Play,
   RotateCcw,
-  Move
+  Move,
+  AlignLeft,
+  AlignCenter,
+  AlignRight
 } from 'lucide-react';
 import { FILTER_CATEGORIES, CAMERA_PRESETS } from '../data/cameraPresets';
 import { drawFrameGraphicDecorations } from '../data/defaultFrames';
@@ -55,11 +58,19 @@ export default function EditorPhotostrip() {
   const [customText, setCustomText] = useState('Long Distance Soulmate');
   const [showBadge, setShowBadge] = useState(true);
   const [showDate, setShowDate] = useState(true);
+  const [textAlign, setTextAlign] = useState('center'); // 'left' | 'center' | 'right'
 
-  // Frame & Photo Orientation (Mode Portrait)
-  const [photoOrientation, setPhotoOrientation] = useState('portrait'); // 'portrait' (3:4 tegak) | 'square' (1:1) | 'classic' (4:3)
-  const isSingleStrip = layout.startsWith('strip_');
-  const totalSlots = layout === 'strip_3cut' ? 3 : layout === 'strip_4cut' ? 4 : layout === '4r_6cut' ? 6 : 4;
+  // Frame & Photo Orientation
+  const [photoOrientation, setPhotoOrientation] = useState('portrait'); // 'portrait' (3:4) | 'square' (1:1)
+  const isSingleStrip = false;
+  const totalSlots = layout === '4r_6cut' ? 6 : 4;
+
+  // Normalize layout to 4R 4-cut or 4R 6-cut (strip 3-cut and 4-cut removed)
+  useEffect(() => {
+    if (layout !== '4r_4cut' && layout !== '4r_6cut') {
+      setLayout('4r_4cut');
+    }
+  }, [layout, setLayout]);
 
   // Photos state copied from context
   const [photos, setPhotos] = useState(capturedPhotos);
@@ -155,123 +166,6 @@ export default function EditorPhotostrip() {
       setPhotos(next);
       showToast(next[idx].dateStamp ? `Stempel tanggal ditambahkan pada Foto #${idx + 1}` : `Stempel tanggal dilepas dari Foto #${idx + 1}`);
     }
-  };
-
-  // Unduh Template Frame PNG Ukuran Fix Portrait dengan cutout transparan foto
-  const handleDownloadFrameTemplatePng = () => {
-    const isStrip = layout.startsWith('strip_');
-    const is4R6 = layout === '4r_6cut';
-    const isStrip4 = layout === 'strip_4cut';
-    const canvasW = isStrip ? 600 : 1200;
-    const canvasH = 1800;
-
-    showToast(`Menyiapkan template frame PNG fix ${isStrip ? 'Strip Portrait (600x1800)' : '4R Portrait (1200x1800)'}...`);
-    const canvas = document.createElement('canvas');
-    canvas.width = canvasW;
-    canvas.height = canvasH;
-    const ctx = canvas.getContext('2d');
-
-    // Background
-    ctx.fillStyle = activeFrame.bg;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    const cutLineX = 600;
-    const photoW = 510;
-    const leftColX = 45;
-    const rightColX = 645;
-
-    let rects = [];
-    if (isStrip) {
-      if (isStrip4) {
-        const photoH = 345;
-        const topPadding = 75;
-        const spacing = 22;
-        for (let i = 0; i < 4; i++) {
-          rects.push({ x: leftColX, y: topPadding + i * (photoH + spacing), w: photoW, h: photoH });
-        }
-      } else {
-        const photoH = 440;
-        const topPadding = 80;
-        const spacing = 35;
-        for (let i = 0; i < 3; i++) {
-          rects.push({ x: leftColX, y: topPadding + i * (photoH + spacing), w: photoW, h: photoH });
-        }
-      }
-    } else if (is4R6) {
-      const photoH = 385;
-      const topPadding = 75;
-      const spacing = 25;
-      for (let i = 0; i < 3; i++) {
-        rects.push({ x: leftColX, y: topPadding + i * (photoH + spacing), w: photoW, h: photoH });
-        rects.push({ x: rightColX, y: topPadding + i * (photoH + spacing), w: photoW, h: photoH });
-      }
-    } else {
-      const photoH = 500;
-      const topPadding = 90;
-      const spacing = 40;
-      for (let i = 0; i < 2; i++) {
-        rects.push({ x: leftColX, y: topPadding + i * (photoH + spacing), w: photoW, h: photoH });
-        rects.push({ x: rightColX, y: topPadding + i * (photoH + spacing), w: photoW, h: photoH });
-      }
-    }
-
-    // Cutout transparent slot boxes so frame is a true fixed PNG overlay
-    for (const r of rects) {
-      ctx.clearRect(r.x, r.y, r.w, r.h);
-      ctx.strokeStyle = activeFrame.text === '#FFFFFF' ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.12)';
-      ctx.lineWidth = 3;
-      ctx.strokeRect(r.x, r.y, r.w, r.h);
-    }
-
-    // Draw center cut line with scissors (only for dual-strip 4R)
-    if (!isStrip) {
-      ctx.save();
-      ctx.strokeStyle = activeFrame.text === '#FFFFFF' ? 'rgba(255,255,255,0.45)' : 'rgba(239,68,68,0.7)';
-      ctx.lineWidth = 4;
-      ctx.setLineDash([12, 12]);
-      ctx.beginPath();
-      ctx.moveTo(cutLineX, 20);
-      ctx.lineTo(cutLineX, 1780);
-      ctx.stroke();
-
-      ctx.setLineDash([]);
-      ctx.font = "bold 32px sans-serif";
-      ctx.fillStyle = activeFrame.text === '#FFFFFF' ? '#FFFFFF' : '#EF4444';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('✂', cutLineX, 40);
-      ctx.fillText('✂', cutLineX, 900);
-      ctx.fillText('✂', cutLineX, 1760);
-      ctx.restore();
-    }
-
-    // Draw footer for portrait strips
-    const colCenters = isStrip ? [300] : [300, 900];
-    const dateStr = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
-    for (const cx of colCenters) {
-      ctx.save();
-      ctx.fillStyle = activeFrame.text;
-      ctx.textAlign = 'center';
-      ctx.font = "bold 38px 'Inter', sans-serif";
-      ctx.fillText(appConfig.website?.brandName || 'snap.e', cx, 1800 - 150);
-
-      ctx.font = "italic 500 32px 'Playfair Display', serif";
-      ctx.fillText(customText || 'Tangible Memories', cx, 1800 - 95);
-
-      if (showDate) {
-        ctx.font = "400 22px 'Inter', sans-serif";
-        ctx.fillStyle = activeFrame.text === '#FFFFFF' ? '#A1A1AA' : '#6B7280';
-        ctx.fillText(`${dateStr} • PHOTO STUDIO`, cx, 1800 - 50);
-      }
-      ctx.restore();
-    }
-
-    // Trigger PNG download
-    const link = document.createElement('a');
-    link.download = `frame_${isStrip ? 'strip' : '4r'}_portrait_${activeFrame.id}_${Date.now()}.png`;
-    link.href = canvas.toDataURL('image/png');
-    link.click();
-    showToast(`Template frame PNG fix ${isStrip ? 'Strip Portrait' : '4R Portrait'} berhasil diunduh!`);
   };
 
   // ==========================================
@@ -806,21 +700,36 @@ export default function EditorPhotostrip() {
     for (const cx of colCenters) {
       ctx.save();
       ctx.fillStyle = activeFrame.text;
-      ctx.textAlign = 'center';
       
-      // Brand name
-      ctx.font = "bold 38px 'Inter', sans-serif";
-      ctx.fillText(appConfig.website?.brandName || 'snap.e', cx, canvas.height - 150);
+      let textX = cx;
+      if (textAlign === 'left') {
+        textX = cx - 220;
+        ctx.textAlign = 'left';
+      } else if (textAlign === 'right') {
+        textX = cx + 220;
+        ctx.textAlign = 'right';
+      } else {
+        textX = cx;
+        ctx.textAlign = 'center';
+      }
+      
+      // Brand name (snap.e text)
+      if (showBadge) {
+        ctx.font = "bold 38px 'Inter', sans-serif";
+        ctx.fillText(appConfig.website?.brandName || 'snap.e', textX, canvas.height - 150);
+      }
 
-      // Custom caption
-      ctx.font = "italic 500 32px 'Playfair Display', serif";
-      ctx.fillText(customText, cx, canvas.height - 95);
+      // Custom caption (teks bawah yang bisa diganti)
+      if (customText) {
+        ctx.font = "italic 500 32px 'Playfair Display', serif";
+        ctx.fillText(customText, textX, canvas.height - 95);
+      }
 
       // Date & Studio (if showDate is true)
       if (showDate) {
         ctx.font = "400 22px 'Inter', sans-serif";
         ctx.fillStyle = activeFrame.text === '#FFFFFF' ? '#A1A1AA' : '#6B7280';
-        ctx.fillText(`${dateStr} • PHOTO STUDIO`, cx, canvas.height - 50);
+        ctx.fillText(`${dateStr} • PHOTO STUDIO`, textX, canvas.height - 50);
       }
       ctx.restore();
     }
@@ -986,25 +895,35 @@ export default function EditorPhotostrip() {
           ctx.restore();
         }
 
-        // Mini footers (centers at 80 for strip, 80 and 240 for 4R)
-        ctx.fillStyle = activeFrame.text;
-        ctx.textAlign = 'center';
-        ctx.font = "bold 10px 'Inter', sans-serif";
-        ctx.fillText(appConfig.website?.brandName || 'snap.e', 80, gifHeight - 32);
-        if (!isStrip) {
-          ctx.fillText(appConfig.website?.brandName || 'snap.e', 240, gifHeight - 32);
-        }
-        ctx.font = "italic 9px 'Playfair Display', serif";
-        ctx.fillText(customText, 80, gifHeight - 18);
-        if (!isStrip) {
-          ctx.fillText(customText, 240, gifHeight - 18);
-        }
-        if (showDate) {
-          ctx.font = "7px 'Inter', sans-serif";
-          ctx.fillText(new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }), 80, gifHeight - 7);
-          if (!isStrip) {
-            ctx.fillText(new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }), 240, gifHeight - 7);
+        // Mini footers (centers at 80 and 240 for 4R, or 80 for strip)
+        const gifCenters = isStrip ? [80] : [80, 240];
+        for (const gcx of gifCenters) {
+          ctx.save();
+          ctx.fillStyle = activeFrame.text;
+          let gX = gcx;
+          if (textAlign === 'left') {
+            gX = gcx - 50;
+            ctx.textAlign = 'left';
+          } else if (textAlign === 'right') {
+            gX = gcx + 50;
+            ctx.textAlign = 'right';
+          } else {
+            gX = gcx;
+            ctx.textAlign = 'center';
           }
+          if (showBadge) {
+            ctx.font = "bold 10px 'Inter', sans-serif";
+            ctx.fillText(appConfig.website?.brandName || 'snap.e', gX, gifHeight - 32);
+          }
+          if (customText) {
+            ctx.font = "italic 9px 'Playfair Display', serif";
+            ctx.fillText(customText, gX, gifHeight - 18);
+          }
+          if (showDate) {
+            ctx.font = "7px 'Inter', sans-serif";
+            ctx.fillText(new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }), gX, gifHeight - 7);
+          }
+          ctx.restore();
         }
 
         framesList.push(canvas.toDataURL('image/jpeg', 0.85));
@@ -1904,16 +1823,70 @@ export default function EditorPhotostrip() {
               <div>
                 <h3 className="font-bold text-sm text-gray-900 mb-3">Teks & Footer Bawah</h3>
                 
-                <div className="space-y-3">
-                  <input
-                    type="text"
-                    value={customText}
-                    onChange={(e) => setCustomText(e.target.value)}
-                    placeholder="Ketik judul memori..."
-                    className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3.5 py-2.5 text-xs font-medium outline-none focus:border-gray-900"
-                  />
+                <div className="space-y-3.5">
+                  <div>
+                    <label className="text-xs font-semibold text-gray-700 block mb-1">
+                      Teks Judul / Pesan (Bawah):
+                    </label>
+                    <input
+                      type="text"
+                      value={customText}
+                      onChange={(e) => setCustomText(e.target.value)}
+                      placeholder="Ketik judul atau caption memori..."
+                      className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3.5 py-2.5 text-xs font-medium outline-none focus:border-gray-900"
+                    />
+                  </div>
+
+                  {/* Alignment buttons: Logo/Icon berbentuk lambang perataan (Bukan teks) */}
+                  <div className="flex items-center justify-between p-2.5 bg-gray-50 rounded-xl border border-gray-100">
+                    <span className="text-xs font-semibold text-gray-700">Posisi Rata Teks:</span>
+                    <div className="flex items-center gap-1 bg-white p-1 rounded-lg border border-gray-200 shadow-2xs">
+                      <button
+                        type="button"
+                        onClick={() => setTextAlign('left')}
+                        className={`p-1.5 rounded-md transition-all ${
+                          textAlign === 'left'
+                            ? 'bg-gray-900 text-white shadow-xs'
+                            : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
+                        }`}
+                        title="Rata Kiri"
+                        aria-label="Rata Kiri"
+                      >
+                        <AlignLeft size={16} />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setTextAlign('center')}
+                        className={`p-1.5 rounded-md transition-all ${
+                          textAlign === 'center'
+                            ? 'bg-gray-900 text-white shadow-xs'
+                            : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
+                        }`}
+                        title="Rata Tengah"
+                        aria-label="Rata Tengah"
+                      >
+                        <AlignCenter size={16} />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setTextAlign('right')}
+                        className={`p-1.5 rounded-md transition-all ${
+                          textAlign === 'right'
+                            ? 'bg-gray-900 text-white shadow-xs'
+                            : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
+                        }`}
+                        title="Rata Kanan"
+                        aria-label="Rata Kanan"
+                      >
+                        <AlignRight size={16} />
+                      </button>
+                    </div>
+                  </div>
 
                   <div className="flex flex-col gap-2.5 pt-1">
+                    {/* Ganti tulisan tampilkan logo snap.e menjadi tampilkan teks snap.e */}
                     <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-gray-700">
                       <input
                         type="checkbox"
@@ -1921,9 +1894,10 @@ export default function EditorPhotostrip() {
                         onChange={(e) => setShowBadge(e.target.checked)}
                         className="rounded text-gray-900 focus:ring-gray-900"
                       />
-                      <span>Tampilkan Logo {appConfig.website?.brandName || 'snap.e'}</span>
+                      <span>Tampilkan Teks {appConfig.website?.brandName || 'snap.e'}</span>
                     </label>
 
+                    {/* Hilangkan / tampilkan tanggal hanya ada pada tab teks */}
                     <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-gray-700">
                       <input
                         type="checkbox"
@@ -1947,129 +1921,63 @@ export default function EditorPhotostrip() {
         {/* CENTER COLUMN: Interactive Photostrip Preview & DOCKED ZOOM/PAN CONTROLLER (Berdampingan) */}
         <div className="flex-1 flex flex-col items-center justify-start gap-4 w-full min-w-0">
           
-          {/* Quick Format Portrait & Date / Orientation Toggle Bar */}
-          <div className="w-full max-w-[500px] bg-white border border-gray-200/90 rounded-2xl p-2.5 sm:p-3 shadow-sm flex flex-col gap-2">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              {/* Format Selection - 100% Mode Portrait */}
-              <div className="flex flex-wrap items-center gap-1 bg-gray-100 p-1 rounded-xl text-xs font-bold">
-                <button
-                  type="button"
-                  onClick={() => setLayout('strip_3cut')}
-                  className={`px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1 ${
-                    layout === 'strip_3cut'
-                      ? 'bg-white text-gray-900 shadow-xs ring-1 ring-black/5 font-extrabold'
-                      : 'text-gray-500 hover:text-gray-900'
-                  }`}
-                  title="Strip Portrait Vertikal Klasik (1 Kolom × 3 Foto)"
-                >
-                  <span>Strip 3-Cut</span>
-                </button>
+          {/* Quick Format & Controls Bar */}
+          <div className="w-full max-w-[500px] bg-white border border-gray-200/90 rounded-2xl p-2 sm:p-2.5 shadow-sm flex flex-wrap items-center justify-between gap-2 text-xs">
+            {/* Format Selection: 4R 4-Cut & 4R 6-Cut */}
+            <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl font-bold">
+              <button
+                type="button"
+                onClick={() => setLayout('4r_4cut')}
+                className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1 ${
+                  layout === '4r_4cut'
+                    ? 'bg-white text-gray-900 shadow-xs ring-1 ring-black/5 font-extrabold'
+                    : 'text-gray-500 hover:text-gray-900'
+                }`}
+                title="4R 4-Cut (2 Kolom × 2 Foto)"
+              >
+                <span>4R 4-Cut</span>
+              </button>
 
-                <button
-                  type="button"
-                  onClick={() => setLayout('strip_4cut')}
-                  className={`px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1 ${
-                    layout === 'strip_4cut'
-                      ? 'bg-white text-gray-900 shadow-xs ring-1 ring-black/5 font-extrabold'
-                      : 'text-gray-500 hover:text-gray-900'
-                  }`}
-                  title="Strip Portrait Vertikal Life4Cuts (1 Kolom × 4 Foto)"
-                >
-                  <span>Strip 4-Cut</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setLayout('4r_4cut')}
-                  className={`px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1 ${
-                    layout === '4r_4cut'
-                      ? 'bg-white text-gray-900 shadow-xs ring-1 ring-black/5 font-extrabold'
-                      : 'text-gray-500 hover:text-gray-900'
-                  }`}
-                  title="4R Portrait Dual Strip (2 Kolom × 2 Foto dengan Garis Potong ✂)"
-                >
-                  <span>4R 4-Cut</span>
-                  <span className="text-[10px] text-red-500 font-bold">✂</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setLayout('4r_6cut')}
-                  className={`px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1 ${
-                    layout === '4r_6cut'
-                      ? 'bg-white text-gray-900 shadow-xs ring-1 ring-black/5 font-extrabold'
-                      : 'text-gray-500 hover:text-gray-900'
-                  }`}
-                  title="4R Portrait Dual Strip (2 Kolom × 3 Foto dengan Garis Potong ✂)"
-                >
-                  <span>4R 6-Cut</span>
-                  <span className="text-[10px] text-red-500 font-bold">✂</span>
-                </button>
-              </div>
-
-              {/* Mode Portrait Indicator Badge */}
-              <div className="flex items-center gap-1.5 text-xs text-rose-700 bg-rose-50 border border-rose-200/80 px-2.5 py-1 rounded-xl font-bold">
-                <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
-                <span>Mode: Portrait (Tegak)</span>
-              </div>
+              <button
+                type="button"
+                onClick={() => setLayout('4r_6cut')}
+                className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1 ${
+                  layout === '4r_6cut'
+                    ? 'bg-white text-gray-900 shadow-xs ring-1 ring-black/5 font-extrabold'
+                    : 'text-gray-500 hover:text-gray-900'
+                }`}
+                title="4R 6-Cut (2 Kolom × 3 Foto)"
+              >
+                <span>4R 6-Cut</span>
+              </button>
             </div>
 
-            {/* Sub-bar: Reset All Button, Photo Orientation Toggle, Date Toggle & PNG Template */}
-            <div className="flex flex-wrap items-center justify-between gap-1.5 pt-1 border-t border-gray-100 text-xs">
-              <div className="flex items-center gap-1">
-                {/* Reset All Adjustments Button */}
-                <button
-                  type="button"
-                  onClick={handleResetAllPhotosAdjust}
-                  className="px-2 py-1 rounded-lg font-bold flex items-center gap-1 text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors"
-                  title="Reset semua posisi geser dan zoom foto ke default (1.0x, tengah)"
-                >
-                  <RotateCcw size={11} className="text-gray-500" />
-                  <span>Reset Semua Foto</span>
-                </button>
+            {/* Quick Photo Controls: Reset All & Slot Ratio */}
+            <div className="flex items-center gap-1">
+              {/* Reset All Adjustments Button */}
+              <button
+                type="button"
+                onClick={handleResetAllPhotosAdjust}
+                className="px-2.5 py-1.5 rounded-lg font-bold flex items-center gap-1 text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors"
+                title="Reset semua posisi geser dan zoom foto ke default (1.0x, tengah)"
+              >
+                <RotateCcw size={12} className="text-gray-500" />
+                <span>Reset Semua Foto</span>
+              </button>
 
-                {/* Photo Slot Orientation Toggle */}
-                <button
-                  type="button"
-                  onClick={() => setPhotoOrientation(prev => prev === 'portrait' ? 'square' : 'portrait')}
-                  className={`px-2 py-1 rounded-lg font-bold flex items-center gap-1 transition-colors border ${
-                    photoOrientation === 'portrait'
-                      ? 'bg-gray-900 text-white border-gray-900'
-                      : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-100'
-                  }`}
-                  title="Ganti orientasi kotak foto: Mode Portrait (Tegak 3:4) atau Persegi (1:1)"
-                >
-                  <span>Foto: {photoOrientation === 'portrait' ? 'Tegak (3:4)' : 'Persegi (1:1)'}</span>
-                </button>
-              </div>
-
-              <div className="flex items-center gap-1">
-                {/* Toggle Tanggal Frame */}
-                <button
-                  type="button"
-                  onClick={() => setShowDate(!showDate)}
-                  className={`px-2 py-1 rounded-lg font-bold flex items-center gap-1 transition-all border ${
-                    showDate
-                      ? 'bg-rose-50 text-rose-700 border-rose-200'
-                      : 'bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100'
-                  }`}
-                  title="Tampilkan atau sembunyikan tanggal pada bingkai foto"
-                >
-                  <Calendar size={11} className={showDate ? 'text-rose-600' : 'text-gray-400'} />
-                  <span>Tanggal: {showDate ? 'Tampil' : 'Sembunyi'}</span>
-                </button>
-
-                {/* Unduh Template Frame PNG Fix Portrait */}
-                <button
-                  type="button"
-                  onClick={handleDownloadFrameTemplatePng}
-                  className="px-2 py-1 rounded-lg font-bold flex items-center gap-1 text-gray-700 bg-gray-100 hover:bg-gray-200 border border-gray-200 transition-colors"
-                  title="Unduh template bingkai ini format PNG transparan ukuran fix portrait"
-                >
-                  <Download size={11} className="text-gray-600" />
-                  <span>PNG Fix</span>
-                </button>
-              </div>
+              {/* Photo Slot Orientation Toggle */}
+              <button
+                type="button"
+                onClick={() => setPhotoOrientation(prev => prev === 'portrait' ? 'square' : 'portrait')}
+                className={`px-2.5 py-1.5 rounded-lg font-bold flex items-center gap-1 transition-colors border ${
+                  photoOrientation === 'portrait'
+                    ? 'bg-gray-900 text-white border-gray-900'
+                    : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-100'
+                }`}
+                title="Ganti rasio kotak foto (3:4 atau 1:1)"
+              >
+                <span>Rasio: {photoOrientation === 'portrait' ? '3:4' : '1:1'}</span>
+              </button>
             </div>
           </div>
 
@@ -2162,9 +2070,7 @@ export default function EditorPhotostrip() {
               <span>{activeFrame.overlayType === 'film' ? '► KODAK 400 35MM' : 'SNAP.E MEMORIES'}</span>
               <div className="flex items-center gap-1.5 pointer-events-auto">
                 <span className="text-[7px] bg-red-100 text-red-700 px-1.5 py-0.2 rounded font-bold whitespace-nowrap">
-                  {isSingleStrip 
-                    ? `Strip Portrait • ${layout === 'strip_4cut' ? '4 Foto' : '3 Foto'}`
-                    : `4R Portrait • ${layout === '4r_6cut' ? '6 Foto' : '4 Foto'}`}
+                  {layout === '4r_6cut' ? '4R (6 Foto)' : '4R (4 Foto)'}
                 </span>
                 <button
                   type="button"
@@ -2178,32 +2084,37 @@ export default function EditorPhotostrip() {
               </div>
             </div>
 
-            {/* Photos Layout Rendering - Strictly Mode Portrait */}
+            {/* Photos Layout Rendering - Strictly 4R Dual Strip */}
             {isSingleStrip ? (
-              /* Single Strip Portrait (1 Kolom Vertikal) */
+              /* Single Strip Portrait Fallback */
               <div className="flex-1 flex flex-col justify-between min-h-0 my-1">
                 <div className={`flex flex-col gap-1 sm:gap-1.5 flex-1 min-h-0 ${layout === 'strip_4cut' ? 'justify-between' : 'justify-center gap-2 sm:gap-2.5'}`}>
                   {(layout === 'strip_4cut' ? [0, 1, 2, 3] : [0, 1, 2]).map((idx) => renderPhotoSlot(idx))}
                 </div>
 
                 {/* Single Strip Fixed Footer */}
-                <div className="h-11 sm:h-12 shrink-0 pt-0.5 text-center border-t border-black/10 flex flex-col justify-center overflow-hidden">
-                  <p className="font-bold text-[9px] leading-tight truncate">{appConfig.website?.brandName || 'snap.e'}</p>
-                  <p className="font-serif italic text-[8px] opacity-90 truncate leading-tight">{customText || 'Tangible Memories'}</p>
-                  <p className={`text-[6.5px] font-mono leading-none mt-0.5 ${showDate ? 'opacity-75' : 'invisible'}`}>
-                    {new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
-                  </p>
+                <div className={`h-11 sm:h-12 shrink-0 pt-0.5 px-2 border-t border-black/10 flex flex-col justify-center overflow-hidden ${
+                  textAlign === 'left' ? 'text-left items-start' : textAlign === 'right' ? 'text-right items-end' : 'text-center items-center'
+                }`}>
+                  {showBadge && (
+                    <p className="font-bold text-[9px] leading-tight truncate">{appConfig.website?.brandName || 'snap.e'}</p>
+                  )}
+                  {customText && (
+                    <p className="font-serif italic text-[8px] opacity-90 truncate leading-tight">{customText}</p>
+                  )}
+                  {showDate && (
+                    <p className="text-[6.5px] font-mono leading-none mt-0.5 opacity-75">
+                      {new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    </p>
+                  )}
                 </div>
               </div>
             ) : (
-              /* Dual Strip 4R Portrait (2 Kolom Berdampingan dengan Garis Potong Tengah) */
+              /* Dual Strip 4R Portrait (2 Kolom Berdampingan) */
               <div className="relative flex gap-2 sm:gap-2.5 flex-1 min-h-0 items-stretch my-1">
                 {/* Dotted Center Cut Line with Scissors */}
                 <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 border-r-2 border-dashed border-red-500/70 z-10 flex flex-col justify-between py-1 pointer-events-none">
                   <span className="text-[9px] text-red-600 bg-white/90 px-0.5 rounded -translate-x-1/2 shadow-xs">✂</span>
-                  <span className="text-[7px] text-red-600 font-mono font-bold bg-white/90 px-1 py-0.5 rounded -translate-x-1/2 rotate-90 shadow-xs whitespace-nowrap">
-                    POTONG
-                  </span>
                   <span className="text-[9px] text-red-600 bg-white/90 px-0.5 rounded -translate-x-1/2 shadow-xs">✂</span>
                 </div>
 
@@ -2214,12 +2125,20 @@ export default function EditorPhotostrip() {
                   </div>
 
                   {/* Left Strip Fixed Footer */}
-                  <div className="h-11 sm:h-12 shrink-0 pt-0.5 text-center border-t border-black/10 flex flex-col justify-center overflow-hidden">
-                    <p className="font-bold text-[9px] leading-tight truncate">{appConfig.website?.brandName || 'snap.e'}</p>
-                    <p className="font-serif italic text-[8px] opacity-90 truncate leading-tight">{customText || 'Tangible Memories'}</p>
-                    <p className={`text-[6.5px] font-mono leading-none mt-0.5 ${showDate ? 'opacity-75' : 'invisible'}`}>
-                      {new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
-                    </p>
+                  <div className={`h-11 sm:h-12 shrink-0 pt-0.5 px-2 border-t border-black/10 flex flex-col justify-center overflow-hidden ${
+                    textAlign === 'left' ? 'text-left items-start' : textAlign === 'right' ? 'text-right items-end' : 'text-center items-center'
+                  }`}>
+                    {showBadge && (
+                      <p className="font-bold text-[9px] leading-tight truncate">{appConfig.website?.brandName || 'snap.e'}</p>
+                    )}
+                    {customText && (
+                      <p className="font-serif italic text-[8px] opacity-90 truncate leading-tight">{customText}</p>
+                    )}
+                    {showDate && (
+                      <p className="text-[6.5px] font-mono leading-none mt-0.5 opacity-75">
+                        {new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -2230,12 +2149,20 @@ export default function EditorPhotostrip() {
                   </div>
 
                   {/* Right Strip Fixed Footer */}
-                  <div className="h-11 sm:h-12 shrink-0 pt-0.5 text-center border-t border-black/10 flex flex-col justify-center overflow-hidden">
-                    <p className="font-bold text-[9px] leading-tight truncate">{appConfig.website?.brandName || 'snap.e'}</p>
-                    <p className="font-serif italic text-[8px] opacity-90 truncate leading-tight">{customText || 'Tangible Memories'}</p>
-                    <p className={`text-[6.5px] font-mono leading-none mt-0.5 ${showDate ? 'opacity-75' : 'invisible'}`}>
-                      {new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
-                    </p>
+                  <div className={`h-11 sm:h-12 shrink-0 pt-0.5 px-2 border-t border-black/10 flex flex-col justify-center overflow-hidden ${
+                    textAlign === 'left' ? 'text-left items-start' : textAlign === 'right' ? 'text-right items-end' : 'text-center items-center'
+                  }`}>
+                    {showBadge && (
+                      <p className="font-bold text-[9px] leading-tight truncate">{appConfig.website?.brandName || 'snap.e'}</p>
+                    )}
+                    {customText && (
+                      <p className="font-serif italic text-[8px] opacity-90 truncate leading-tight">{customText}</p>
+                    )}
+                    {showDate && (
+                      <p className="text-[6.5px] font-mono leading-none mt-0.5 opacity-75">
+                        {new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>

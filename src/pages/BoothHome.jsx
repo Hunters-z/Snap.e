@@ -314,13 +314,12 @@ export default function BoothHome() {
                   <div>
                     <p className="font-bold text-xs text-gray-900 flex items-center justify-center gap-1">
                       <span>4R (4 Foto)</span>
-                      <span className="text-[9px] bg-red-100 text-red-700 px-1 rounded font-bold">Potong ✂</span>
                     </p>
-                    <p className="text-[10px] text-gray-500 mt-0.5">2 strip × 2 foto (Garis potong tengah)</p>
+                    <p className="text-[10px] text-gray-500 mt-0.5">2 strip × 2 foto</p>
                   </div>
                 </button>
 
-                {/* 4R 6-Cut with Center Cut Line */}
+                {/* 4R 6-Cut */}
                 <button
                   type="button"
                   onClick={() => setLayout('4r_6cut')}
@@ -351,9 +350,8 @@ export default function BoothHome() {
                   <div>
                     <p className="font-bold text-xs text-gray-900 flex items-center justify-center gap-1">
                       <span>4R (6 Foto)</span>
-                      <span className="text-[9px] bg-red-100 text-red-700 px-1 rounded font-bold">Potong ✂</span>
                     </p>
-                    <p className="text-[10px] text-gray-500 mt-0.5">2 strip × 3 foto (Garis potong tengah)</p>
+                    <p className="text-[10px] text-gray-500 mt-0.5">2 strip × 3 foto</p>
                   </div>
                 </button>
               </div>
