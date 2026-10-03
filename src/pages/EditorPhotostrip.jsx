@@ -20,11 +20,14 @@ import {
   Move,
   AlignLeft,
   AlignCenter,
-  AlignRight
+  AlignRight,
+  CreditCard,
+  Cloud
 } from 'lucide-react';
 import { FILTER_CATEGORIES, CAMERA_PRESETS } from '../data/cameraPresets';
 import { drawFrameGraphicDecorations } from '../data/defaultFrames';
 import { formatSessionTime, generateGifFromFrames } from '../utils/photoCaptureHelper';
+import PaymentModal from '../components/PaymentModal';
 
 export default function EditorPhotostrip() {
   const navigate = useNavigate();
@@ -38,10 +41,15 @@ export default function EditorPhotostrip() {
     setLayout,
     addOrder,
     sessionTimeRemaining,
+    startNewSession,
     sessionAlbum,
     deletePhotoFromAlbum,
     selectPhotoForSlot
   } = useBooth();
+
+  const [showPaymentModalInEditor, setShowPaymentModalInEditor] = useState(false);
+  const [editorAlbumFilter, setEditorAlbumFilter] = useState('all'); // 'all' | 'photo' | 'gif'
+  const [previewingGifId, setPreviewingGifId] = useState(null);
 
   // Selected frame
   const frames = appConfig.customFrames || [];
@@ -1182,13 +1190,22 @@ export default function EditorPhotostrip() {
           )}
 
           {sessionTimeRemaining <= 0 ? (
-            <button
-              onClick={() => setActiveTab('album')}
-              className="flex items-center gap-1.5 px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold text-xs transition-colors shadow-xs"
-            >
-              <ImageIcon size={13} />
-              <span>Buka Album Sementara (7 Hari)</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setActiveTab('album')}
+                className="flex items-center gap-1.5 px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold text-xs transition-colors shadow-xs"
+              >
+                <ImageIcon size={13} />
+                <span>Album Cloud (7 Hari)</span>
+              </button>
+              <button
+                onClick={() => setShowPaymentModalInEditor(true)}
+                className="flex items-center gap-1.5 px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold text-xs transition-colors shadow-xs"
+              >
+                <CreditCard size={13} />
+                <span>Beli Sesi Baru (Bayar)</span>
+              </button>
+            </div>
           ) : (
             <button
               onClick={() => navigate('/capture')}
@@ -1270,20 +1287,60 @@ export default function EditorPhotostrip() {
                   <div>
                     <h3 className="font-bold text-sm text-gray-900 flex items-center gap-1.5">
                       <ImageIcon size={15} className="text-red-600" />
-                      Pilih Foto dari Album Sesi
+                      Album Foto & Gambar Gerak Sesi
                     </h3>
-                    <p className="text-xs text-gray-500 mt-0.5">
-                      Tersimpan {sessionAlbum?.length || 0} jepretan foto selama sesi ini.
+                    <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1">
+                      <Cloud size={12} className="text-emerald-500 shrink-0" />
+                      <span>Tersimpan di Cloud selama 7 hari ({sessionAlbum?.length || 0} media).</span>
                     </p>
                   </div>
 
+                  {sessionTimeRemaining <= 0 ? (
+                    <button
+                      onClick={() => setShowPaymentModalInEditor(true)}
+                      className="flex items-center gap-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold rounded-lg shadow-xs transition-colors shrink-0"
+                    >
+                      <CreditCard size={13} />
+                      <span>Beli Sesi Baru (Bayar)</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => navigate('/capture')}
+                      className="flex items-center gap-1 px-2.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 text-[11px] font-bold rounded-lg border border-red-200 transition-colors shrink-0"
+                      title="Buka kamera untuk mengambil pose tambahan"
+                    >
+                      <Camera size={13} />
+                      <span>+ Foto Baru</span>
+                    </button>
+                  )}
+                </div>
+
+                {/* Media Filter Tabs */}
+                <div className="flex items-center gap-1.5 bg-gray-100 p-1 rounded-xl text-xs">
                   <button
-                    onClick={() => navigate('/capture')}
-                    className="flex items-center gap-1 px-2.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 text-[11px] font-bold rounded-lg border border-red-200 transition-colors shrink-0"
-                    title="Buka kamera untuk mengambil pose tambahan"
+                    onClick={() => setEditorAlbumFilter('all')}
+                    className={`flex-1 py-1 rounded-lg text-[11px] font-bold transition-colors ${
+                      editorAlbumFilter === 'all' ? 'bg-white text-gray-900 shadow-xs' : 'text-gray-500 hover:text-gray-900'
+                    }`}
                   >
-                    <Camera size={13} />
-                    <span>+ Foto Baru</span>
+                    Semua ({sessionAlbum?.length || 0})
+                  </button>
+                  <button
+                    onClick={() => setEditorAlbumFilter('photo')}
+                    className={`flex-1 py-1 rounded-lg text-[11px] font-bold transition-colors ${
+                      editorAlbumFilter === 'photo' ? 'bg-white text-gray-900 shadow-xs' : 'text-gray-500 hover:text-gray-900'
+                    }`}
+                  >
+                    Foto ({sessionAlbum?.filter(i => i.dataUrl).length || 0})
+                  </button>
+                  <button
+                    onClick={() => setEditorAlbumFilter('gif')}
+                    className={`flex-1 py-1 rounded-lg text-[11px] font-bold transition-colors flex items-center justify-center gap-1 ${
+                      editorAlbumFilter === 'gif' ? 'bg-purple-600 text-white shadow-xs' : 'text-purple-700 hover:text-purple-900'
+                    }`}
+                  >
+                    <Sparkles size={11} />
+                    <span>Gambar Gerak ({sessionAlbum?.filter(i => i.gifUrl).length || 0})</span>
                   </button>
                 </div>
 
@@ -1292,95 +1349,150 @@ export default function EditorPhotostrip() {
                     <div className="text-center py-8 text-gray-400 space-y-2">
                       <Camera size={28} className="mx-auto text-gray-300" />
                       <p className="text-xs font-semibold">Belum ada foto yang tersimpan di album sesi.</p>
-                      <button
-                        onClick={() => navigate('/capture')}
-                        className="px-3 py-1.5 bg-red-600 text-white rounded-lg text-xs font-bold"
-                      >
-                        Buka Kamera Sekarang
-                      </button>
+                      {sessionTimeRemaining > 0 ? (
+                        <button
+                          onClick={() => navigate('/capture')}
+                          className="px-3 py-1.5 bg-red-600 text-white rounded-lg text-xs font-bold"
+                        >
+                          Buka Kamera Sekarang
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => setShowPaymentModalInEditor(true)}
+                          className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold"
+                        >
+                          Beli Sesi Baru untuk Berfoto
+                        </button>
+                      )}
                     </div>
                   ) : (
-                    sessionAlbum.map((item, idx) => {
-                      const assignedSlot = photos.findIndex(p => p.dataUrl === item.dataUrl);
+                    sessionAlbum
+                      .filter(item => {
+                        if (editorAlbumFilter === 'photo') return Boolean(item.dataUrl);
+                        if (editorAlbumFilter === 'gif') return Boolean(item.gifUrl);
+                        return true;
+                      })
+                      .map((item, idx) => {
+                        const assignedSlot = photos.findIndex(p => p.dataUrl === item.dataUrl);
+                        const isPlayingGif = previewingGifId === item.id;
+                        const hasGif = Boolean(item.gifUrl);
 
-                      return (
-                        <div
-                          key={item.id || idx}
-                          className={`p-2.5 rounded-xl border transition-all flex gap-3 ${
-                            assignedSlot !== -1
-                              ? 'border-red-500 bg-red-50/30 ring-1 ring-red-500/20'
-                              : 'border-gray-200 hover:border-gray-300 bg-gray-50/50'
-                          }`}
-                        >
-                          {/* Thumbnail */}
-                          <div className="w-18 h-20 rounded-lg overflow-hidden relative shrink-0 bg-gray-200 border border-gray-300">
-                            <img 
-                              src={item.dataUrl} 
-                              alt="Album Thumbnail" 
-                              className="w-full h-full object-cover" 
-                            />
-                            {item.gifUrl && (
-                              <span className="absolute bottom-1 left-1 bg-purple-600 text-white text-[8px] font-bold px-1 rounded">
-                                GIF
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Info and Slot Selection */}
-                          <div className="flex-1 flex flex-col justify-between min-w-0">
-                            <div className="flex items-start justify-between gap-1">
-                              <div>
-                                <span className="text-[10px] font-mono text-gray-400">
-                                  {item.capturedAt || `Foto #${idx + 1}`}
-                                </span>
-                                <p className="text-xs font-bold text-gray-800 truncate">
-                                  {item.filterName || 'Analog Real'}
-                                </p>
-                              </div>
-
-                              <div className="flex items-center gap-1.5 shrink-0">
-                                {assignedSlot !== -1 && (
-                                  <span className="bg-red-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0">
-                                    Slot #{assignedSlot + 1}
-                                  </span>
-                                )}
+                        return (
+                          <div
+                            key={item.id || idx}
+                            className={`p-2.5 rounded-xl border transition-all flex gap-3 ${
+                              assignedSlot !== -1
+                                ? 'border-red-500 bg-red-50/30 ring-1 ring-red-500/20'
+                                : 'border-gray-200 hover:border-gray-300 bg-gray-50/50'
+                            }`}
+                          >
+                            {/* Thumbnail (Still or Animated GIF) */}
+                            <div 
+                              onClick={() => {
+                                if (hasGif) {
+                                  setPreviewingGifId(isPlayingGif ? null : item.id);
+                                }
+                              }}
+                              className={`w-20 h-24 rounded-lg overflow-hidden relative shrink-0 bg-gray-200 border border-gray-300 ${hasGif ? 'cursor-pointer' : ''}`}
+                              title={hasGif ? "Klik untuk memutar / menjeda gambar gerak (GIF)" : ""}
+                            >
+                              <img 
+                                src={isPlayingGif && item.gifUrl ? item.gifUrl : item.dataUrl} 
+                                alt="Album Thumbnail" 
+                                className="w-full h-full object-cover" 
+                              />
+                              {hasGif && (
                                 <button
                                   type="button"
-                                  onClick={() => deletePhotoFromAlbum(item.id)}
-                                  className="text-gray-400 hover:text-red-500 p-0.5"
-                                  title="Hapus foto dari album"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setPreviewingGifId(isPlayingGif ? null : item.id);
+                                  }}
+                                  className={`absolute bottom-1 left-1 text-[8px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5 transition-colors ${
+                                    isPlayingGif ? 'bg-purple-600 text-white animate-pulse' : 'bg-black/70 text-purple-300 hover:bg-purple-600 hover:text-white'
+                                  }`}
                                 >
-                                  <Trash2 size={12} />
+                                  <Play size={8} className={isPlayingGif ? 'fill-white' : ''} />
+                                  <span>{isPlayingGif ? 'Gerak' : 'GIF'}</span>
                                 </button>
-                              </div>
+                              )}
                             </div>
 
-                            {/* Slot buttons to place into frame */}
-                            <div>
-                              <span className="text-[9px] font-bold text-gray-500 uppercase tracking-wider block mb-1">
-                                Pasang ke Frame:
-                              </span>
-                              <div className="flex flex-wrap gap-1">
-                                {Array.from({ length: totalSlots }).map((_, sIdx) => (
-                                  <button
-                                    key={sIdx}
-                                    onClick={() => handleAssignPhotoToSlot(item, sIdx)}
-                                    className={`flex-1 min-w-[50px] py-1 text-[10px] font-bold rounded border transition-colors ${
-                                      assignedSlot === sIdx
-                                        ? 'bg-red-600 text-white border-red-600 shadow-xs'
-                                        : 'bg-white hover:bg-gray-100 text-gray-700 border-gray-300'
-                                    }`}
+                            {/* Info and Slot Selection */}
+                            <div className="flex-1 flex flex-col justify-between min-w-0">
+                              <div className="flex items-start justify-between gap-1">
+                                <div>
+                                  <span className="text-[10px] font-mono text-gray-400">
+                                    {item.capturedAt || `Foto #${idx + 1}`}
+                                  </span>
+                                  <p className="text-xs font-bold text-gray-800 truncate">
+                                    {item.filterName || 'Analog Real'}
+                                  </p>
+                                </div>
+
+                                <div className="flex items-center gap-1 shrink-0">
+                                  {/* Download Still */}
+                                  <a
+                                    href={item.dataUrl}
+                                    download={`snap_photo_${item.id || idx + 1}.jpg`}
+                                    className="p-1 text-gray-400 hover:text-gray-700 hover:bg-gray-200/60 rounded"
+                                    title="Unduh Foto Diam (JPG)"
                                   >
-                                    Slot {sIdx + 1}
+                                    <Download size={12} />
+                                  </a>
+                                  {/* Download GIF */}
+                                  {item.gifUrl && (
+                                    <a
+                                      href={item.gifUrl}
+                                      download={`snap_motion_${item.id || idx + 1}.gif`}
+                                      className="px-1.5 py-0.5 text-purple-600 hover:bg-purple-100 rounded text-[9px] font-bold"
+                                      title="Unduh Gambar Gerak (GIF)"
+                                    >
+                                      GIF
+                                    </a>
+                                  )}
+                                  {assignedSlot !== -1 && (
+                                    <span className="bg-red-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0">
+                                      Slot #{assignedSlot + 1}
+                                    </span>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => deletePhotoFromAlbum(item.id)}
+                                    className="text-gray-400 hover:text-red-500 p-0.5"
+                                    title="Hapus foto dari album"
+                                  >
+                                    <Trash2 size={12} />
                                   </button>
-                                ))}
+                                </div>
                               </div>
-                            </div>
 
+                              {/* Slot buttons to place into frame */}
+                              <div>
+                                <span className="text-[9px] font-bold text-gray-500 uppercase tracking-wider block mb-1">
+                                  Pasang ke Frame:
+                                </span>
+                                <div className="flex flex-wrap gap-1">
+                                  {Array.from({ length: totalSlots }).map((_, sIdx) => (
+                                    <button
+                                      key={sIdx}
+                                      onClick={() => handleAssignPhotoToSlot(item, sIdx)}
+                                      className={`flex-1 min-w-[50px] py-1 text-[10px] font-bold rounded border transition-colors ${
+                                        assignedSlot === sIdx
+                                          ? 'bg-red-600 text-white border-red-600 shadow-xs'
+                                          : 'bg-white hover:bg-gray-100 text-gray-700 border-gray-300'
+                                      }`}
+                                    >
+                                      Slot {sIdx + 1}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+
+                            </div>
                           </div>
-                        </div>
-                      );
-                    })
+                        );
+                      })
                   )}
                 </div>
               </div>
@@ -2429,6 +2541,18 @@ export default function EditorPhotostrip() {
           </div>
         </div>
       )}
+
+      {/* Payment Modal for Expired Session */}
+      <PaymentModal
+        isOpen={showPaymentModalInEditor}
+        onClose={() => setShowPaymentModalInEditor(false)}
+        onSuccess={() => {
+          startNewSession();
+          setShowPaymentModalInEditor(false);
+          navigate('/capture');
+        }}
+        title="Beli Sesi Photobooth Baru (15 Menit)"
+      />
 
       {/* Footer */}
       <footer className="border-t border-gray-200 bg-white py-6 mt-auto">

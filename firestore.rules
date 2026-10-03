@@ -90,5 +90,16 @@ service cloud.firestore {
       allow get, list: if true;
       allow create, update, delete: if isValidId(roomId);
     }
+
+    // 5. Cloud Albums Collection (Retained for 7 days in cloud)
+    match /cloud_albums/{sessionId} {
+      allow get, list: if true;
+      allow create, update, delete: if isValidId(sessionId);
+
+      match /photos/{photoId} {
+        allow get, list: if true;
+        allow create, update, delete: if isValidId(photoId);
+      }
+    }
   }
 }

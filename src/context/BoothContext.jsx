@@ -6,7 +6,8 @@ import {
   onSnapshot, 
   setDoc, 
   updateDoc, 
-  deleteDoc 
+  deleteDoc,
+  getDocs
 } from 'firebase/firestore';
 import { 
   signInWithPopup, 
@@ -21,6 +22,12 @@ import {
 import { auth, db, handleFirestoreError } from '../firebase';
 import { CAMERA_PRESETS } from '../data/cameraPresets';
 import { DEFAULT_FRAMES } from '../data/defaultFrames';
+import {
+  persistAlbum,
+  getPersistedAlbum,
+  persistCapturedPhotos,
+  getPersistedCapturedPhotos
+} from '../utils/persistentStorage';
 
 export const ADMIN_EMAILS = [
   '0601randikurnia.s@gmail.com',
@@ -300,12 +307,12 @@ export function BoothProvider({ children }) {
     }
   });
 
-  // Session Album: stored separately per session in `snape_album_${currentSessionId}`
+  // Session Album: stored persistently in IndexedDB & mirrored in Cloud Firestore
   const [sessionAlbum, setSessionAlbum] = useState(() => {
     try {
       const sessId = localStorage.getItem('snape_current_session_id');
       if (sessId) {
-        const saved = localStorage.getItem(`snape_album_${sessId}`);
+        const saved = localStorage.getItem(`snape_album_${sessId}`) || localStorage.getItem('snape_session_album');
         if (saved) {
           const parsed = JSON.parse(saved);
           if (Array.isArray(parsed) && parsed.length > 0) {
@@ -318,10 +325,10 @@ export function BoothProvider({ children }) {
     } catch {
       // fallback
     }
-    return []; // Album starts completely empty for each new session!
+    return [];
   });
 
-  // Photos captured in booth
+  // Photos captured in booth slots
   const [capturedPhotos, setCapturedPhotos] = useState(() => {
     try {
       const saved = localStorage.getItem('snape_captured_photos');
@@ -335,8 +342,66 @@ export function BoothProvider({ children }) {
     } catch {
       // fallback
     }
-    return []; // Starts empty!
+    return [];
   });
+
+  // Payment modal state
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const openPaymentModal = useCallback(() => setShowPaymentModal(true), []);
+  const closePaymentModal = useCallback(() => setShowPaymentModal(false), []);
+
+  // HYDRATE FROM INDEXEDDB & CLOUD FIRESTORE ON MOUNT / RELOAD
+  // This guarantees that even after page refresh or browser reload,
+  // photos, GIFs, and albums NEVER disappear!
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadPersistedData() {
+      const sessId = currentSessionId || localStorage.getItem('snape_current_session_id');
+      if (!sessId) return;
+
+      try {
+        // 1. Load Album from IndexedDB
+        const idbAlbum = await getPersistedAlbum(sessId);
+        if (isMounted && Array.isArray(idbAlbum) && idbAlbum.length > 0) {
+          setSessionAlbum(idbAlbum);
+        }
+
+        // 2. Load Slot captures from IndexedDB
+        const idbCaptured = await getPersistedCapturedPhotos(sessId);
+        if (isMounted && Array.isArray(idbCaptured) && idbCaptured.length > 0) {
+          setCapturedPhotos(idbCaptured);
+        }
+
+        // 3. Fallback: If IndexedDB was empty (e.g. opened on new device/cleared cache), load from Cloud Firestore
+        if ((!idbAlbum || idbAlbum.length === 0) && db) {
+          try {
+            const albumRef = collection(db, 'cloud_albums', sessId, 'photos');
+            const snap = await getDocs(albumRef);
+            if (!snap.empty && isMounted) {
+              const cloudPhotos = [];
+              snap.forEach(d => {
+                const data = d.data();
+                if (data && data.dataUrl) cloudPhotos.push(data);
+              });
+              cloudPhotos.sort((a, b) => (new Date(b.createdAt || 0)) - (new Date(a.createdAt || 0)));
+              if (cloudPhotos.length > 0) {
+                setSessionAlbum(cloudPhotos);
+                persistAlbum(sessId, cloudPhotos);
+              }
+            }
+          } catch (cloudErr) {
+            console.warn('Cloud album restore fallback:', cloudErr);
+          }
+        }
+      } catch (err) {
+        console.warn('Persistent storage restore error:', err);
+      }
+    }
+
+    loadPersistedData();
+    return () => { isMounted = false; };
+  }, [currentSessionId]);
 
   // Session ticker timer effect
   useEffect(() => {
@@ -353,14 +418,16 @@ export function BoothProvider({ children }) {
 
   const startOrResumeSession = useCallback(() => {
     let startTime = sessionStartTime;
-    // If no start time OR if previous session is already expired, start fresh 15-minute session
-    if (!startTime || (Date.now() - startTime) >= SESSION_MAX_SECONDS * 1000) {
+    // If no start time at all, initiate fresh session
+    if (!startTime) {
       startTime = Date.now();
       localStorage.setItem('snape_session_start_time', String(startTime));
       setSessionStartTime(startTime);
     }
+    // Calculate remaining without auto-resetting when expired!
     const elapsed = Math.floor((Date.now() - startTime) / 1000);
-    setSessionTimeRemaining(Math.max(0, SESSION_MAX_SECONDS - elapsed));
+    const remaining = Math.max(0, SESSION_MAX_SECONDS - elapsed);
+    setSessionTimeRemaining(remaining);
   }, [sessionStartTime]);
 
   const resetSession = useCallback(() => {
@@ -370,10 +437,22 @@ export function BoothProvider({ children }) {
     setSessionTimeRemaining(SESSION_MAX_SECONDS);
   }, []);
 
-  // Start an entirely new session with its own distinct album storage
+  // Start an entirely new session with payment
   const startNewSession = useCallback(() => {
     const now = Date.now();
     const newSessionId = `sess_${now}_${Math.random().toString(36).substr(2, 4)}`;
+
+    // Keep history of previous sessions so past albums can always be browsed in cloud
+    try {
+      const pastSessions = JSON.parse(localStorage.getItem('snape_all_sessions') || '[]');
+      if (currentSessionId && !pastSessions.includes(currentSessionId)) {
+        pastSessions.unshift(currentSessionId);
+        localStorage.setItem('snape_all_sessions', JSON.stringify(pastSessions.slice(0, 20)));
+      }
+    } catch (_e) {
+      // ignore localStorage quota or parsing error
+    }
+
     try {
       localStorage.setItem('snape_current_session_id', newSessionId);
       localStorage.setItem('snape_session_start_time', String(now));
@@ -382,15 +461,16 @@ export function BoothProvider({ children }) {
     } catch (e) {
       console.warn('Session init warning:', e);
     }
+
     setCurrentSessionId(newSessionId);
     setSessionStartTime(now);
     setSessionTimeRemaining(SESSION_MAX_SECONDS);
     setSessionAlbum([]);
     setCapturedPhotos([]);
     return newSessionId;
-  }, []);
+  }, [currentSessionId]);
 
-  // Album actions with 7-day expiration (scoped per session storage)
+  // Album actions with 7-day expiration (persisted in IndexedDB + Cloud Firestore)
   const addPhotoToAlbum = useCallback((newPhoto) => {
     const now = Date.now();
     const photoWithId = {
@@ -404,14 +484,53 @@ export function BoothProvider({ children }) {
 
     setSessionAlbum(prev => {
       const updated = [photoWithId, ...prev];
+      // 1. Robust save to IndexedDB (No 5MB limit!)
+      persistAlbum(currentSessionId, updated);
+
+      // 2. Safe lightweight fallback to localStorage
       try {
-        localStorage.setItem(`snape_album_${currentSessionId}`, JSON.stringify(updated.slice(0, 50)));
-        localStorage.setItem('snape_session_album', JSON.stringify(updated.slice(0, 50)));
-      } catch (e) {
-        console.warn('Storage warning for album:', e);
+        const light = updated.slice(0, 8).map(p => ({
+          id: p.id,
+          sessionId: p.sessionId,
+          capturedAt: p.capturedAt,
+          filterName: p.filterName,
+          dateStamp: p.dateStamp,
+          createdAt: p.createdAt,
+          expiresAt: p.expiresAt,
+          dataUrl: p.dataUrl ? (p.dataUrl.length > 200000 ? p.dataUrl.slice(0, 1000) : p.dataUrl) : null
+        }));
+        localStorage.setItem(`snape_album_${currentSessionId}`, JSON.stringify(light));
+        localStorage.setItem('snape_session_album', JSON.stringify(light));
+      } catch {
+        // Quota error safe to ignore as IndexedDB has the full resolution data
       }
       return updated;
     });
+
+    // 3. Sync to Cloud Firestore (Stored for 7 days in cloud)
+    try {
+      if (db) {
+        setDoc(doc(db, 'cloud_albums', currentSessionId), {
+          sessionId: currentSessionId,
+          updatedAt: new Date().toISOString(),
+          expiresAt: new Date(now + SEVEN_DAYS_MS).toISOString()
+        }, { merge: true }).catch(() => {});
+
+        setDoc(doc(db, 'cloud_albums', currentSessionId, 'photos', photoWithId.id), {
+          id: photoWithId.id,
+          sessionId: currentSessionId,
+          capturedAt: photoWithId.capturedAt,
+          dataUrl: photoWithId.dataUrl,
+          gifUrl: photoWithId.gifUrl || null,
+          filterName: photoWithId.filterName || 'Natural',
+          dateStamp: photoWithId.dateStamp || null,
+          createdAt: photoWithId.createdAt,
+          expiresAt: photoWithId.expiresAt
+        }).catch(err => console.warn('Cloud album photo sync error:', err));
+      }
+    } catch (err) {
+      console.warn('Cloud album sync exception:', err);
+    }
 
     return photoWithId;
   }, [currentSessionId]);
@@ -419,14 +538,24 @@ export function BoothProvider({ children }) {
   const deletePhotoFromAlbum = useCallback((photoId) => {
     setSessionAlbum(prev => {
       const updated = prev.filter(p => p.id !== photoId);
+      persistAlbum(currentSessionId, updated);
       try {
-        localStorage.setItem(`snape_album_${currentSessionId}`, JSON.stringify(updated));
-        localStorage.setItem('snape_session_album', JSON.stringify(updated));
+        localStorage.setItem(`snape_album_${currentSessionId}`, JSON.stringify(updated.slice(0, 8)));
+        localStorage.setItem('snape_session_album', JSON.stringify(updated.slice(0, 8)));
       } catch (err) {
         console.warn('Storage error:', err);
       }
       return updated;
     });
+
+    // Also delete from Firestore if present
+    try {
+      if (db) {
+        deleteDoc(doc(db, 'cloud_albums', currentSessionId, 'photos', photoId)).catch(() => {});
+      }
+    } catch (_e) {
+      // ignore cloud deletion error
+    }
   }, [currentSessionId]);
 
   const selectPhotoForSlot = useCallback((slotIndex, photoItem) => {
@@ -439,14 +568,16 @@ export function BoothProvider({ children }) {
         offsetY: photoItem.offsetY ?? 0,
         stickers: Array.isArray(photoItem.stickers) ? photoItem.stickers : []
       };
+      // Persist in IndexedDB
+      persistCapturedPhotos(currentSessionId, next);
       try {
         localStorage.setItem('snape_captured_photos', JSON.stringify(next));
       } catch (err) {
-        console.warn('Storage error:', err);
+        // Safe to ignore quota error
       }
       return next;
     });
-  }, []);
+  }, [currentSessionId]);
 
   // Print orders list (for studio admin) - synced with Firestore
   const [orders, setOrders] = useState([]);
@@ -1265,6 +1396,11 @@ export function BoothProvider({ children }) {
         capturedPhotos,
         updateCapturedPhotos,
         sessionTimeRemaining,
+        isSessionExpired: sessionTimeRemaining <= 0,
+        showPaymentModal,
+        setShowPaymentModal,
+        openPaymentModal,
+        closePaymentModal,
         currentSessionId,
         startNewSession,
         startOrResumeSession,

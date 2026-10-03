@@ -74,6 +74,10 @@
     "/photostrips/{sessionId}": {
       "schema": "PhotostripSession",
       "description": "Saved photostrip gallery items"
+    },
+    "/cloud_albums/{sessionId}": {
+      "schema": "PhotostripSession",
+      "description": "Saved 7-day session cloud photo album and animated GIFs"
     }
   }
 }

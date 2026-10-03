@@ -18,7 +18,11 @@ import {
   Play,
   Copy,
   Check,
-  Heart
+  Heart,
+  Grid,
+  Download,
+  Cloud,
+  CreditCard
 } from 'lucide-react';
 import { useBooth } from '../context/BoothContext';
 import { FILTER_CATEGORIES, CAMERA_PRESETS } from '../data/cameraPresets';
@@ -30,6 +34,7 @@ import {
 } from '../utils/photoCaptureHelper';
 import { db } from '../firebase';
 import { doc, setDoc, updateDoc, onSnapshot, arrayUnion } from 'firebase/firestore';
+import PaymentModal from '../components/PaymentModal';
 
 export default function LiveCapture() {
   const navigate = useNavigate();
@@ -43,6 +48,8 @@ export default function LiveCapture() {
     capturedPhotos,
     sessionTimeRemaining,
     startOrResumeSession,
+    startNewSession,
+    currentSessionId,
     sessionAlbum,
     addPhotoToAlbum,
     deletePhotoFromAlbum,
@@ -86,9 +93,20 @@ export default function LiveCapture() {
   const [cameraError, setCameraError] = useState(null);
   const [isSimulatedCam, setIsSimulatedCam] = useState(false);
 
-  // Album Modal
+  // Album Modal & Persistence States
   const [showAlbumModal, setShowAlbumModal] = useState(false);
   const [previewLiveItem, setPreviewLiveItem] = useState(null);
+  const [albumFilter, setAlbumFilter] = useState('all'); // 'all' | 'photo' | 'gif'
+  const [autoPlayAllGifs, setAutoPlayAllGifs] = useState(false);
+  const [showGrid, setShowGrid] = useState(true);
+  const [showPaymentModalInCapture, setShowPaymentModalInCapture] = useState(false);
+
+  // Automatically open the Album Modal immediately when session timer expires!
+  useEffect(() => {
+    if (sessionTimeRemaining <= 0) {
+      setShowAlbumModal(true);
+    }
+  }, [sessionTimeRemaining]);
 
   // LDR Peer and Realtime states
   const [peerConnected, setPeerConnected] = useState(false);
@@ -804,6 +822,17 @@ export default function LiveCapture() {
             {soundEnabled ? <Volume2 size={15} /> : <VolumeX size={15} className="text-gray-400" />}
           </button>
 
+          {/* Grid Viewfinder Toggle */}
+          <button
+            onClick={() => setShowGrid(!showGrid)}
+            className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
+              showGrid ? 'bg-white text-black font-bold shadow-xs' : 'bg-white/10 hover:bg-white/20 text-gray-400'
+            }`}
+            title={showGrid ? 'Matikan Grid Kamera' : 'Nyalakan Grid Kamera (Rule of Thirds)'}
+          >
+            <Grid size={15} />
+          </button>
+
           {/* Switch Camera */}
           <button
             onClick={toggleCameraFacing}
@@ -1033,13 +1062,34 @@ export default function LiveCapture() {
             <span className="text-white">{activeFilter.shortName || activeFilter.name}</span>
           </div>
 
-          {/* Viewfinder Grid lines */}
-          <div className="absolute inset-0 pointer-events-none opacity-20">
-            <div className="w-full h-1/3 border-b border-white"></div>
-            <div className="w-full h-2/3 border-b border-white"></div>
-            <div className="h-full w-1/3 border-r border-white absolute top-0 left-0"></div>
-            <div className="h-full w-2/3 border-r border-white absolute top-0 left-0"></div>
-          </div>
+          {/* Viewfinder Grid (Rule of Thirds + Corner Brackets + Center Target) */}
+          {showGrid && (
+            <div className="absolute inset-0 pointer-events-none z-15">
+              {/* Symmetrical 3x3 Rule-of-Thirds Grid */}
+              <div className="w-full h-full grid grid-cols-3 grid-rows-3">
+                <div className="border-r border-b border-white/25" />
+                <div className="border-r border-b border-white/25" />
+                <div className="border-b border-white/25" />
+                <div className="border-r border-b border-white/25" />
+                <div className="border-r border-b border-white/25 flex items-center justify-center">
+                  {/* Center Target Mark */}
+                  <div className="w-7 h-7 rounded-full border border-white/40 flex items-center justify-center">
+                    <div className="w-1.5 h-1.5 rounded-full bg-white/70" />
+                  </div>
+                </div>
+                <div className="border-b border-white/25" />
+                <div className="border-r border-white/25" />
+                <div className="border-r border-white/25" />
+                <div />
+              </div>
+
+              {/* Viewfinder Corner Framing Brackets */}
+              <div className="absolute top-2.5 left-2.5 w-4 h-4 border-t-2 border-l-2 border-white/60 rounded-tl-xs pointer-events-none" />
+              <div className="absolute top-2.5 right-2.5 w-4 h-4 border-t-2 border-r-2 border-white/60 rounded-tr-xs pointer-events-none" />
+              <div className="absolute bottom-2.5 left-2.5 w-4 h-4 border-b-2 border-l-2 border-white/60 rounded-bl-xs pointer-events-none" />
+              <div className="absolute bottom-2.5 right-2.5 w-4 h-4 border-b-2 border-r-2 border-white/60 rounded-br-xs pointer-events-none" />
+            </div>
+          )}
         </div>
       </div>
 
@@ -1135,20 +1185,27 @@ export default function LiveCapture() {
                 <span>Waktu Sesi Telah Selesai (15 Menit)</span>
               </p>
               <p className="text-[11px] text-gray-400 mt-0.5">
-                Bilik kamera ditutup. Hanya fitur Album Sementara (7 hari) yang kini aktif.
+                Pengambilan foto baru dikunci. Album foto & gambar gerak Anda tetap tersimpan di Cloud selama 7 hari.
               </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2">
               <button
                 onClick={() => setShowAlbumModal(true)}
-                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 transition-colors shadow-md"
+                className="px-3.5 py-2 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 transition-colors shadow-md"
               >
                 <Image size={14} />
                 <span>Buka Album ({sessionAlbum?.length || 0})</span>
               </button>
               <button
+                onClick={() => setShowPaymentModalInCapture(true)}
+                className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 transition-colors shadow-md shadow-emerald-600/20"
+              >
+                <CreditCard size={14} />
+                <span>Beli Sesi Baru (Bayar)</span>
+              </button>
+              <button
                 onClick={() => navigate('/editor')}
-                className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white font-bold text-xs rounded-xl transition-colors"
+                className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white font-bold text-xs rounded-xl transition-colors"
               >
                 <span>Ke Editor</span>
               </button>
@@ -1295,39 +1352,106 @@ export default function LiveCapture() {
         </div>
       </div>
 
-      {/* TEMPORARY SESSION ALBUM MODAL / DRAWER */}
+      {/* TEMPORARY & CLOUD SESSION ALBUM MODAL */}
       {showAlbumModal && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
-          <div className="bg-[#18181C] border border-white/15 w-full max-w-2xl max-h-[85vh] rounded-3xl p-5 sm:p-6 flex flex-col shadow-2xl space-y-4">
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-fadeIn">
+          <div className="bg-[#18181C] border border-white/15 w-full max-w-2xl max-h-[88vh] rounded-3xl p-4 sm:p-6 flex flex-col shadow-2xl space-y-3.5">
             
             {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
               <div>
                 <h3 className="font-bold text-base text-white flex items-center gap-2">
                   <Image size={18} className="text-red-500" />
-                  Album Penyimpanan Sementara ({sessionAlbum?.length || 0} Foto)
+                  <span>Album Foto & Gambar Gerak</span>
+                  <span className="text-xs font-mono font-normal text-gray-400">({sessionAlbum?.length || 0} Media)</span>
                 </h3>
-                <p className="text-xs text-gray-400 mt-0.5">
-                  Foto-foto jepretan Anda selama sesi ini. Anda dapat memilih foto untuk slot frame atau mengambil ulang (retake).
+                <p className="text-xs text-gray-400 mt-0.5 flex flex-wrap items-center gap-1.5">
+                  <span>Tersimpan di Cloud selama 7 hari · Foto diam & gambar gerak (GIF).</span>
+                  <span className="text-[10px] text-gray-400 bg-white/10 px-1.5 py-0.5 rounded font-mono">Sesi: {currentSessionId}</span>
                 </p>
               </div>
               <button
                 onClick={() => { setShowAlbumModal(false); setPreviewLiveItem(null); }}
                 className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-gray-300 hover:text-white flex items-center justify-center transition-colors"
+                title="Tutup"
               >
                 <X size={18} />
               </button>
             </div>
 
-            {/* 7-Day Storage Guarantee Banner */}
-            <div className="bg-amber-500/10 border border-amber-500/30 p-2.5 rounded-xl flex items-center justify-between text-xs text-amber-300">
-              <div className="flex items-center gap-2">
-                <Clock size={14} className="text-amber-400 shrink-0" />
-                <span>Album Sementara: Foto tersimpan aman selama <strong>7 Hari</strong></span>
+            {/* Expired Session Lock Banner */}
+            {sessionTimeRemaining <= 0 && (
+              <div className="bg-rose-950/70 border border-rose-500/40 p-3 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-2.5 text-xs text-rose-200">
+                <div className="flex items-center gap-2 text-center sm:text-left">
+                  <Clock size={16} className="text-rose-400 shrink-0" />
+                  <div>
+                    <p className="font-bold text-rose-100">Waktu Sesi Selesai (15 Menit) — Pengambilan Foto Terkunci</p>
+                    <p className="text-[11px] text-rose-300/90 mt-0.5">
+                      Album Anda tetap tersimpan aman di Cloud selama 7 hari. Untuk berfoto kembali, lakukan pembayaran sesi baru.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowPaymentModalInCapture(true)}
+                  className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 shrink-0 shadow-md transition-colors"
+                >
+                  <CreditCard size={14} />
+                  <span>Beli Sesi Baru (Bayar)</span>
+                </button>
               </div>
-              <span className="text-[10px] font-mono bg-amber-500/20 px-2 py-0.5 rounded-md text-amber-200 font-bold shrink-0">
-                Bebas Jepret & Pilih
-              </span>
+            )}
+
+            {/* Cloud Storage & Filter Bar */}
+            <div className="flex flex-wrap items-center justify-between gap-2 bg-white/5 border border-white/10 p-2 sm:p-2.5 rounded-2xl text-xs">
+              {/* Media type filter tabs */}
+              <div className="flex items-center gap-1 bg-black/40 p-1 rounded-xl">
+                <button
+                  onClick={() => setAlbumFilter('all')}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors ${
+                    albumFilter === 'all' ? 'bg-white text-black' : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  Semua ({sessionAlbum?.length || 0})
+                </button>
+                <button
+                  onClick={() => setAlbumFilter('photo')}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors ${
+                    albumFilter === 'photo' ? 'bg-white text-black' : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  Foto ({sessionAlbum?.filter(i => i.dataUrl).length || 0})
+                </button>
+                <button
+                  onClick={() => setAlbumFilter('gif')}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors flex items-center gap-1 ${
+                    albumFilter === 'gif' ? 'bg-purple-600 text-white' : 'text-purple-300 hover:text-white'
+                  }`}
+                >
+                  <Sparkles size={11} />
+                  Gambar Gerak ({sessionAlbum?.filter(i => i.gifUrl).length || 0})
+                </button>
+              </div>
+
+              {/* Auto play GIF toggle & Cloud Guarantee */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setAutoPlayAllGifs(!autoPlayAllGifs)}
+                  className={`px-2.5 py-1 rounded-xl text-[10px] font-bold border transition-colors flex items-center gap-1 ${
+                    autoPlayAllGifs
+                      ? 'bg-purple-600/30 text-purple-200 border-purple-500/50'
+                      : 'bg-white/5 text-gray-400 border-white/10 hover:text-white'
+                  }`}
+                  title="Putar semua animasi gambar gerak / GIF secara otomatis"
+                >
+                  <Play size={10} className={autoPlayAllGifs ? 'fill-purple-200' : ''} />
+                  <span>{autoPlayAllGifs ? 'Semua GIF Berputar' : 'Putar Semua Gerak'}</span>
+                </button>
+
+                <div className="hidden sm:flex items-center gap-1 text-[10px] text-emerald-400 font-medium">
+                  <Cloud size={12} />
+                  <span>Cloud 7 Hari</span>
+                </div>
+              </div>
             </div>
 
             {/* Album Grid */}
@@ -1336,110 +1460,153 @@ export default function LiveCapture() {
                 <div className="py-12 text-center text-gray-400 space-y-2">
                   <Camera size={36} className="mx-auto text-gray-600" />
                   <p className="text-sm font-semibold">Belum ada foto dalam album sesi.</p>
-                  <p className="text-xs text-gray-500">Tutup album dan tekan tombol kamera untuk mulai berfoto.</p>
+                  <p className="text-xs text-gray-500">
+                    {sessionTimeRemaining > 0 
+                      ? 'Tutup album dan tekan tombol kamera untuk mulai berfoto.' 
+                      : 'Waktu sesi telah habis. Bayar sesi baru untuk berfoto kembali.'}
+                  </p>
                 </div>
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {sessionAlbum.map((item, idx) => {
-                    const isPreviewingLive = previewLiveItem?.id === item.id;
+                  {sessionAlbum
+                    .filter(item => {
+                      if (albumFilter === 'photo') return Boolean(item.dataUrl);
+                      if (albumFilter === 'gif') return Boolean(item.gifUrl);
+                      return true;
+                    })
+                    .map((item, idx) => {
+                      const isPreviewingLive = autoPlayAllGifs || previewLiveItem?.id === item.id;
+                      const hasMotion = Boolean(item.gifUrl || item.liveVideoUrl);
 
-                    return (
-                      <div
-                        key={item.id || idx}
-                        className="bg-black/50 border border-white/10 rounded-2xl overflow-hidden group hover:border-white/30 transition-all flex flex-col"
-                      >
-                        {/* Media display (Still or Live/GIF) */}
-                        <div className="aspect-[4/3] bg-gray-900 relative overflow-hidden">
-                          {isPreviewingLive && (item.gifUrl || item.liveVideoUrl) ? (
-                            <img
-                              src={item.gifUrl || item.dataUrl}
-                              alt="Live Photo GIF"
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <img
-                              src={item.dataUrl}
-                              alt="Captured Still"
-                              className="w-full h-full object-cover"
-                            />
-                          )}
+                      return (
+                        <div
+                          key={item.id || idx}
+                          className="bg-black/50 border border-white/10 rounded-2xl overflow-hidden group hover:border-white/30 transition-all flex flex-col"
+                        >
+                          {/* Media display (Still or Live/GIF) */}
+                          <div className="aspect-[4/3] bg-gray-900 relative overflow-hidden">
+                            {isPreviewingLive && hasMotion ? (
+                              <img
+                                src={item.gifUrl || item.dataUrl}
+                                alt="Foto Gerak / GIF"
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <img
+                                src={item.dataUrl}
+                                alt="Foto Diam"
+                                className="w-full h-full object-cover"
+                              />
+                            )}
 
-                          {/* Live Photo / GIF Badge */}
-                          {(item.gifUrl || item.liveVideoUrl) && (
-                            <button
-                              onClick={() => setPreviewLiveItem(isPreviewingLive ? null : item)}
-                              className={`absolute top-2 left-2 px-2 py-0.5 rounded-full text-[9px] font-bold flex items-center gap-1 z-10 transition-colors ${
-                                isPreviewingLive 
-                                  ? 'bg-purple-600 text-white animate-pulse' 
-                                  : 'bg-black/60 text-purple-300 hover:bg-purple-600 hover:text-white'
-                              }`}
-                              title="Klik untuk memutar foto gerak / GIF"
-                            >
-                              <Play size={8} />
-                              <span>{isPreviewingLive ? 'Stop Gerak' : 'Foto Gerak / GIF'}</span>
-                            </button>
-                          )}
+                            {/* Live Photo / GIF Badge */}
+                            {hasMotion && (
+                              <button
+                                onClick={() => setPreviewLiveItem(isPreviewingLive && !autoPlayAllGifs ? null : item)}
+                                className={`absolute top-2 left-2 px-2 py-0.5 rounded-full text-[9px] font-bold flex items-center gap-1 z-10 transition-colors ${
+                                  isPreviewingLive 
+                                    ? 'bg-purple-600 text-white animate-pulse' 
+                                    : 'bg-black/60 text-purple-300 hover:bg-purple-600 hover:text-white'
+                                }`}
+                                title="Klik untuk memutar foto gerak / GIF"
+                              >
+                                <Play size={8} className={isPreviewingLive ? 'fill-white' : ''} />
+                                <span>{isPreviewingLive ? 'Gerak Aktif' : 'Foto Gerak'}</span>
+                              </button>
+                            )}
 
-                          <span className="absolute bottom-1 right-2 text-[9px] font-mono text-gray-300 bg-black/60 px-1.5 py-0.5 rounded">
-                            {item.capturedAt || `#${idx + 1}`}
-                          </span>
-                        </div>
-
-                        {/* Controls to assign photo to Slots */}
-                        <div className="p-2.5 space-y-2 flex-1 flex flex-col justify-between">
-                          <div className="flex items-center justify-between text-[11px] text-gray-400">
-                            <span className="truncate max-w-[100px]">{item.filterName || 'Natural'}</span>
-                            <button
-                              onClick={() => deletePhotoFromAlbum(item.id)}
-                              className="text-gray-400 hover:text-red-400 p-1 transition-colors"
-                              title="Hapus foto dari album sementara"
-                            >
-                              <Trash2 size={13} />
-                            </button>
-                          </div>
-
-                          {/* Slot Buttons */}
-                          <div className="space-y-1">
-                            <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">
-                              Pasang ke Frame:
+                            <span className="absolute bottom-1 right-2 text-[9px] font-mono text-gray-300 bg-black/60 px-1.5 py-0.5 rounded">
+                              {item.capturedAt || `#${idx + 1}`}
                             </span>
-                            <div className="grid grid-cols-3 gap-1">
-                              {Array.from({ length: totalShots }).map((_, slotIdx) => (
-                                <button
-                                  key={slotIdx}
-                                  onClick={() => {
-                                    selectPhotoForSlot(slotIdx, item);
-                                    setShowAlbumModal(false);
-                                  }}
-                                  className={`py-1 text-[10px] font-bold rounded-lg border transition-colors ${
-                                    capturedPhotos[slotIdx]?.dataUrl === item.dataUrl
-                                      ? 'bg-emerald-600 text-white border-emerald-500'
-                                      : 'bg-white/10 hover:bg-white/20 text-gray-200 border-white/10'
-                                  }`}
-                                  title={`Jadikan foto ini untuk Pose #${slotIdx + 1}`}
-                                >
-                                  Slot {slotIdx + 1}
-                                </button>
-                              ))}
-                            </div>
                           </div>
 
+                          {/* Controls to assign photo to Slots & Download */}
+                          <div className="p-2.5 space-y-2 flex-1 flex flex-col justify-between">
+                            <div className="flex items-center justify-between text-[11px] text-gray-400">
+                              <span className="truncate max-w-[100px] font-medium text-gray-300">{item.filterName || 'Natural'}</span>
+                              <div className="flex items-center gap-1">
+                                {/* Download Still */}
+                                <a
+                                  href={item.dataUrl}
+                                  download={`snap_photo_${item.id || idx + 1}.jpg`}
+                                  className="text-gray-400 hover:text-white p-1 transition-colors"
+                                  title="Unduh Foto Diam (JPG)"
+                                >
+                                  <Download size={12} />
+                                </a>
+                                {/* Download GIF if available */}
+                                {item.gifUrl && (
+                                  <a
+                                    href={item.gifUrl}
+                                    download={`snap_motion_${item.id || idx + 1}.gif`}
+                                    className="text-purple-400 hover:text-purple-300 p-1 transition-colors font-bold text-[10px]"
+                                    title="Unduh Gambar Gerak (GIF)"
+                                  >
+                                    GIF
+                                  </a>
+                                )}
+                                <button
+                                  onClick={() => deletePhotoFromAlbum(item.id)}
+                                  className="text-gray-400 hover:text-red-400 p-1 transition-colors ml-0.5"
+                                  title="Hapus foto dari album"
+                                >
+                                  <Trash2 size={12} />
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Slot Buttons */}
+                            <div className="space-y-1">
+                              <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">
+                                Pasang ke Frame:
+                              </span>
+                              <div className="grid grid-cols-3 gap-1">
+                                {Array.from({ length: totalShots }).map((_, slotIdx) => (
+                                  <button
+                                    key={slotIdx}
+                                    onClick={() => {
+                                      selectPhotoForSlot(slotIdx, item);
+                                      setShowAlbumModal(false);
+                                    }}
+                                    className={`py-1 text-[10px] font-bold rounded-lg border transition-colors ${
+                                      capturedPhotos[slotIdx]?.dataUrl === item.dataUrl
+                                        ? 'bg-emerald-600 text-white border-emerald-500'
+                                        : 'bg-white/10 hover:bg-white/20 text-gray-200 border-white/10'
+                                    }`}
+                                    title={`Jadikan foto ini untuk Pose #${slotIdx + 1}`}
+                                  >
+                                    Slot {slotIdx + 1}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
                 </div>
               )}
             </div>
 
             {/* Modal Footer */}
-            <div className="pt-2 border-t border-white/10 flex items-center justify-between">
-              <button
-                onClick={() => { setShowAlbumModal(false); setPreviewLiveItem(null); }}
-                className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold transition-colors"
-              >
-                Kembali ke Kamera
-              </button>
+            <div className="pt-2 border-t border-white/10 flex items-center justify-between gap-2">
+              {sessionTimeRemaining > 0 ? (
+                <button
+                  onClick={() => { setShowAlbumModal(false); setPreviewLiveItem(null); }}
+                  className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold transition-colors"
+                >
+                  Kembali ke Kamera
+                </button>
+              ) : (
+                <button
+                  onClick={() => setShowPaymentModalInCapture(true)}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors shadow-md shadow-emerald-600/20"
+                >
+                  <CreditCard size={14} />
+                  <span>Beli Sesi Baru (Bayar)</span>
+                </button>
+              )}
 
               <button
                 onClick={() => {
@@ -1456,6 +1623,18 @@ export default function LiveCapture() {
           </div>
         </div>
       )}
+
+      {/* Payment Modal for Expired Session */}
+      <PaymentModal
+        isOpen={showPaymentModalInCapture}
+        onClose={() => setShowPaymentModalInCapture(false)}
+        onSuccess={() => {
+          startNewSession();
+          setShowPaymentModalInCapture(false);
+          setShowAlbumModal(false);
+        }}
+        title="Beli Sesi Photobooth Baru (15 Menit)"
+      />
 
     </div>
   );
