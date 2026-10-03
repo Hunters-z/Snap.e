@@ -50,30 +50,20 @@ function openDB() {
   return dbPromise;
 }
 
+const memoryAlbums = new Map();
+const memoryCaptures = new Map();
+
 /**
  * Save album photos into IndexedDB (persists across page reloads & browser restarts)
  */
 export async function persistAlbum(sessionId, photos) {
   if (!sessionId) return false;
+  if (Array.isArray(photos)) {
+    memoryAlbums.set(sessionId, photos);
+  }
   try {
     const db = await openDB();
     if (!db) {
-      // Fallback: try saving stripped metadata to localStorage
-      try {
-        const light = (photos || []).slice(0, 15).map(p => ({
-          id: p.id,
-          sessionId: p.sessionId,
-          capturedAt: p.capturedAt,
-          filterName: p.filterName,
-          dateStamp: p.dateStamp,
-          createdAt: p.createdAt,
-          expiresAt: p.expiresAt,
-          dataUrl: p.dataUrl ? p.dataUrl.slice(0, 1000) : null // light preview only
-        }));
-        localStorage.setItem(`snape_album_meta_${sessionId}`, JSON.stringify(light));
-      } catch {
-        // ignore
-      }
       return false;
     }
 
@@ -108,9 +98,13 @@ export async function persistAlbum(sessionId, photos) {
  */
 export async function getPersistedAlbum(sessionId) {
   if (!sessionId) return null;
+  if (memoryAlbums.has(sessionId)) {
+    const cached = memoryAlbums.get(sessionId);
+    if (Array.isArray(cached) && cached.length > 0) return cached;
+  }
   try {
     const db = await openDB();
-    if (!db) return null;
+    if (!db) return memoryAlbums.get(sessionId) || null;
 
     return new Promise((resolve) => {
       try {
@@ -120,21 +114,22 @@ export async function getPersistedAlbum(sessionId) {
 
         req.onsuccess = () => {
           if (req.result && Array.isArray(req.result.photos)) {
+            memoryAlbums.set(sessionId, req.result.photos);
             resolve(req.result.photos);
           } else {
-            resolve(null);
+            resolve(memoryAlbums.get(sessionId) || null);
           }
         };
 
-        req.onerror = () => resolve(null);
+        req.onerror = () => resolve(memoryAlbums.get(sessionId) || null);
       } catch (err) {
         console.warn('getPersistedAlbum error:', err);
-        resolve(null);
+        resolve(memoryAlbums.get(sessionId) || null);
       }
     });
   } catch (e) {
     console.warn('getPersistedAlbum exception:', e);
-    return null;
+    return memoryAlbums.get(sessionId) || null;
   }
 }
 
@@ -143,6 +138,9 @@ export async function getPersistedAlbum(sessionId) {
  */
 export async function persistCapturedPhotos(sessionId, photos) {
   if (!sessionId) return false;
+  if (Array.isArray(photos)) {
+    memoryCaptures.set(sessionId, photos);
+  }
   try {
     const db = await openDB();
     if (!db) return false;
@@ -175,9 +173,13 @@ export async function persistCapturedPhotos(sessionId, photos) {
  */
 export async function getPersistedCapturedPhotos(sessionId) {
   if (!sessionId) return null;
+  if (memoryCaptures.has(sessionId)) {
+    const cached = memoryCaptures.get(sessionId);
+    if (Array.isArray(cached) && cached.length > 0) return cached;
+  }
   try {
     const db = await openDB();
-    if (!db) return null;
+    if (!db) return memoryCaptures.get(sessionId) || null;
 
     return new Promise((resolve) => {
       try {
@@ -187,19 +189,20 @@ export async function getPersistedCapturedPhotos(sessionId) {
 
         req.onsuccess = () => {
           if (req.result && Array.isArray(req.result.photos)) {
+            memoryCaptures.set(sessionId, req.result.photos);
             resolve(req.result.photos);
           } else {
-            resolve(null);
+            resolve(memoryCaptures.get(sessionId) || null);
           }
         };
 
-        req.onerror = () => resolve(null);
+        req.onerror = () => resolve(memoryCaptures.get(sessionId) || null);
       } catch {
-        resolve(null);
+        resolve(memoryCaptures.get(sessionId) || null);
       }
     });
   } catch {
-    return null;
+    return memoryCaptures.get(sessionId) || null;
   }
 }
 

@@ -955,16 +955,16 @@ export default function LiveCapture() {
 
         {/* Video Wrapper (Center Cropped 4:3 Aspect Ratio) */}
         <div 
-          className={`w-full max-w-3xl aspect-[4/3] rounded-2xl sm:rounded-3xl overflow-hidden bg-black/90 relative shadow-2xl border border-white/10 flex ${
+          className={`w-full max-w-3xl max-h-full aspect-[4/3] rounded-2xl sm:rounded-3xl overflow-hidden bg-black/90 relative shadow-2xl border border-white/10 flex ${
             mode === 'ldr' ? 'flex-col sm:flex-row' : 'flex-col'
           }`}
-          style={{ filter: activeFilter.css }}
         >
           {/* Simulated Canvas (shown if camera blocked) */}
           <canvas
             ref={animCanvasRef}
             width={640}
             height={480}
+            style={{ filter: activeFilter.css }}
             className={`w-full h-full object-cover ${isSimulatedCam ? 'block' : 'hidden'}`}
           />
 
@@ -975,6 +975,7 @@ export default function LiveCapture() {
               autoPlay
               playsInline
               muted
+              style={{ filter: activeFilter.css }}
               className={`w-full h-full object-cover transform transition-transform ${facingMode === 'user' ? 'scale-x-[-1]' : 'scale-x-100'}`}
             />
             <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-full text-[11px] font-semibold flex items-center gap-1.5 z-10">
@@ -1063,31 +1064,45 @@ export default function LiveCapture() {
           </div>
 
           {/* Viewfinder Grid (Rule of Thirds + Corner Brackets + Center Target) */}
-          {showGrid && (
+          {showGrid && mode === 'solo' && (
             <div className="absolute inset-0 pointer-events-none z-15">
-              {/* Symmetrical 3x3 Rule-of-Thirds Grid */}
-              <div className="w-full h-full grid grid-cols-3 grid-rows-3">
-                <div className="border-r border-b border-white/25" />
-                <div className="border-r border-b border-white/25" />
-                <div className="border-b border-white/25" />
-                <div className="border-r border-b border-white/25" />
-                <div className="border-r border-b border-white/25 flex items-center justify-center">
-                  {/* Center Target Mark */}
-                  <div className="w-7 h-7 rounded-full border border-white/40 flex items-center justify-center">
-                    <div className="w-1.5 h-1.5 rounded-full bg-white/70" />
-                  </div>
-                </div>
-                <div className="border-b border-white/25" />
-                <div className="border-r border-white/25" />
-                <div className="border-r border-white/25" />
-                <div />
+              {/* Horizontal rule-of-thirds lines */}
+              <div className="absolute left-0 right-0 top-1/3 border-b border-white/25" />
+              <div className="absolute left-0 right-0 top-2/3 border-b border-white/25" />
+              {/* Vertical rule-of-thirds lines */}
+              <div className="absolute top-0 bottom-0 left-1/3 border-r border-white/25" />
+              <div className="absolute top-0 bottom-0 left-2/3 border-r border-white/25" />
+              {/* Center Target Mark */}
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 rounded-full border border-white/40 flex items-center justify-center">
+                <div className="w-1.5 h-1.5 rounded-full bg-white/80" />
               </div>
-
               {/* Viewfinder Corner Framing Brackets */}
-              <div className="absolute top-2.5 left-2.5 w-4 h-4 border-t-2 border-l-2 border-white/60 rounded-tl-xs pointer-events-none" />
-              <div className="absolute top-2.5 right-2.5 w-4 h-4 border-t-2 border-r-2 border-white/60 rounded-tr-xs pointer-events-none" />
-              <div className="absolute bottom-2.5 left-2.5 w-4 h-4 border-b-2 border-l-2 border-white/60 rounded-bl-xs pointer-events-none" />
-              <div className="absolute bottom-2.5 right-2.5 w-4 h-4 border-b-2 border-r-2 border-white/60 rounded-br-xs pointer-events-none" />
+              <div className="absolute top-3 left-3 w-5 h-5 border-t-2 border-l-2 border-white/70 rounded-tl-sm pointer-events-none" />
+              <div className="absolute top-3 right-3 w-5 h-5 border-t-2 border-r-2 border-white/70 rounded-tr-sm pointer-events-none" />
+              <div className="absolute bottom-3 left-3 w-5 h-5 border-b-2 border-l-2 border-white/70 rounded-bl-sm pointer-events-none" />
+              <div className="absolute bottom-3 right-3 w-5 h-5 border-b-2 border-r-2 border-white/70 rounded-br-sm pointer-events-none" />
+            </div>
+          )}
+
+          {/* Viewfinder Grid for LDR Mode: Each camera has its own centered framing */}
+          {showGrid && mode === 'ldr' && (
+            <div className="absolute inset-0 pointer-events-none z-15 flex flex-col sm:flex-row">
+              {/* Left feed guides */}
+              <div className="flex-1 relative h-full">
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-7 h-7 rounded-full border border-white/35 flex items-center justify-center">
+                  <div className="w-1 h-1 rounded-full bg-white/60" />
+                </div>
+                <div className="absolute top-2.5 left-2.5 w-4 h-4 border-t-2 border-l-2 border-white/50 rounded-tl-xs" />
+                <div className="absolute bottom-2.5 left-2.5 w-4 h-4 border-b-2 border-l-2 border-white/50 rounded-bl-xs" />
+              </div>
+              {/* Right feed guides */}
+              <div className="flex-1 relative h-full">
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-7 h-7 rounded-full border border-white/35 flex items-center justify-center">
+                  <div className="w-1 h-1 rounded-full bg-white/60" />
+                </div>
+                <div className="absolute top-2.5 right-2.5 w-4 h-4 border-t-2 border-r-2 border-white/50 rounded-tr-xs" />
+                <div className="absolute bottom-2.5 right-2.5 w-4 h-4 border-b-2 border-r-2 border-white/50 rounded-br-xs" />
+              </div>
             </div>
           )}
         </div>
@@ -1560,7 +1575,7 @@ export default function LiveCapture() {
                               <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">
                                 Pasang ke Frame:
                               </span>
-                              <div className="grid grid-cols-3 gap-1">
+                              <div className={`grid gap-1 ${totalShots === 4 ? 'grid-cols-4' : 'grid-cols-3'}`}>
                                 {Array.from({ length: totalShots }).map((_, slotIdx) => (
                                   <button
                                     key={slotIdx}

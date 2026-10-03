@@ -311,13 +311,13 @@ export default function BoothHome() {
                   </div>
                   <div>
                     <p className="font-bold text-xs text-gray-900 flex items-center justify-center gap-1">
-                      <span>4R (4 Foto)</span>
+                      <span>Grid 4</span>
                     </p>
                     <p className="text-[10px] text-gray-500 mt-0.5">2 strip × 2 foto</p>
                   </div>
                 </button>
 
-                {/* 4R 6-Cut */}
+                {/* Grid 6 */}
                 <button
                   type="button"
                   onClick={() => setLayout('4r_6cut')}
@@ -345,7 +345,7 @@ export default function BoothHome() {
                   </div>
                   <div>
                     <p className="font-bold text-xs text-gray-900 flex items-center justify-center gap-1">
-                      <span>4R (6 Foto)</span>
+                      <span>Grid 6</span>
                     </p>
                     <p className="text-[10px] text-gray-500 mt-0.5">2 strip × 3 foto</p>
                   </div>

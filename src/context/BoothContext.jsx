@@ -317,7 +317,7 @@ export function BoothProvider({ children }) {
           const parsed = JSON.parse(saved);
           if (Array.isArray(parsed) && parsed.length > 0) {
             const now = Date.now();
-            const valid = parsed.filter(p => p && !p.id?.startsWith('sample_') && !p.dataUrl?.includes('images.unsplash.com') && (!p.expiresAt || new Date(p.expiresAt).getTime() > now));
+            const valid = parsed.filter(p => p && !p.id?.startsWith('sample_') && !p.dataUrl?.includes('images.unsplash.com') && p.dataUrl && p.dataUrl.length > 500 && (!p.expiresAt || new Date(p.expiresAt).getTime() > now));
             return valid;
           }
         }
@@ -335,7 +335,7 @@ export function BoothProvider({ children }) {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          const validCaptured = parsed.filter(p => p && !p.id?.startsWith('sample_') && !p.dataUrl?.includes('images.unsplash.com'));
+          const validCaptured = parsed.filter(p => p && !p.id?.startsWith('sample_') && !p.dataUrl?.includes('images.unsplash.com') && p.dataUrl && p.dataUrl.length > 500);
           return validCaptured;
         }
       }
@@ -487,9 +487,9 @@ export function BoothProvider({ children }) {
       // 1. Robust save to IndexedDB (No 5MB limit!)
       persistAlbum(currentSessionId, updated);
 
-      // 2. Safe lightweight fallback to localStorage
+      // 2. Safe lightweight mirror to localStorage
       try {
-        const light = updated.slice(0, 8).map(p => ({
+        const light = updated.slice(0, 6).map(p => ({
           id: p.id,
           sessionId: p.sessionId,
           capturedAt: p.capturedAt,
@@ -497,12 +497,13 @@ export function BoothProvider({ children }) {
           dateStamp: p.dateStamp,
           createdAt: p.createdAt,
           expiresAt: p.expiresAt,
-          dataUrl: p.dataUrl ? (p.dataUrl.length > 200000 ? p.dataUrl.slice(0, 1000) : p.dataUrl) : null
+          dataUrl: p.dataUrl,
+          gifUrl: p.gifUrl || null
         }));
         localStorage.setItem(`snape_album_${currentSessionId}`, JSON.stringify(light));
         localStorage.setItem('snape_session_album', JSON.stringify(light));
       } catch {
-        // Quota error safe to ignore as IndexedDB has the full resolution data
+        // Quota error is safely handled because IndexedDB stores full resolution without quota limits
       }
       return updated;
     });

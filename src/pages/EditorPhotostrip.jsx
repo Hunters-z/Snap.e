@@ -960,7 +960,7 @@ export default function EditorPhotostrip() {
         onClick={() => setActivePhotoIdx(idx)}
         onPointerDown={(e) => handlePhotoPointerDown(e, idx)}
         onWheel={(e) => handleSlotWheel(e, idx)}
-        className={`flex-1 ${slotAspectClass} bg-gray-200 rounded-xs overflow-hidden relative group border-2 transition-all select-none cursor-grab active:cursor-grabbing touch-none ${
+        className={`w-full ${slotAspectClass} flex-none bg-gray-200 rounded-xs overflow-hidden relative group border-2 transition-all select-none cursor-grab active:cursor-grabbing touch-none ${
           isActive ? 'border-red-500 shadow-md ring-2 ring-red-500/40' : 'border-transparent hover:border-gray-400/50'
         }`}
         title={`Foto #${idx + 1}: Tahan & geser untuk atur posisi, scroll atau tombol untuk zoom`}
@@ -1280,19 +1280,23 @@ export default function EditorPhotostrip() {
 
           <div className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-gray-100 space-y-6">
             
-            {/* Section 0: TEMPORARY ALBUM & PHOTO SELECTION */}
+            {/* Section 0: TEMPORARY ALBUM & PHOTO SELECTION - SIMPLE & CLEAN UI */}
             {activeTab === 'album' && (
-              <div className="space-y-4">
-                <div className="flex items-start justify-between gap-2 border-b border-gray-100 pb-3">
-                  <div>
+              <div className="space-y-3.5">
+                {/* Header & Quick Action */}
+                <div className="flex items-center justify-between gap-2 border-b border-gray-100 pb-2.5">
+                  <div className="flex items-center gap-2">
                     <h3 className="font-bold text-sm text-gray-900 flex items-center gap-1.5">
                       <ImageIcon size={15} className="text-red-600" />
-                      Album Foto & Gambar Gerak Sesi
+                      <span>Album Sesi</span>
                     </h3>
-                    <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1">
-                      <Cloud size={12} className="text-emerald-500 shrink-0" />
-                      <span>Tersimpan di Cloud selama 7 hari ({sessionAlbum?.length || 0} media).</span>
-                    </p>
+                    <span className="text-[11px] font-bold bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full">
+                      {sessionAlbum?.length || 0}
+                    </span>
+                    <span className="hidden sm:inline-flex items-center gap-1 text-[10px] text-emerald-600 font-semibold bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/60">
+                      <Cloud size={11} />
+                      Cloud 7 Hari
+                    </span>
                   </div>
 
                   {sessionTimeRemaining <= 0 ? (
@@ -1301,7 +1305,7 @@ export default function EditorPhotostrip() {
                       className="flex items-center gap-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold rounded-lg shadow-xs transition-colors shrink-0"
                     >
                       <CreditCard size={13} />
-                      <span>Beli Sesi Baru (Bayar)</span>
+                      <span>Beli Sesi Baru</span>
                     </button>
                   ) : (
                     <button
@@ -1316,7 +1320,7 @@ export default function EditorPhotostrip() {
                 </div>
 
                 {/* Media Filter Tabs */}
-                <div className="flex items-center gap-1.5 bg-gray-100 p-1 rounded-xl text-xs">
+                <div className="flex items-center gap-1 bg-gray-100/90 p-1 rounded-xl text-xs">
                   <button
                     onClick={() => setEditorAlbumFilter('all')}
                     className={`flex-1 py-1 rounded-lg text-[11px] font-bold transition-colors ${
@@ -1340,159 +1344,149 @@ export default function EditorPhotostrip() {
                     }`}
                   >
                     <Sparkles size={11} />
-                    <span>Gambar Gerak ({sessionAlbum?.filter(i => i.gifUrl).length || 0})</span>
+                    <span>Gerak ({sessionAlbum?.filter(i => i.gifUrl).length || 0})</span>
                   </button>
                 </div>
 
-                <div className="space-y-3 max-h-[380px] overflow-y-auto pr-1">
+                {/* Simple & Clean Photo Cards Grid */}
+                <div className="max-h-[420px] overflow-y-auto pr-1">
                   {sessionAlbum?.length === 0 ? (
-                    <div className="text-center py-8 text-gray-400 space-y-2">
-                      <Camera size={28} className="mx-auto text-gray-300" />
-                      <p className="text-xs font-semibold">Belum ada foto yang tersimpan di album sesi.</p>
+                    <div className="text-center py-10 text-gray-400 space-y-2.5">
+                      <Camera size={32} className="mx-auto text-gray-300" />
+                      <p className="text-xs font-semibold text-gray-600">Belum ada foto dalam album sesi.</p>
                       {sessionTimeRemaining > 0 ? (
                         <button
                           onClick={() => navigate('/capture')}
-                          className="px-3 py-1.5 bg-red-600 text-white rounded-lg text-xs font-bold"
+                          className="px-3.5 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded-xl text-xs font-bold transition-colors"
                         >
                           Buka Kamera Sekarang
                         </button>
                       ) : (
                         <button
                           onClick={() => setShowPaymentModalInEditor(true)}
-                          className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold"
+                          className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-colors"
                         >
-                          Beli Sesi Baru untuk Berfoto
+                          Beli Sesi Baru
                         </button>
                       )}
                     </div>
                   ) : (
-                    sessionAlbum
-                      .filter(item => {
-                        if (editorAlbumFilter === 'photo') return Boolean(item.dataUrl);
-                        if (editorAlbumFilter === 'gif') return Boolean(item.gifUrl);
-                        return true;
-                      })
-                      .map((item, idx) => {
-                        const assignedSlot = photos.findIndex(p => p.dataUrl === item.dataUrl);
-                        const isPlayingGif = previewingGifId === item.id;
-                        const hasGif = Boolean(item.gifUrl);
+                    <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
+                      {sessionAlbum
+                        .filter(item => {
+                          if (editorAlbumFilter === 'photo') return Boolean(item.dataUrl);
+                          if (editorAlbumFilter === 'gif') return Boolean(item.gifUrl);
+                          return true;
+                        })
+                        .map((item, idx) => {
+                          const assignedSlot = photos.findIndex(p => p.dataUrl === item.dataUrl);
+                          const isPlayingGif = previewingGifId === item.id;
+                          const hasGif = Boolean(item.gifUrl);
 
-                        return (
-                          <div
-                            key={item.id || idx}
-                            className={`p-2.5 rounded-xl border transition-all flex gap-3 ${
-                              assignedSlot !== -1
-                                ? 'border-red-500 bg-red-50/30 ring-1 ring-red-500/20'
-                                : 'border-gray-200 hover:border-gray-300 bg-gray-50/50'
-                            }`}
-                          >
-                            {/* Thumbnail (Still or Animated GIF) */}
-                            <div 
-                              onClick={() => {
-                                if (hasGif) {
-                                  setPreviewingGifId(isPlayingGif ? null : item.id);
-                                }
-                              }}
-                              className={`w-20 h-24 rounded-lg overflow-hidden relative shrink-0 bg-gray-200 border border-gray-300 ${hasGif ? 'cursor-pointer' : ''}`}
-                              title={hasGif ? "Klik untuk memutar / menjeda gambar gerak (GIF)" : ""}
+                          return (
+                            <div
+                              key={item.id || idx}
+                              className={`bg-white rounded-xl border overflow-hidden shadow-xs hover:shadow-md transition-all flex flex-col group ${
+                                assignedSlot !== -1 ? 'border-red-400 ring-1 ring-red-400/30' : 'border-gray-200'
+                              }`}
                             >
-                              <img 
-                                src={isPlayingGif && item.gifUrl ? item.gifUrl : item.dataUrl} 
-                                alt="Album Thumbnail" 
-                                className="w-full h-full object-cover" 
-                              />
-                              {hasGif && (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setPreviewingGifId(isPlayingGif ? null : item.id);
-                                  }}
-                                  className={`absolute bottom-1 left-1 text-[8px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5 transition-colors ${
-                                    isPlayingGif ? 'bg-purple-600 text-white animate-pulse' : 'bg-black/70 text-purple-300 hover:bg-purple-600 hover:text-white'
-                                  }`}
-                                >
-                                  <Play size={8} className={isPlayingGif ? 'fill-white' : ''} />
-                                  <span>{isPlayingGif ? 'Gerak' : 'GIF'}</span>
-                                </button>
-                              )}
-                            </div>
+                              {/* 4:3 Thumbnail Viewport */}
+                              <div className="relative aspect-[4/3] bg-gray-100 overflow-hidden">
+                                <img
+                                  src={isPlayingGif && item.gifUrl ? item.gifUrl : item.dataUrl}
+                                  alt={`Foto ${idx + 1}`}
+                                  className="w-full h-full object-cover select-none"
+                                />
 
-                            {/* Info and Slot Selection */}
-                            <div className="flex-1 flex flex-col justify-between min-w-0">
-                              <div className="flex items-start justify-between gap-1">
-                                <div>
-                                  <span className="text-[10px] font-mono text-gray-400">
-                                    {item.capturedAt || `Foto #${idx + 1}`}
+                                {/* GIF Toggle Pill */}
+                                {hasGif && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setPreviewingGifId(isPlayingGif ? null : item.id)}
+                                    className={`absolute top-1.5 left-1.5 text-[8px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-0.5 z-10 transition-colors shadow-xs ${
+                                      isPlayingGif
+                                        ? 'bg-purple-600 text-white animate-pulse'
+                                        : 'bg-black/60 backdrop-blur-xs text-purple-200 hover:bg-purple-600 hover:text-white'
+                                    }`}
+                                    title="Putar atau jeda gambar gerak"
+                                  >
+                                    <Play size={7} className={isPlayingGif ? 'fill-white' : ''} />
+                                    <span>{isPlayingGif ? 'Gerak' : 'GIF'}</span>
+                                  </button>
+                                )}
+
+                                {/* Slot indicator badge if assigned */}
+                                {assignedSlot !== -1 && (
+                                  <span className="absolute top-1.5 right-1.5 bg-red-600 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full z-10 shadow-xs">
+                                    Slot {assignedSlot + 1}
                                   </span>
-                                  <p className="text-xs font-bold text-gray-800 truncate">
-                                    {item.filterName || 'Analog Real'}
-                                  </p>
-                                </div>
+                                )}
 
-                                <div className="flex items-center gap-1 shrink-0">
-                                  {/* Download Still */}
+                                {/* Action icons on corner */}
+                                <div className="absolute bottom-1.5 right-1.5 flex items-center gap-1 z-10">
                                   <a
                                     href={item.dataUrl}
-                                    download={`snap_photo_${item.id || idx + 1}.jpg`}
-                                    className="p-1 text-gray-400 hover:text-gray-700 hover:bg-gray-200/60 rounded"
-                                    title="Unduh Foto Diam (JPG)"
+                                    download={`snap_${item.id || idx + 1}.jpg`}
+                                    className="w-5 h-5 rounded-full bg-black/50 hover:bg-black/80 text-white flex items-center justify-center transition-colors"
+                                    title="Unduh foto (JPG)"
                                   >
-                                    <Download size={12} />
+                                    <Download size={9} />
                                   </a>
-                                  {/* Download GIF */}
                                   {item.gifUrl && (
                                     <a
                                       href={item.gifUrl}
                                       download={`snap_motion_${item.id || idx + 1}.gif`}
-                                      className="px-1.5 py-0.5 text-purple-600 hover:bg-purple-100 rounded text-[9px] font-bold"
-                                      title="Unduh Gambar Gerak (GIF)"
+                                      className="h-5 px-1 rounded-full bg-purple-600/80 hover:bg-purple-600 text-white flex items-center justify-center text-[7.5px] font-bold transition-colors"
+                                      title="Unduh GIF"
                                     >
                                       GIF
                                     </a>
                                   )}
-                                  {assignedSlot !== -1 && (
-                                    <span className="bg-red-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0">
-                                      Slot #{assignedSlot + 1}
-                                    </span>
-                                  )}
                                   <button
                                     type="button"
                                     onClick={() => deletePhotoFromAlbum(item.id)}
-                                    className="text-gray-400 hover:text-red-500 p-0.5"
-                                    title="Hapus foto dari album"
+                                    className="w-5 h-5 rounded-full bg-black/50 hover:bg-red-600 text-white flex items-center justify-center transition-colors"
+                                    title="Hapus dari album"
                                   >
-                                    <Trash2 size={12} />
+                                    <Trash2 size={9} />
                                   </button>
                                 </div>
+
+                                <span className="absolute bottom-1.5 left-1.5 text-[8px] font-mono font-medium text-white bg-black/50 backdrop-blur-xs px-1 rounded">
+                                  {item.capturedAt || `#${idx + 1}`}
+                                </span>
                               </div>
 
-                              {/* Slot buttons to place into frame */}
-                              <div>
-                                <span className="text-[9px] font-bold text-gray-500 uppercase tracking-wider block mb-1">
-                                  Pasang ke Frame:
+                              {/* Clean Placement Bar: Slot Buttons */}
+                              <div className="p-2 bg-gray-50/80 border-t border-gray-100 flex items-center justify-between gap-1">
+                                <span className="text-[9px] font-bold text-gray-500 uppercase tracking-tight">
+                                  Pasang:
                                 </span>
-                                <div className="flex flex-wrap gap-1">
-                                  {Array.from({ length: totalSlots }).map((_, sIdx) => (
-                                    <button
-                                      key={sIdx}
-                                      onClick={() => handleAssignPhotoToSlot(item, sIdx)}
-                                      className={`flex-1 min-w-[50px] py-1 text-[10px] font-bold rounded border transition-colors ${
-                                        assignedSlot === sIdx
-                                          ? 'bg-red-600 text-white border-red-600 shadow-xs'
-                                          : 'bg-white hover:bg-gray-100 text-gray-700 border-gray-300'
-                                      }`}
-                                    >
-                                      Slot {sIdx + 1}
-                                    </button>
-                                  ))}
+                                <div className="flex items-center gap-1">
+                                  {Array.from({ length: totalSlots }).map((_, sIdx) => {
+                                    const isCurrentSlot = assignedSlot === sIdx;
+                                    return (
+                                      <button
+                                        key={sIdx}
+                                        type="button"
+                                        onClick={() => handleAssignPhotoToSlot(item, sIdx)}
+                                        className={`w-6 h-6 rounded-lg font-mono font-bold text-[10px] flex items-center justify-center transition-all ${
+                                          isCurrentSlot
+                                            ? 'bg-red-600 text-white shadow-xs ring-1 ring-red-400'
+                                            : 'bg-white hover:bg-gray-200 text-gray-700 border border-gray-200'
+                                        }`}
+                                        title={`Pasang ke Slot #${sIdx + 1}`}
+                                      >
+                                        {sIdx + 1}
+                                      </button>
+                                    );
+                                  })}
                                 </div>
                               </div>
-
                             </div>
-                          </div>
-                        );
-                      })
+                          );
+                        })}
+                    </div>
                   )}
                 </div>
               </div>
@@ -2024,7 +2018,7 @@ export default function EditorPhotostrip() {
           
           {/* Quick Format & Controls Bar */}
           <div className="w-full max-w-[500px] bg-white border border-gray-200/90 rounded-2xl p-2 sm:p-2.5 shadow-sm flex flex-wrap items-center justify-between gap-2 text-xs">
-            {/* Format Selection: 4R 4-Cut & 4R 6-Cut */}
+            {/* Format Selection: Grid 4 & Grid 6 */}
             <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl font-bold">
               <button
                 type="button"
@@ -2034,9 +2028,9 @@ export default function EditorPhotostrip() {
                     ? 'bg-white text-gray-900 shadow-xs ring-1 ring-black/5 font-extrabold'
                     : 'text-gray-500 hover:text-gray-900'
                 }`}
-                title="4R 4-Cut (2 Kolom × 2 Foto)"
+                title="Grid 4 (2 Kolom × 2 Foto)"
               >
-                <span>4R 4-Cut</span>
+                <span>Grid 4</span>
               </button>
 
               <button
@@ -2047,9 +2041,9 @@ export default function EditorPhotostrip() {
                     ? 'bg-white text-gray-900 shadow-xs ring-1 ring-black/5 font-extrabold'
                     : 'text-gray-500 hover:text-gray-900'
                 }`}
-                title="4R 6-Cut (2 Kolom × 3 Foto)"
+                title="Grid 6 (2 Kolom × 3 Foto)"
               >
-                <span>4R 6-Cut</span>
+                <span>Grid 6</span>
               </button>
             </div>
 
@@ -2157,7 +2151,7 @@ export default function EditorPhotostrip() {
               <span>{activeFrame.overlayType === 'film' ? '► KODAK 400 35MM' : 'SNAP.E MEMORIES'}</span>
               <div className="flex items-center gap-1.5 pointer-events-auto">
                 <span className="text-[7px] bg-red-100 text-red-700 px-1.5 py-0.2 rounded font-bold whitespace-nowrap">
-                  {layout === '4r_6cut' ? '4R (6 Foto)' : '4R (4 Foto)'}
+                  {layout === '4r_6cut' ? 'Grid 6' : 'Grid 4'}
                 </span>
                 <button
                   type="button"
@@ -2201,7 +2195,7 @@ export default function EditorPhotostrip() {
               <div className="relative flex gap-2 sm:gap-2.5 flex-1 min-h-0 items-stretch my-1">
                 {/* Left Strip */}
                 <div className="flex-1 flex flex-col justify-between min-h-0">
-                  <div className={`flex flex-col gap-1 sm:gap-1.5 flex-1 min-h-0 ${layout === '4r_6cut' ? 'justify-between' : 'justify-center gap-2.5 sm:gap-3'}`}>
+                  <div className={`flex flex-col flex-1 min-h-0 ${layout === '4r_6cut' ? 'justify-between gap-1 sm:gap-1.5' : 'justify-center gap-2.5 sm:gap-3.5'}`}>
                     {(layout === '4r_6cut' ? [0, 1, 2] : [0, 1]).map((idx) => renderPhotoSlot(idx))}
                   </div>
 
@@ -2225,7 +2219,7 @@ export default function EditorPhotostrip() {
 
                 {/* Right Strip */}
                 <div className="flex-1 flex flex-col justify-between min-h-0">
-                  <div className={`flex flex-col gap-1 sm:gap-1.5 flex-1 min-h-0 ${layout === '4r_6cut' ? 'justify-between' : 'justify-center gap-2.5 sm:gap-3'}`}>
+                  <div className={`flex flex-col flex-1 min-h-0 ${layout === '4r_6cut' ? 'justify-between gap-1 sm:gap-1.5' : 'justify-center gap-2.5 sm:gap-3.5'}`}>
                     {(layout === '4r_6cut' ? [3, 4, 5] : [2, 3]).map((idx) => renderPhotoSlot(idx))}
                   </div>
 
