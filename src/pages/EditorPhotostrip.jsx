@@ -60,8 +60,7 @@ export default function EditorPhotostrip() {
   const [showDate, setShowDate] = useState(true);
   const [textAlign, setTextAlign] = useState('center'); // 'left' | 'center' | 'right'
 
-  // Frame & Photo Orientation
-  const [photoOrientation, setPhotoOrientation] = useState('portrait'); // 'portrait' (3:4) | 'square' (1:1)
+  // Frame Layout settings
   const isSingleStrip = false;
   const totalSlots = layout === '4r_6cut' ? 6 : 4;
 
@@ -188,8 +187,8 @@ export default function EditorPhotostrip() {
         const deltaPercentX = (deltaPxX / (dragState.slotW || 200)) * 100;
         const deltaPercentY = (deltaPxY / (dragState.slotH || 150)) * 100;
 
-        const newX = Math.max(-80, Math.min(80, dragState.startOffsetX + deltaPercentX));
-        const newY = Math.max(-80, Math.min(80, dragState.startOffsetY + deltaPercentY));
+        const newX = Math.max(-100, Math.min(100, dragState.startOffsetX + deltaPercentX));
+        const newY = Math.max(-100, Math.min(100, dragState.startOffsetY + deltaPercentY));
 
         setPhotos(prev => {
           const next = [...prev];
@@ -306,9 +305,9 @@ export default function EditorPhotostrip() {
     handleZoomChange(slotIdx, curZoom + delta);
   };
 
-  // Zoom change
+  // Zoom change (0.6x to 3.0x for complete freedom in framing)
   const handleZoomChange = (slotIdx, val) => {
-    const clamped = Math.max(1.0, Math.min(3.0, parseFloat(Number(val).toFixed(2))));
+    const clamped = Math.max(0.6, Math.min(3.0, parseFloat(Number(val).toFixed(2))));
     setPhotos(prev => {
       const next = [...prev];
       if (next[slotIdx]) {
@@ -457,7 +456,6 @@ export default function EditorPhotostrip() {
 
     const cWidth = isStrip ? 600 : 1200;
     const cHeight = 1800;
-    const cutLineX = 600;
     const photoW = 510;
     const leftColX = 45;
     const rightColX = 645;
@@ -498,8 +496,8 @@ export default function EditorPhotostrip() {
         }
       }
     } else if (is4R6Cut) {
-      // 4R Portrait (1200 x 1800): Left Strip (3 photos) and Right Strip (3 photos)
-      const photoH = 385;
+      // 4R Portrait (1200 x 1800): Left Strip (3 photos) and Right Strip (3 photos) - 4:3 original aspect ratio
+      const photoH = 382.5;
       const topPadding = 75;
       const spacing = 25;
 
@@ -524,10 +522,10 @@ export default function EditorPhotostrip() {
         });
       }
     } else {
-      // 4R Portrait (1200 x 1800): Left Strip (2 photos) and Right Strip (2 photos)
-      const photoH = 500;
-      const topPadding = 90;
-      const spacing = 40;
+      // 4R Portrait (1200 x 1800): Left Strip (2 photos) and Right Strip (2 photos) - 4:3 original aspect ratio
+      const photoH = 382.5;
+      const topPadding = 180;
+      const spacing = 50;
 
       // Left 2 photos
       for (let i = 0; i < 2; i++) {
@@ -665,29 +663,6 @@ export default function EditorPhotostrip() {
       });
     }
 
-    // Draw Dotted Center Cut Line for 4R portrait format (not for single strip)
-    if (!isStrip) {
-      ctx.save();
-      ctx.strokeStyle = activeFrame.text === '#FFFFFF' ? 'rgba(255,255,255,0.45)' : 'rgba(239,68,68,0.7)';
-      ctx.lineWidth = 4;
-      ctx.setLineDash([12, 12]);
-      ctx.beginPath();
-      ctx.moveTo(cutLineX, 20);
-      ctx.lineTo(cutLineX, canvas.height - 20);
-      ctx.stroke();
-
-      // Scissors symbol
-      ctx.setLineDash([]);
-      ctx.font = "bold 32px sans-serif";
-      ctx.fillStyle = activeFrame.text === '#FFFFFF' ? '#FFFFFF' : '#EF4444';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('✂', cutLineX, 40);
-      ctx.fillText('✂', cutLineX, canvas.height / 2);
-      ctx.fillText('✂', cutLineX, canvas.height - 40);
-      ctx.restore();
-    }
-
     // Draw Footer Typography
     const dateStr = new Date().toLocaleDateString('id-ID', {
       day: 'numeric',
@@ -768,7 +743,6 @@ export default function EditorPhotostrip() {
         ctx.fillStyle = activeFrame.bg;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        const cutX = 160;
         const col1X = 12;
         const col2X = 172;
         const itemW = 136;
@@ -883,16 +857,6 @@ export default function EditorPhotostrip() {
             ctx.restore();
           }
 
-          // Dotted Center Cut Line
-          ctx.save();
-          ctx.strokeStyle = activeFrame.text === '#FFFFFF' ? 'rgba(255,255,255,0.45)' : 'rgba(239,68,68,0.7)';
-          ctx.lineWidth = 2;
-          ctx.setLineDash([6, 6]);
-          ctx.beginPath();
-          ctx.moveTo(cutX, 8);
-          ctx.lineTo(cutX, gifHeight - 8);
-          ctx.stroke();
-          ctx.restore();
         }
 
         // Mini footers (centers at 80 and 240 for 4R, or 80 for strip)
@@ -978,7 +942,8 @@ export default function EditorPhotostrip() {
     const p = photos[idx];
     const isActive = activePhotoIdx === idx;
     const isAdjusted = (p?.zoom && p.zoom !== 1.0) || (p?.offsetX && p.offsetX !== 0) || (p?.offsetY && p.offsetY !== 0);
-    const slotAspectClass = photoOrientation === 'portrait' ? 'aspect-[3/4]' : photoOrientation === 'square' ? 'aspect-square' : 'aspect-[4/3]';
+    // Maintain 4:3 original photo aspect ratio so photos fit naturally and can be freely framed
+    const slotAspectClass = 'aspect-[4/3]';
 
     return (
       <div
@@ -993,7 +958,7 @@ export default function EditorPhotostrip() {
         title={`Foto #${idx + 1}: Tahan & geser untuk atur posisi, scroll atau tombol untuk zoom`}
       >
         {p?.dataUrl ? (
-          <div className="w-full h-full relative overflow-hidden pointer-events-none">
+          <div className="w-full h-full relative overflow-hidden pointer-events-none flex items-center justify-center bg-black/5">
             <img
               src={p?.dataUrl}
               alt={`Photo ${idx + 1}`}
@@ -1019,7 +984,7 @@ export default function EditorPhotostrip() {
                     e.stopPropagation();
                     handleStepZoom(idx, -0.1);
                   }}
-                  disabled={(p?.zoom || 1.0) <= 1.0}
+                  disabled={(p?.zoom || 1.0) <= 0.6}
                   className="w-4 h-4 rounded hover:bg-white/25 flex items-center justify-center font-bold disabled:opacity-30 transition-colors text-[10px]"
                   title="Perkecil zoom"
                 >
@@ -1190,25 +1155,49 @@ export default function EditorPhotostrip() {
     <div className="min-h-screen flex flex-col bg-[#F8F9FA] text-gray-900 font-sans">
       <Topbar />
 
-      {/* 15-Minute Session Banner with Retake / Add Photo CTA */}
-      <div className="bg-gray-900 text-white px-4 py-2 border-b border-gray-800">
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-3 text-xs">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            <span className="font-semibold text-gray-300">Sesi Bilik Foto Berjalan</span>
-            <div className="flex items-center gap-1.5 font-mono font-bold bg-white/10 px-2.5 py-0.5 rounded-full text-amber-300 border border-white/10">
-              <Clock size={12} />
-              <span>Sisa: {formatSessionTime(sessionTimeRemaining)}</span>
+      {/* 15-Minute Session Banner */}
+      <div className={`px-4 py-2 border-b text-xs transition-colors ${
+        sessionTimeRemaining <= 0
+          ? 'bg-amber-950 text-amber-100 border-amber-800/60'
+          : 'bg-gray-900 text-white border-gray-800'
+      }`}>
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
+          {sessionTimeRemaining <= 0 ? (
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-amber-400"></span>
+              <span className="font-bold text-amber-300">Waktu Sesi Selesai (15 Menit)</span>
+              <span className="bg-amber-500/20 text-amber-200 border border-amber-500/30 px-2 py-0.5 rounded-full text-[11px] font-medium hidden sm:inline-block">
+                Hanya Fitur Album Sementara yang Tersedia (Bertahan 7 Hari)
+              </span>
             </div>
-          </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span className="font-semibold text-gray-300">Sesi Bilik Foto Berjalan</span>
+              <div className="flex items-center gap-1.5 font-mono font-bold bg-white/10 px-2.5 py-0.5 rounded-full text-amber-300 border border-white/10">
+                <Clock size={12} />
+                <span>Sisa: {formatSessionTime(sessionTimeRemaining)}</span>
+              </div>
+            </div>
+          )}
 
-          <button
-            onClick={() => navigate('/capture')}
-            className="flex items-center gap-1.5 px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold text-xs transition-colors shadow-xs"
-          >
-            <Camera size={13} />
-            <span>📸 Ambil Foto Lagi / Retake Pose</span>
-          </button>
+          {sessionTimeRemaining <= 0 ? (
+            <button
+              onClick={() => setActiveTab('album')}
+              className="flex items-center gap-1.5 px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold text-xs transition-colors shadow-xs"
+            >
+              <ImageIcon size={13} />
+              <span>Buka Album Sementara (7 Hari)</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => navigate('/capture')}
+              className="flex items-center gap-1.5 px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold text-xs transition-colors shadow-xs"
+            >
+              <Camera size={13} />
+              <span>📸 Ambil Foto Lagi / Retake Pose</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -1964,20 +1953,6 @@ export default function EditorPhotostrip() {
                 <RotateCcw size={12} className="text-gray-500" />
                 <span>Reset Semua Foto</span>
               </button>
-
-              {/* Photo Slot Orientation Toggle */}
-              <button
-                type="button"
-                onClick={() => setPhotoOrientation(prev => prev === 'portrait' ? 'square' : 'portrait')}
-                className={`px-2.5 py-1.5 rounded-lg font-bold flex items-center gap-1 transition-colors border ${
-                  photoOrientation === 'portrait'
-                    ? 'bg-gray-900 text-white border-gray-900'
-                    : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-100'
-                }`}
-                title="Ganti rasio kotak foto (3:4 atau 1:1)"
-              >
-                <span>Rasio: {photoOrientation === 'portrait' ? '3:4' : '1:1'}</span>
-              </button>
             </div>
           </div>
 
@@ -2112,12 +2087,6 @@ export default function EditorPhotostrip() {
             ) : (
               /* Dual Strip 4R Portrait (2 Kolom Berdampingan) */
               <div className="relative flex gap-2 sm:gap-2.5 flex-1 min-h-0 items-stretch my-1">
-                {/* Dotted Center Cut Line with Scissors */}
-                <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 border-r-2 border-dashed border-red-500/70 z-10 flex flex-col justify-between py-1 pointer-events-none">
-                  <span className="text-[9px] text-red-600 bg-white/90 px-0.5 rounded -translate-x-1/2 shadow-xs">✂</span>
-                  <span className="text-[9px] text-red-600 bg-white/90 px-0.5 rounded -translate-x-1/2 shadow-xs">✂</span>
-                </div>
-
                 {/* Left Strip */}
                 <div className="flex-1 flex flex-col justify-between min-h-0">
                   <div className={`flex flex-col gap-1 sm:gap-1.5 flex-1 min-h-0 ${layout === '4r_6cut' ? 'justify-between' : 'justify-center gap-2.5 sm:gap-3'}`}>

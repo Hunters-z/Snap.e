@@ -638,6 +638,10 @@ export default function LiveCapture() {
    * Also captures Live Photo video clip and generates an Animated GIF!
    */
   const handleTriggerCapture = async (isRemoteInitiated = false) => {
+    if (sessionTimeRemaining <= 0) {
+      setShowAlbumModal(true);
+      return;
+    }
     if (isCapturing) return;
     setIsCapturing(true);
 
@@ -1123,71 +1127,102 @@ export default function LiveCapture() {
 
       {/* Shutter & Controls Section */}
       <div className="px-4 py-2.5 sm:py-3.5 shrink-0 bg-[#161619] border-t border-white/10 flex items-center justify-between max-w-xl mx-auto w-full">
-        {/* Timer duration selector */}
-        <div className="flex flex-col items-center gap-1">
-          <div className="flex bg-white/10 rounded-full p-0.5">
-            <button
-              onClick={() => setTimerDuration(3)}
-              className={`px-2.5 py-1 rounded-full text-xs font-bold transition-colors ${
-                timerDuration === 3 ? 'bg-white text-black' : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              3s
-            </button>
-            <button
-              onClick={() => setTimerDuration(5)}
-              className={`px-2.5 py-1 rounded-full text-xs font-bold transition-colors ${
-                timerDuration === 5 ? 'bg-white text-black' : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              5s
-            </button>
+        {sessionTimeRemaining <= 0 ? (
+          <div className="flex-1 flex flex-col sm:flex-row items-center justify-between gap-3 py-1 text-center sm:text-left">
+            <div>
+              <p className="text-xs font-bold text-amber-300 flex items-center gap-1.5 justify-center sm:justify-start">
+                <Clock size={13} className="text-amber-400" />
+                <span>Waktu Sesi Telah Selesai (15 Menit)</span>
+              </p>
+              <p className="text-[11px] text-gray-400 mt-0.5">
+                Bilik kamera ditutup. Hanya fitur Album Sementara (7 hari) yang kini aktif.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowAlbumModal(true)}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 transition-colors shadow-md"
+              >
+                <Image size={14} />
+                <span>Buka Album ({sessionAlbum?.length || 0})</span>
+              </button>
+              <button
+                onClick={() => navigate('/editor')}
+                className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white font-bold text-xs rounded-xl transition-colors"
+              >
+                <span>Ke Editor</span>
+              </button>
+            </div>
           </div>
-          <span className="text-[9px] font-bold tracking-widest text-gray-400 uppercase">Jeda Shutter</span>
-        </div>
-
-        {/* Retake Button (if current slot already has a photo) */}
-        {capturedPhotos[activeSlotIndex] && (
-          <button
-            onClick={handleRetakeActiveSlot}
-            disabled={isCapturing}
-            className="flex flex-col items-center gap-1 text-gray-300 hover:text-white transition-colors"
-            title="Ambil Ulang Pose Ini"
-          >
-            <div className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center">
-              <RotateCcw size={16} />
+        ) : (
+          <>
+            {/* Timer duration selector */}
+            <div className="flex flex-col items-center gap-1">
+              <div className="flex bg-white/10 rounded-full p-0.5">
+                <button
+                  onClick={() => setTimerDuration(3)}
+                  className={`px-2.5 py-1 rounded-full text-xs font-bold transition-colors ${
+                    timerDuration === 3 ? 'bg-white text-black' : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  3s
+                </button>
+                <button
+                  onClick={() => setTimerDuration(5)}
+                  className={`px-2.5 py-1 rounded-full text-xs font-bold transition-colors ${
+                    timerDuration === 5 ? 'bg-white text-black' : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  5s
+                </button>
+              </div>
+              <span className="text-[9px] font-bold tracking-widest text-gray-400 uppercase">Jeda Shutter</span>
             </div>
-            <span className="text-[9px] font-bold uppercase tracking-wider">Ulangi #{activeSlotIndex + 1}</span>
-          </button>
+
+            {/* Retake Button (if current slot already has a photo) */}
+            {capturedPhotos[activeSlotIndex] && (
+              <button
+                onClick={handleRetakeActiveSlot}
+                disabled={isCapturing}
+                className="flex flex-col items-center gap-1 text-gray-300 hover:text-white transition-colors"
+                title="Ambil Ulang Pose Ini"
+              >
+                <div className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center">
+                  <RotateCcw size={16} />
+                </div>
+                <span className="text-[9px] font-bold uppercase tracking-wider">Ulangi #{activeSlotIndex + 1}</span>
+              </button>
+            )}
+
+            {/* Big Shutter Trigger Button (Timer ONLY starts here when tapped!) */}
+            <div className="relative flex items-center justify-center">
+              <div className="absolute inset-0 bg-red-600 rounded-full blur-md opacity-40 animate-pulse pointer-events-none"></div>
+              <button
+                onClick={handleTriggerCapture}
+                disabled={isCapturing}
+                className="w-18 h-18 sm:w-20 sm:h-20 rounded-full border-4 border-red-500/80 flex items-center justify-center relative z-10 transition-transform active:scale-95 disabled:opacity-50"
+                title={`Ambil Foto untuk Pose #${activeSlotIndex + 1}`}
+              >
+                <div className="w-14 h-14 sm:w-16 sm:h-16 bg-white rounded-full flex flex-col items-center justify-center text-red-600 shadow-inner">
+                  <Camera size={24} />
+                  <span className="text-[9px] font-bold text-gray-900 leading-none mt-0.5">#{activeSlotIndex + 1}</span>
+                </div>
+              </button>
+            </div>
+
+            {/* Next Slot or Jump to Editor */}
+            <div className="flex flex-col items-center gap-1">
+              <button
+                onClick={() => navigate('/editor')}
+                className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-gray-200 transition-colors"
+                title="Lanjut ke Editor Photostrip"
+              >
+                <ArrowRight size={18} />
+              </button>
+              <span className="text-[9px] font-bold tracking-widest text-gray-400 uppercase">Editor</span>
+            </div>
+          </>
         )}
-
-        {/* Big Shutter Trigger Button (Timer ONLY starts here when tapped!) */}
-        <div className="relative flex items-center justify-center">
-          <div className="absolute inset-0 bg-red-600 rounded-full blur-md opacity-40 animate-pulse pointer-events-none"></div>
-          <button
-            onClick={handleTriggerCapture}
-            disabled={isCapturing}
-            className="w-18 h-18 sm:w-20 sm:h-20 rounded-full border-4 border-red-500/80 flex items-center justify-center relative z-10 transition-transform active:scale-95 disabled:opacity-50"
-            title={`Ambil Foto untuk Pose #${activeSlotIndex + 1}`}
-          >
-            <div className="w-14 h-14 sm:w-16 sm:h-16 bg-white rounded-full flex flex-col items-center justify-center text-red-600 shadow-inner">
-              <Camera size={24} />
-              <span className="text-[9px] font-bold text-gray-900 leading-none mt-0.5">#{activeSlotIndex + 1}</span>
-            </div>
-          </button>
-        </div>
-
-        {/* Next Slot or Jump to Editor */}
-        <div className="flex flex-col items-center gap-1">
-          <button
-            onClick={() => navigate('/editor')}
-            className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-gray-200 transition-colors"
-            title="Lanjut ke Editor Photostrip"
-          >
-            <ArrowRight size={18} />
-          </button>
-          <span className="text-[9px] font-bold tracking-widest text-gray-400 uppercase">Editor</span>
-        </div>
       </div>
 
       {/* Filmstrip Bottom Thumbnails & Active Slot Selectors */}

@@ -301,10 +301,8 @@ export default function BoothHome() {
                       <div className="w-full h-7 bg-gray-200 rounded-xs mb-1"></div>
                       <div className="w-full h-7 bg-gray-200 rounded-xs"></div>
                     </div>
-                    {/* Dotted Center Cut Line */}
-                    <div className="w-0 border-r-2 border-dashed border-red-500 my-0.5 relative flex items-center justify-center">
-                      <span className="absolute text-[8px] text-red-500 font-bold bg-white px-0.5 rounded">✂</span>
-                    </div>
+                    {/* Center Divider */}
+                    <div className="w-0.5 bg-gray-200 my-0.5"></div>
                     {/* Right Strip (2 photos) */}
                     <div className="flex-1 flex flex-col justify-between pl-1">
                       <div className="w-full h-7 bg-gray-200 rounded-xs mb-1"></div>
@@ -336,10 +334,8 @@ export default function BoothHome() {
                       <div className="w-full h-4.5 bg-gray-200 rounded-xs mb-0.5"></div>
                       <div className="w-full h-4.5 bg-gray-200 rounded-xs"></div>
                     </div>
-                    {/* Dotted Center Cut Line */}
-                    <div className="w-0 border-r-2 border-dashed border-red-500 my-0.5 relative flex items-center justify-center">
-                      <span className="absolute text-[8px] text-red-500 font-bold bg-white px-0.5 rounded">✂</span>
-                    </div>
+                    {/* Center Divider */}
+                    <div className="w-0.5 bg-gray-200 my-0.5"></div>
                     {/* Right Strip (3 photos) */}
                     <div className="flex-1 flex flex-col justify-between pl-1">
                       <div className="w-full h-4.5 bg-gray-200 rounded-xs mb-0.5"></div>
