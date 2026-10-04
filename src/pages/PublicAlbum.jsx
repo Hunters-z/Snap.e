@@ -6,7 +6,6 @@ import {
   Check, 
   Play, 
   Pause, 
-  Camera, 
   Edit3, 
   Image as ImageIcon, 
   Film, 
@@ -16,12 +15,48 @@ import {
   ChevronRight, 
   X, 
   Cloud,
-  Maximize2
+  Maximize2,
+  RefreshCw
 } from 'lucide-react';
 import { useBooth } from '../context/BoothContext';
-import { getPersistedAlbum } from '../utils/persistentStorage';
+import { 
+  getPersistedAlbum, 
+  getPersistedCapturedPhotos, 
+  getAllPersistedAlbums 
+} from '../utils/persistentStorage';
 import { db } from '../firebase';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
+
+/**
+ * Standardize any photo object format into a consistent display structure
+ */
+function normalizePhoto(p, idx) {
+  if (!p) return null;
+  if (typeof p === 'string') {
+    return {
+      id: `photo_${idx}_${Date.now()}`,
+      dataUrl: p,
+      url: p,
+      filterName: 'Natural',
+      filterCss: 'none',
+      capturedAt: 'snap.e photo',
+      dateStamp: null,
+      gifUrl: null
+    };
+  }
+  const dataUrl = p.dataUrl || p.url || p.src || p.imageUrl || p.previewUrl || '';
+  if (!dataUrl) return null;
+  return {
+    id: p.id || `photo_${idx}`,
+    dataUrl,
+    gifUrl: p.gifUrl || null,
+    filterName: p.filterName || 'Natural',
+    filterCss: p.filterCss || 'none',
+    capturedAt: p.capturedAt || 'snap.e photo',
+    dateStamp: p.dateStamp || null,
+    createdAt: p.createdAt || null
+  };
+}
 
 export default function PublicAlbum() {
   const { albumId } = useParams();
@@ -29,6 +64,7 @@ export default function PublicAlbum() {
   const { 
     appConfig, 
     sessionAlbum, 
+    capturedPhotos,
     currentSessionId,
     showToast 
   } = useBooth();
@@ -47,95 +83,201 @@ export default function PublicAlbum() {
     return '';
   }, [albumId]);
 
-  // Load photos for this unique album ID
-  useEffect(() => {
-    let isMounted = true;
+  // Load photos for this unique album ID with multi-source fallback
+  const loadAlbumPhotos = useCallback(async () => {
+    if (!albumId) {
+      setLoading(false);
+      return;
+    }
 
-    async function loadAlbumPhotos() {
-      setLoading(true);
-      try {
-        // 1. If currently in the active session on this device
-        if (currentSessionId === albumId && Array.isArray(sessionAlbum) && sessionAlbum.length > 0) {
-          if (isMounted) {
-            setPhotos(sessionAlbum);
+    setLoading(true);
+    try {
+      const candidates = [];
+
+      // 1. Check in-memory sessionAlbum in context (if current session matches)
+      if (Array.isArray(sessionAlbum) && sessionAlbum.length > 0) {
+        if (currentSessionId === albumId || !albumId) {
+          const valid = sessionAlbum.map(normalizePhoto).filter(Boolean);
+          if (valid.length > 0) {
+            setPhotos(valid);
             setLoading(false);
+            return;
           }
+        }
+      }
+
+      // 2. Check in-memory capturedPhotos in context (if user shot in booth or editor)
+      if (Array.isArray(capturedPhotos) && capturedPhotos.length > 0) {
+        if (currentSessionId === albumId) {
+          const valid = capturedPhotos.map(normalizePhoto).filter(Boolean);
+          if (valid.length > 0) {
+            setPhotos(valid);
+            setLoading(false);
+            return;
+          }
+        }
+      }
+
+      // 3. Try loading directly from IndexedDB on this browser
+      const idbAlbum = await getPersistedAlbum(albumId);
+      if (Array.isArray(idbAlbum) && idbAlbum.length > 0) {
+        const valid = idbAlbum.map(normalizePhoto).filter(Boolean);
+        if (valid.length > 0) {
+          setPhotos(valid);
+          setLoading(false);
           return;
         }
+      }
 
-        // 2. Try loading from IndexedDB on this device
-        const localAlbum = await getPersistedAlbum(albumId);
-        if (Array.isArray(localAlbum) && localAlbum.length > 0) {
-          if (isMounted) {
-            setPhotos(localAlbum);
-            setLoading(false);
-          }
+      const idbCaptured = await getPersistedCapturedPhotos(albumId);
+      if (Array.isArray(idbCaptured) && idbCaptured.length > 0) {
+        const valid = idbCaptured.map(normalizePhoto).filter(Boolean);
+        if (valid.length > 0) {
+          setPhotos(valid);
+          setLoading(false);
           return;
         }
+      }
 
-        // 3. Fallback: try localStorage on this device
+      // 4. Try normalized albumId without or with 'sess_' prefix in IndexedDB
+      const altId = albumId.startsWith('sess_') ? albumId.slice(5) : `sess_${albumId}`;
+      const altIdbAlbum = await getPersistedAlbum(altId);
+      if (Array.isArray(altIdbAlbum) && altIdbAlbum.length > 0) {
+        const valid = altIdbAlbum.map(normalizePhoto).filter(Boolean);
+        if (valid.length > 0) {
+          setPhotos(valid);
+          setLoading(false);
+          return;
+        }
+      }
+
+      // 5. Try finding in all persisted albums in IndexedDB
+      const allLocal = await getAllPersistedAlbums();
+      if (Array.isArray(allLocal) && allLocal.length > 0) {
+        const found = allLocal.find(a => 
+          a.sessionId === albumId || 
+          a.sessionId === altId || 
+          (a.sessionId && albumId && (a.sessionId.includes(albumId) || albumId.includes(a.sessionId)))
+        );
+        if (found && Array.isArray(found.photos) && found.photos.length > 0) {
+          const valid = found.photos.map(normalizePhoto).filter(Boolean);
+          if (valid.length > 0) {
+            setPhotos(valid);
+            setLoading(false);
+            return;
+          }
+        }
+      }
+
+      // 6. Try localStorage fallback on this device
+      const lsKeys = [
+        `snape_album_${albumId}`,
+        `snape_album_${altId}`,
+        `snape_captured_${albumId}`,
+        `snape_captured_${altId}`
+      ];
+      if (currentSessionId === albumId) {
+        lsKeys.push('snape_session_album', 'snape_captured_photos');
+      }
+
+      for (const k of lsKeys) {
         try {
-          const lsData = localStorage.getItem(`snape_album_${albumId}`);
-          if (lsData) {
-            const parsed = JSON.parse(lsData);
+          const raw = localStorage.getItem(k);
+          if (raw) {
+            const parsed = JSON.parse(raw);
             if (Array.isArray(parsed) && parsed.length > 0) {
-              if (isMounted) {
-                setPhotos(parsed);
+              const valid = parsed.map(normalizePhoto).filter(Boolean);
+              if (valid.length > 0) {
+                setPhotos(valid);
                 setLoading(false);
+                return;
               }
-              return;
             }
           }
         } catch (_e) {
           // ignore parsing error
         }
+      }
 
-        // 4. Remote / Public cross-device load from Cloud Firestore
-        if (db) {
+      // 7. Remote cross-device public load from Cloud Firestore
+      if (db) {
+        const idsToTry = [albumId, altId].filter(Boolean);
+        
+        for (const targetId of idsToTry) {
+          // A. Check parent doc cloud_albums/{targetId}
           try {
-            const q = collection(db, 'cloud_albums', albumId, 'photos');
-            const snap = await getDocs(q);
-            if (!snap.empty) {
-              const remotePhotos = snap.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-              }));
-              // Sort by captured timestamp or order
-              remotePhotos.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
-              if (isMounted) {
-                setPhotos(remotePhotos);
-                setLoading(false);
+            const parentSnap = await getDoc(doc(db, 'cloud_albums', targetId));
+            if (parentSnap.exists()) {
+              const data = parentSnap.data();
+              if (Array.isArray(data?.photos) && data.photos.length > 0) {
+                const valid = data.photos.map(normalizePhoto).filter(Boolean);
+                if (valid.length > 0) {
+                  setPhotos(valid);
+                  setLoading(false);
+                  return;
+                }
               }
-              return;
             }
           } catch (cloudErr) {
-            console.warn('Could not fetch public cloud album:', cloudErr);
+            console.warn('Firestore parent doc check error:', cloudErr);
+          }
+
+          // B. Check subcollection cloud_albums/{targetId}/photos
+          try {
+            const subCol = collection(db, 'cloud_albums', targetId, 'photos');
+            const subSnap = await getDocs(subCol);
+            if (!subSnap.empty) {
+              const list = [];
+              subSnap.forEach(d => {
+                const dData = d.data();
+                if (dData && (dData.dataUrl || dData.url)) {
+                  list.push({ id: d.id, ...dData });
+                }
+              });
+              list.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+              const valid = list.map(normalizePhoto).filter(Boolean);
+              if (valid.length > 0) {
+                setPhotos(valid);
+                setLoading(false);
+                return;
+              }
+            }
+          } catch (subErr) {
+            console.warn('Firestore subcollection fetch error:', subErr);
+          }
+
+          // C. Check photostrips collection
+          try {
+            const stripSnap = await getDoc(doc(db, 'photostrips', targetId));
+            if (stripSnap.exists()) {
+              const data = stripSnap.data();
+              if (Array.isArray(data?.photos) && data.photos.length > 0) {
+                const valid = data.photos.map(normalizePhoto).filter(Boolean);
+                if (valid.length > 0) {
+                  setPhotos(valid);
+                  setLoading(false);
+                  return;
+                }
+              }
+            }
+          } catch (_stripErr) {
+            // ignore
           }
         }
-
-        if (isMounted) {
-          setPhotos([]);
-          setLoading(false);
-        }
-      } catch (err) {
-        console.error('Error loading album:', err);
-        if (isMounted) {
-          setPhotos([]);
-          setLoading(false);
-        }
       }
-    }
 
-    if (albumId) {
-      loadAlbumPhotos();
-    } else {
+      setPhotos(candidates);
+      setLoading(false);
+    } catch (err) {
+      console.error('Error loading public album photos:', err);
+      setPhotos([]);
       setLoading(false);
     }
+  }, [albumId, currentSessionId, sessionAlbum, capturedPhotos]);
 
-    return () => {
-      isMounted = false;
-    };
-  }, [albumId, currentSessionId, sessionAlbum]);
+  useEffect(() => {
+    loadAlbumPhotos();
+  }, [loadAlbumPhotos]);
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(albumUrl);
@@ -156,7 +298,7 @@ export default function PublicAlbum() {
 
   const handleDownloadSingle = (photoItem, e) => {
     if (e) e.stopPropagation();
-    const url = photoItem.dataUrl;
+    const url = photoItem.dataUrl || photoItem.url;
     if (!url) return;
     const a = document.createElement('a');
     a.href = url;
@@ -181,7 +323,7 @@ export default function PublicAlbum() {
     photos.forEach((p, idx) => {
       setTimeout(() => {
         const a = document.createElement('a');
-        a.href = p.dataUrl;
+        a.href = p.dataUrl || p.url;
         a.download = `snap_e_album_${idx + 1}.jpg`;
         a.click();
       }, idx * 250);
@@ -217,13 +359,22 @@ export default function PublicAlbum() {
       {/* Top Navbar */}
       <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-gray-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+          {/* Brand Logo with Official Image */}
           <div className="flex items-center gap-3">
-            <Link to="/" className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl bg-gray-950 text-white flex items-center justify-center font-bold text-xs shadow-xs">
-                📸
+            <Link to="/" className="flex items-center gap-2.5 group">
+              <div className="w-8 h-8 rounded-full overflow-hidden border border-gray-200 shadow-xs flex items-center justify-center bg-gray-900 group-hover:scale-105 transition-transform">
+                <img 
+                  src="/logo.jpeg" 
+                  alt="snap.e logo" 
+                  className="w-full h-full object-cover" 
+                  onError={(e) => { 
+                    e.currentTarget.style.display = 'none'; 
+                  }} 
+                />
               </div>
-              <span className="font-extrabold text-base tracking-tight text-gray-950">
+              <span className="font-extrabold text-base tracking-tight text-gray-950 flex items-center gap-1">
                 {appConfig?.website?.brandName || 'snap.e'}
+                <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
               </span>
             </Link>
             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -231,18 +382,11 @@ export default function PublicAlbum() {
             </span>
           </div>
 
+          {/* Right Header Action: Only Editor (No Camera Button for Public Album) */}
           <div className="flex items-center gap-2">
-            <Link
-              to="/capture"
-              className="px-3.5 py-2 rounded-xl text-xs font-bold text-gray-700 hover:text-gray-950 hover:bg-gray-100 flex items-center gap-1.5 transition-colors"
-            >
-              <Camera size={14} className="text-red-600" />
-              <span className="hidden sm:inline">Bilik Kamera</span>
-            </Link>
-
             <button
               onClick={handleOpenEditor}
-              className="px-4 py-2 rounded-xl text-xs font-extrabold text-white bg-red-600 hover:bg-red-700 shadow-sm shadow-red-600/20 flex items-center gap-1.5 transition-all active:scale-98"
+              className="px-4 py-2 rounded-xl text-xs font-extrabold text-white bg-red-600 hover:bg-red-700 shadow-sm shadow-red-600/20 flex items-center gap-1.5 transition-all active:scale-98 cursor-pointer"
               title="Buka Editor Photostrip (memerlukan login)"
             >
               <Edit3 size={13} />
@@ -279,8 +423,8 @@ export default function PublicAlbum() {
               </h1>
 
               <p className="text-xs sm:text-sm text-gray-600 max-w-2xl leading-relaxed">
-                Album ini dapat dilihat secara publik oleh siapa saja hanya dengan link unik ini. 
-                Anda dapat melihat foto hasil jepretan, memutar animasi gerak GIF, mengunduh file HD, atau melanjutkan kreasi photostrip ke editor.
+                Album ini dapat dilihat secara publik oleh siapa saja hanya dengan menggunakan link unik ini. 
+                Anda dapat melihat foto hasil jepretan, memutar animasi gerak GIF, mengunduh file HD, atau melanjutkan kreasi photostrip ke editor (tersedia ketika login).
               </p>
             </div>
 
@@ -289,7 +433,7 @@ export default function PublicAlbum() {
               <button
                 type="button"
                 onClick={handleCopyLink}
-                className={`w-full px-4 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-xs ${
+                className={`w-full px-4 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-xs cursor-pointer ${
                   copiedLink
                     ? 'bg-emerald-600 text-white'
                     : 'bg-gray-900 hover:bg-black text-white'
@@ -303,7 +447,7 @@ export default function PublicAlbum() {
                 <button
                   type="button"
                   onClick={handleDownloadAll}
-                  className="w-full px-4 py-2.5 rounded-xl font-bold text-xs text-gray-700 bg-gray-100 hover:bg-gray-200 flex items-center justify-center gap-2 transition-colors border border-gray-200"
+                  className="w-full px-4 py-2.5 rounded-xl font-bold text-xs text-gray-700 bg-gray-100 hover:bg-gray-200 flex items-center justify-center gap-2 transition-colors border border-gray-200 cursor-pointer"
                 >
                   <Download size={14} />
                   <span>Unduh Semua Foto ({photos.length})</span>
@@ -325,7 +469,7 @@ export default function PublicAlbum() {
               <button
                 type="button"
                 onClick={handleCopyLink}
-                className="text-[11px] font-bold text-red-600 hover:text-red-700 shrink-0 ml-1"
+                className="text-[11px] font-bold text-red-600 hover:text-red-700 shrink-0 ml-1 cursor-pointer"
               >
                 Salin
               </button>
@@ -338,7 +482,7 @@ export default function PublicAlbum() {
           <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl text-xs font-bold w-full sm:w-auto">
             <button
               onClick={() => setActiveFilter('all')}
-              className={`flex-1 sm:flex-none px-3.5 py-1.5 rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+              className={`flex-1 sm:flex-none px-3.5 py-1.5 rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
                 activeFilter === 'all'
                   ? 'bg-white text-gray-950 shadow-xs'
                   : 'text-gray-600 hover:text-gray-900'
@@ -350,7 +494,7 @@ export default function PublicAlbum() {
 
             <button
               onClick={() => setActiveFilter('gif')}
-              className={`flex-1 sm:flex-none px-3.5 py-1.5 rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+              className={`flex-1 sm:flex-none px-3.5 py-1.5 rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
                 activeFilter === 'gif'
                   ? 'bg-purple-600 text-white shadow-xs'
                   : 'text-gray-600 hover:text-gray-900'
@@ -361,8 +505,16 @@ export default function PublicAlbum() {
             </button>
           </div>
 
-          <div className="text-xs text-gray-500 font-medium">
-            Menampilkan <span className="font-bold text-gray-900">{filteredPhotos.length}</span> item
+          <div className="flex items-center gap-3 text-xs text-gray-500 font-medium">
+            <button
+              onClick={loadAlbumPhotos}
+              className="flex items-center gap-1 text-gray-600 hover:text-gray-900 transition-colors cursor-pointer"
+              title="Muat ulang foto album"
+            >
+              <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
+              <span>Segarkan</span>
+            </button>
+            <span>Menampilkan <strong className="text-gray-900">{filteredPhotos.length}</strong> item</span>
           </div>
         </div>
 
@@ -384,20 +536,28 @@ export default function PublicAlbum() {
               </p>
             </div>
             <div className="pt-2 flex justify-center gap-2">
-              <Link
-                to="/capture"
-                className="px-5 py-2.5 bg-red-600 text-white rounded-xl font-bold text-xs shadow-md shadow-red-600/20"
+              <button
+                type="button"
+                onClick={loadAlbumPhotos}
+                className="px-5 py-2.5 bg-gray-900 hover:bg-black text-white rounded-xl font-bold text-xs shadow-md shadow-gray-900/10 flex items-center gap-1.5 transition-colors cursor-pointer"
               >
-                Mulai Jepret di Bilik Foto
+                <RefreshCw size={13} />
+                <span>Muat Ulang Album</span>
+              </button>
+              <Link
+                to="/"
+                className="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-xl font-bold text-xs transition-colors"
+              >
+                Kembali ke Beranda
               </Link>
             </div>
           </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
             {filteredPhotos.map((item, idx) => {
-              const hasGif = !!item.gifUrl;
+              const hasGif = Boolean(item.gifUrl);
               const isPlayingGif = playingGifId === item.id;
-              const displayUrl = isPlayingGif && item.gifUrl ? item.gifUrl : item.dataUrl;
+              const displayUrl = isPlayingGif && item.gifUrl ? item.gifUrl : (item.dataUrl || item.url || '');
 
               return (
                 <div
@@ -411,10 +571,16 @@ export default function PublicAlbum() {
                   >
                     <img
                       src={displayUrl}
-                      alt={`Pose ${idx + 1}`}
+                      alt={`Foto Pose ${idx + 1}`}
                       className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-102 select-none"
                       style={{ filter: item.filterCss || 'none' }}
                       loading="lazy"
+                      onError={(e) => {
+                        // Fallback to still photo if GIF failed to load
+                        if (item.dataUrl && e.currentTarget.src !== item.dataUrl) {
+                          e.currentTarget.src = item.dataUrl;
+                        }
+                      }}
                     />
 
                     {/* GIF Indicator / Toggle Button */}
@@ -425,7 +591,7 @@ export default function PublicAlbum() {
                           e.stopPropagation();
                           setPlayingGifId(isPlayingGif ? null : item.id);
                         }}
-                        className={`absolute top-2 left-2 text-[9px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 z-10 shadow-md transition-all ${
+                        className={`absolute top-2 left-2 text-[9px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 z-10 shadow-md transition-all cursor-pointer ${
                           isPlayingGif
                             ? 'bg-purple-600 text-white animate-pulse'
                             : 'bg-black/60 backdrop-blur-xs text-purple-200 hover:bg-purple-600 hover:text-white'
@@ -467,7 +633,7 @@ export default function PublicAlbum() {
                         <button
                           type="button"
                           onClick={(e) => handleDownloadGifSingle(item, e)}
-                          className="px-2 py-1 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-700 text-[10px] font-bold flex items-center gap-1 transition-colors"
+                          className="px-2 py-1 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-700 text-[10px] font-bold flex items-center gap-1 transition-colors cursor-pointer"
                           title="Unduh GIF"
                         >
                           <Film size={11} />
@@ -478,7 +644,7 @@ export default function PublicAlbum() {
                       <button
                         type="button"
                         onClick={(e) => handleDownloadSingle(item, e)}
-                        className="px-2 py-1 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-800 text-[10px] font-bold flex items-center gap-1 transition-colors"
+                        className="px-2 py-1 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-800 text-[10px] font-bold flex items-center gap-1 transition-colors cursor-pointer"
                         title="Unduh foto resolusi tinggi"
                       >
                         <Download size={11} />
@@ -515,7 +681,7 @@ export default function PublicAlbum() {
                 <button
                   type="button"
                   onClick={(e) => handleDownloadGifSingle(currentLightboxPhoto, e)}
-                  className="px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs flex items-center gap-1 shadow-md"
+                  className="px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs flex items-center gap-1 shadow-md cursor-pointer"
                 >
                   <Film size={13} />
                   <span>Unduh GIF</span>
@@ -525,7 +691,7 @@ export default function PublicAlbum() {
               <button
                 type="button"
                 onClick={(e) => handleDownloadSingle(currentLightboxPhoto, e)}
-                className="px-3 py-1.5 rounded-xl bg-white text-gray-950 hover:bg-gray-100 font-bold text-xs flex items-center gap-1 shadow-md"
+                className="px-3 py-1.5 rounded-xl bg-white text-gray-950 hover:bg-gray-100 font-bold text-xs flex items-center gap-1 shadow-md cursor-pointer"
               >
                 <Download size={13} />
                 <span>Unduh HD</span>
@@ -534,7 +700,8 @@ export default function PublicAlbum() {
               <button
                 type="button"
                 onClick={() => setLightboxIndex(null)}
-                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors cursor-pointer"
+                title="Tutup"
               >
                 <X size={18} />
               </button>
@@ -550,7 +717,7 @@ export default function PublicAlbum() {
                   e.stopPropagation();
                   setLightboxIndex((prev) => (prev - 1 + filteredPhotos.length) % filteredPhotos.length);
                 }}
-                className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/60 hover:bg-black/90 text-white flex items-center justify-center z-20 transition-all border border-white/20"
+                className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/60 hover:bg-black/90 text-white flex items-center justify-center z-20 transition-all border border-white/20 cursor-pointer"
                 title="Foto Sebelumnya"
               >
                 <ChevronLeft size={22} />
@@ -562,7 +729,7 @@ export default function PublicAlbum() {
                   e.stopPropagation();
                   setLightboxIndex((prev) => (prev + 1) % filteredPhotos.length);
                 }}
-                className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/60 hover:bg-black/90 text-white flex items-center justify-center z-20 transition-all border border-white/20"
+                className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/60 hover:bg-black/90 text-white flex items-center justify-center z-20 transition-all border border-white/20 cursor-pointer"
                 title="Foto Berikutnya"
               >
                 <ChevronRight size={22} />
@@ -579,7 +746,7 @@ export default function PublicAlbum() {
               src={
                 playingGifId === currentLightboxPhoto.id && currentLightboxPhoto.gifUrl
                   ? currentLightboxPhoto.gifUrl
-                  : currentLightboxPhoto.dataUrl
+                  : (currentLightboxPhoto.dataUrl || currentLightboxPhoto.url)
               }
               alt="Lightbox Preview"
               className="max-h-[80vh] max-w-full rounded-2xl object-contain shadow-2xl"
@@ -590,7 +757,7 @@ export default function PublicAlbum() {
               <button
                 type="button"
                 onClick={() => setPlayingGifId(playingGifId === currentLightboxPhoto.id ? null : currentLightboxPhoto.id)}
-                className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-1.5 rounded-full bg-black/80 hover:bg-purple-600 text-white font-bold text-xs flex items-center gap-1.5 shadow-xl transition-colors border border-white/20"
+                className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-1.5 rounded-full bg-black/80 hover:bg-purple-600 text-white font-bold text-xs flex items-center gap-1.5 shadow-xl transition-colors border border-white/20 cursor-pointer"
               >
                 {playingGifId === currentLightboxPhoto.id ? <Pause size={13} /> : <Play size={13} className="fill-current" />}
                 <span>{playingGifId === currentLightboxPhoto.id ? 'Jeda Animasi' : 'Putar Animasi GIF'}</span>
@@ -600,10 +767,20 @@ export default function PublicAlbum() {
         </div>
       )}
 
-      {/* Footer */}
+      {/* Footer with Official Logo */}
       <footer className="border-t border-gray-200 bg-white py-6 mt-auto">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-gray-500">
           <div className="flex items-center gap-2">
+            <div className="w-5 h-5 rounded-full overflow-hidden border border-gray-200 flex items-center justify-center bg-gray-900">
+              <img 
+                src="/logo.jpeg" 
+                alt="snap.e" 
+                className="w-full h-full object-cover" 
+                onError={(e) => { 
+                  e.currentTarget.style.display = 'none'; 
+                }} 
+              />
+            </div>
             <span className="font-bold text-gray-900">{appConfig?.website?.brandName || 'snap.e'}</span>
             <span>— Photobooth Studio & Creative Strip Lab</span>
           </div>

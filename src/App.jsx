@@ -17,7 +17,14 @@ function App() {
         <Routes>
           <Route path="/" element={<BoothHome />} />
           <Route path="/setup" element={<BoothHome />} />
-          <Route path="/capture" element={<LiveCapture />} />
+          <Route 
+            path="/capture" 
+            element={
+              <ProtectedRoute>
+                <LiveCapture />
+              </ProtectedRoute>
+            } 
+          />
           <Route 
             path="/editor" 
             element={

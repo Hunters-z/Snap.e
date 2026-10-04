@@ -7,7 +7,8 @@ import {
   setDoc, 
   updateDoc, 
   deleteDoc,
-  getDocs
+  getDocs,
+  getDoc
 } from 'firebase/firestore';
 import { 
   signInWithPopup, 
@@ -350,6 +351,70 @@ export function BoothProvider({ children }) {
   const openPaymentModal = useCallback(() => setShowPaymentModal(true), []);
   const closePaymentModal = useCallback(() => setShowPaymentModal(false), []);
 
+  // Track if current session has been paid for taking photos (Camera requires Login & Payment)
+  const [isSessionPaid, setIsSessionPaid] = useState(() => {
+    try {
+      const sessId = localStorage.getItem('snape_current_session_id');
+      if (sessId && localStorage.getItem(`snape_session_paid_${sessId}`) === 'true') {
+        return true;
+      }
+    } catch {
+      // fallback
+    }
+    return false;
+  });
+
+  const markSessionPaid = useCallback((sessionId = currentSessionId) => {
+    setIsSessionPaid(true);
+    try {
+      if (sessionId) {
+        localStorage.setItem(`snape_session_paid_${sessionId}`, 'true');
+      }
+    } catch (_e) {
+      // ignore
+    }
+  }, [currentSessionId]);
+
+  // Robust sync of photos to Cloud Firestore for cross-device public viewing
+  const syncAlbumToCloud = useCallback(async (sessionId, photosList) => {
+    if (!db || !sessionId || !Array.isArray(photosList) || photosList.length === 0) return;
+    try {
+      const now = Date.now();
+      const compactPhotos = photosList.slice(0, 10).map((p, idx) => ({
+        id: p.id || `snap_${now}_${idx}`,
+        sessionId,
+        capturedAt: p.capturedAt || 'snap.e photo',
+        dataUrl: p.dataUrl || p.url || '',
+        gifUrl: p.gifUrl || null,
+        filterName: p.filterName || 'Natural',
+        filterCss: p.filterCss || 'none',
+        dateStamp: p.dateStamp || null,
+        createdAt: p.createdAt || new Date().toISOString(),
+        expiresAt: p.expiresAt || new Date(now + SEVEN_DAYS_MS).toISOString()
+      }));
+
+      // 1. Write parent doc with full photos array for instant, single-query retrieval
+      await setDoc(doc(db, 'cloud_albums', sessionId), {
+        sessionId,
+        updatedAt: new Date().toISOString(),
+        expiresAt: new Date(now + SEVEN_DAYS_MS).toISOString(),
+        photosCount: compactPhotos.length,
+        photos: compactPhotos
+      }, { merge: true });
+
+      // 2. Also populate subcollection for subcollection queries
+      for (const p of compactPhotos) {
+        try {
+          await setDoc(doc(db, 'cloud_albums', sessionId, 'photos', p.id), p, { merge: true });
+        } catch (_subErr) {
+          // ignore individual doc error
+        }
+      }
+    } catch (cloudErr) {
+      console.warn('Cloud album sync error:', cloudErr);
+    }
+  }, []);
+
   // HYDRATE FROM INDEXEDDB & CLOUD FIRESTORE ON MOUNT / RELOAD
   // This guarantees that even after page refresh or browser reload,
   // photos, GIFs, and albums NEVER disappear!
@@ -376,18 +441,26 @@ export function BoothProvider({ children }) {
         // 3. Fallback: If IndexedDB was empty (e.g. opened on new device/cleared cache), load from Cloud Firestore
         if ((!idbAlbum || idbAlbum.length === 0) && db) {
           try {
-            const albumRef = collection(db, 'cloud_albums', sessId, 'photos');
-            const snap = await getDocs(albumRef);
-            if (!snap.empty && isMounted) {
-              const cloudPhotos = [];
-              snap.forEach(d => {
-                const data = d.data();
-                if (data && data.dataUrl) cloudPhotos.push(data);
-              });
-              cloudPhotos.sort((a, b) => (new Date(b.createdAt || 0)) - (new Date(a.createdAt || 0)));
-              if (cloudPhotos.length > 0) {
-                setSessionAlbum(cloudPhotos);
-                persistAlbum(sessId, cloudPhotos);
+            // First try parent document with embedded photos array
+            const parentDocSnap = await getDoc(doc(db, 'cloud_albums', sessId));
+            if (parentDocSnap.exists() && Array.isArray(parentDocSnap.data()?.photos) && parentDocSnap.data().photos.length > 0 && isMounted) {
+              const cloudPhotos = parentDocSnap.data().photos;
+              setSessionAlbum(cloudPhotos);
+              persistAlbum(sessId, cloudPhotos);
+            } else {
+              const albumRef = collection(db, 'cloud_albums', sessId, 'photos');
+              const snap = await getDocs(albumRef);
+              if (!snap.empty && isMounted) {
+                const cloudPhotos = [];
+                snap.forEach(d => {
+                  const data = d.data();
+                  if (data && (data.dataUrl || data.url)) cloudPhotos.push(data);
+                });
+                cloudPhotos.sort((a, b) => (new Date(b.createdAt || 0)) - (new Date(a.createdAt || 0)));
+                if (cloudPhotos.length > 0) {
+                  setSessionAlbum(cloudPhotos);
+                  persistAlbum(sessId, cloudPhotos);
+                }
               }
             }
           } catch (cloudErr) {
@@ -467,8 +540,9 @@ export function BoothProvider({ children }) {
     setSessionTimeRemaining(SESSION_MAX_SECONDS);
     setSessionAlbum([]);
     setCapturedPhotos([]);
+    markSessionPaid(newSessionId);
     return newSessionId;
-  }, [currentSessionId]);
+  }, [currentSessionId, markSessionPaid]);
 
   // Album actions with 7-day expiration (persisted in IndexedDB + Cloud Firestore)
   const addPhotoToAlbum = useCallback((newPhoto) => {
@@ -505,36 +579,15 @@ export function BoothProvider({ children }) {
       } catch {
         // Quota error is safely handled because IndexedDB stores full resolution without quota limits
       }
+
+      // 3. Sync to Cloud Firestore for public unique link access
+      syncAlbumToCloud(currentSessionId, updated);
+
       return updated;
     });
 
-    // 3. Sync to Cloud Firestore (Stored for 7 days in cloud)
-    try {
-      if (db) {
-        setDoc(doc(db, 'cloud_albums', currentSessionId), {
-          sessionId: currentSessionId,
-          updatedAt: new Date().toISOString(),
-          expiresAt: new Date(now + SEVEN_DAYS_MS).toISOString()
-        }, { merge: true }).catch(() => {});
-
-        setDoc(doc(db, 'cloud_albums', currentSessionId, 'photos', photoWithId.id), {
-          id: photoWithId.id,
-          sessionId: currentSessionId,
-          capturedAt: photoWithId.capturedAt,
-          dataUrl: photoWithId.dataUrl,
-          gifUrl: photoWithId.gifUrl || null,
-          filterName: photoWithId.filterName || 'Natural',
-          dateStamp: photoWithId.dateStamp || null,
-          createdAt: photoWithId.createdAt,
-          expiresAt: photoWithId.expiresAt
-        }).catch(err => console.warn('Cloud album photo sync error:', err));
-      }
-    } catch (err) {
-      console.warn('Cloud album sync exception:', err);
-    }
-
     return photoWithId;
-  }, [currentSessionId]);
+  }, [currentSessionId, syncAlbumToCloud]);
 
   const deletePhotoFromAlbum = useCallback((photoId) => {
     setSessionAlbum(prev => {
@@ -942,7 +995,7 @@ export function BoothProvider({ children }) {
     }
   };
 
-  // Save photos to local state
+  // Save photos to local state, IndexedDB and sync to cloud
   const updateCapturedPhotos = useCallback((photos) => {
     setCapturedPhotos(photos);
     try {
@@ -950,7 +1003,13 @@ export function BoothProvider({ children }) {
     } catch (e) {
       console.warn('Could not save to localStorage:', e);
     }
-  }, []);
+    // Also save to IndexedDB and Cloud Firestore so public albums always have latest photos
+    if (currentSessionId && Array.isArray(photos)) {
+      persistCapturedPhotos(currentSessionId, photos);
+      persistAlbum(currentSessionId, photos);
+      syncAlbumToCloud(currentSessionId, photos);
+    }
+  }, [currentSessionId, syncAlbumToCloud]);
 
   // Add print order to Firestore
   const addOrder = async (orderData) => {
@@ -1398,6 +1457,10 @@ export function BoothProvider({ children }) {
         updateCapturedPhotos,
         sessionTimeRemaining,
         isSessionExpired: sessionTimeRemaining <= 0,
+        isSessionPaid,
+        setIsSessionPaid,
+        markSessionPaid,
+        syncAlbumToCloud,
         showPaymentModal,
         setShowPaymentModal,
         openPaymentModal,

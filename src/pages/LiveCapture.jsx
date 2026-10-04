@@ -54,7 +54,12 @@ export default function LiveCapture() {
     sessionAlbum,
     addPhotoToAlbum,
     deletePhotoFromAlbum,
-    selectPhotoForSlot
+    selectPhotoForSlot,
+    currentUser,
+    isAdmin,
+    isSessionPaid,
+    markSessionPaid,
+    openAuthModal
   } = useBooth();
 
   // Route parameters for LDR
@@ -658,6 +663,15 @@ export default function LiveCapture() {
    * Also captures Live Photo video clip and generates an Animated GIF!
    */
   const handleTriggerCapture = async (isRemoteInitiated = false) => {
+    // Only logged in users with verified payment can take photos
+    if (!currentUser) {
+      if (openAuthModal) openAuthModal('/capture');
+      return;
+    }
+    if (!isSessionPaid && !isAdmin) {
+      setShowPaymentModalInCapture(true);
+      return;
+    }
     if (sessionTimeRemaining <= 0) {
       setShowAlbumModal(true);
       return;
@@ -845,6 +859,24 @@ export default function LiveCapture() {
           </button>
         </div>
       </header>
+
+      {/* Unpaid session warning banner */}
+      {!isSessionPaid && !isAdmin && (
+        <div className="bg-gradient-to-r from-amber-600/90 via-red-600/90 to-amber-600/90 px-3 sm:px-6 py-2 flex items-center justify-between text-xs text-white shadow-lg shrink-0 z-20 animate-fadeIn">
+          <div className="flex items-center gap-2">
+            <CreditCard size={15} className="text-amber-200 shrink-0" />
+            <span className="font-semibold text-[11px] sm:text-xs">
+              Sesi foto belum dibayar. Selesaikan pembayaran untuk mengaktifkan tombol foto.
+            </span>
+          </div>
+          <button
+            onClick={() => setShowPaymentModalInCapture(true)}
+            className="px-3 py-1 bg-white text-gray-950 hover:bg-amber-100 font-extrabold rounded-lg text-[11px] shrink-0 transition-colors shadow-xs active:scale-95 ml-2 cursor-pointer"
+          >
+            Bayar Sesi Foto Sekarang (Rp {(appConfig.payment?.price || 15000).toLocaleString('id-ID')})
+          </button>
+        </div>
+      )}
 
       {/* Sub Header / Active Slot Selector */}
       <div className="px-3 sm:px-6 py-1.5 flex items-center justify-between shrink-0 bg-black/60 text-xs border-b border-white/5">
@@ -1270,16 +1302,33 @@ export default function LiveCapture() {
 
             {/* Big Shutter Trigger Button (Timer ONLY starts here when tapped!) */}
             <div className="relative flex items-center justify-center">
-              <div className="absolute inset-0 bg-red-600 rounded-full blur-md opacity-40 animate-pulse pointer-events-none"></div>
+              <div className={`absolute inset-0 rounded-full blur-md opacity-40 pointer-events-none ${
+                !isSessionPaid && !isAdmin ? 'bg-amber-500 animate-pulse' : 'bg-red-600 animate-pulse'
+              }`}></div>
               <button
                 onClick={handleTriggerCapture}
                 disabled={isCapturing}
-                className="w-18 h-18 sm:w-20 sm:h-20 rounded-full border-4 border-red-500/80 flex items-center justify-center relative z-10 transition-transform active:scale-95 disabled:opacity-50"
-                title={`Ambil Foto untuk Pose #${activeSlotIndex + 1}`}
+                className={`w-18 h-18 sm:w-20 sm:h-20 rounded-full border-4 flex items-center justify-center relative z-10 transition-transform active:scale-95 disabled:opacity-50 cursor-pointer ${
+                  !isSessionPaid && !isAdmin ? 'border-amber-400 bg-amber-500/20' : 'border-red-500/80'
+                }`}
+                title={
+                  !isSessionPaid && !isAdmin 
+                    ? 'Selesaikan pembayaran untuk mengambil foto' 
+                    : `Ambil Foto untuk Pose #${activeSlotIndex + 1}`
+                }
               >
                 <div className="w-14 h-14 sm:w-16 sm:h-16 bg-white rounded-full flex flex-col items-center justify-center text-red-600 shadow-inner">
-                  <Camera size={24} />
-                  <span className="text-[9px] font-bold text-gray-900 leading-none mt-0.5">#{activeSlotIndex + 1}</span>
+                  {!isSessionPaid && !isAdmin ? (
+                    <>
+                      <CreditCard size={22} className="text-amber-600" />
+                      <span className="text-[8px] font-black text-gray-900 leading-none mt-0.5 tracking-tight">BAYAR</span>
+                    </>
+                  ) : (
+                    <>
+                      <Camera size={24} />
+                      <span className="text-[9px] font-bold text-gray-900 leading-none mt-0.5">#{activeSlotIndex + 1}</span>
+                    </>
+                  )}
                 </div>
               </button>
             </div>
@@ -1689,10 +1738,11 @@ export default function LiveCapture() {
         onClose={() => setShowPaymentModalInCapture(false)}
         onSuccess={() => {
           startNewSession();
+          if (markSessionPaid) markSessionPaid();
           setShowPaymentModalInCapture(false);
           setShowAlbumModal(false);
         }}
-        title="Beli Sesi Photobooth Baru (15 Menit)"
+        title="Pembayaran Sesi Photobooth (15 Menit)"
       />
 
     </div>
