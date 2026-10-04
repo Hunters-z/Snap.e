@@ -22,7 +22,9 @@ import {
   AlignCenter,
   AlignRight,
   CreditCard,
-  Cloud
+  Cloud,
+  Crop,
+  Check
 } from 'lucide-react';
 import { FILTER_CATEGORIES, CAMERA_PRESETS } from '../data/cameraPresets';
 import { drawFrameGraphicDecorations } from '../data/defaultFrames';
@@ -181,6 +183,110 @@ export default function EditorPhotostrip() {
   const [dragState, setDragState] = useState(null);
   const [selectedStickerId, setSelectedStickerId] = useState(null);
   const [stickerFilterCategory, setStickerFilterCategory] = useState('all');
+
+  // Canva Frame Adjuster Modal State
+  const [canvaCropIdx, setCanvaCropIdx] = useState(null);
+  const [canvaCropZoom, setCanvaCropZoom] = useState(1.0);
+  const [canvaCropOffsetX, setCanvaCropOffsetX] = useState(0);
+  const [canvaCropOffsetY, setCanvaCropOffsetY] = useState(0);
+  const [modalDragState, setModalDragState] = useState(null);
+
+  const openCanvaCrop = (idx) => {
+    setActivePhotoIdx(idx);
+    const p = photos[idx];
+    if (!p?.dataUrl) {
+      showToast('Slot ini belum memiliki foto untuk disesuaikan');
+      return;
+    }
+    setCanvaCropIdx(idx);
+    setCanvaCropZoom(p.zoom || 1.0);
+    setCanvaCropOffsetX(p.offsetX || 0);
+    setCanvaCropOffsetY(p.offsetY || 0);
+  };
+
+  const handleApplyCanvaCrop = () => {
+    if (canvaCropIdx === null) return;
+    const next = [...photos];
+    if (next[canvaCropIdx]) {
+      next[canvaCropIdx] = {
+        ...next[canvaCropIdx],
+        zoom: canvaCropZoom,
+        offsetX: canvaCropOffsetX,
+        offsetY: canvaCropOffsetY
+      };
+      setPhotos(next);
+      updateCapturedPhotos(next);
+      showToast(`Bingkai Foto #${canvaCropIdx + 1} berhasil disesuaikan!`);
+    }
+    setCanvaCropIdx(null);
+  };
+
+  const handleModalPhotoPointerDown = (e, frameW, frameH) => {
+    e.preventDefault();
+    setModalDragState({
+      startX: e.clientX,
+      startY: e.clientY,
+      initialX: canvaCropOffsetX,
+      initialY: canvaCropOffsetY,
+      frameW: frameW || 240,
+      frameH: frameH || 330
+    });
+  };
+
+  const handleModalStepZoom = (step) => {
+    setCanvaCropZoom(prev => {
+      const next = Math.max(0.6, Math.min(3.0, Math.round((prev + step) * 100) / 100));
+      return next;
+    });
+  };
+
+  const handleModalReset = () => {
+    setCanvaCropZoom(1.0);
+    setCanvaCropOffsetX(0);
+    setCanvaCropOffsetY(0);
+  };
+
+  const handleModalWheel = (e) => {
+    e.preventDefault();
+    const delta = e.deltaY < 0 ? 0.08 : -0.08;
+    setCanvaCropZoom(prev => {
+      const next = Math.max(0.6, Math.min(3.0, Math.round((prev + delta) * 100) / 100));
+      return next;
+    });
+  };
+
+  // Pointer drag listener for Canva Frame Adjuster modal
+  useEffect(() => {
+    if (!modalDragState) return;
+
+    const handlePointerMove = (e) => {
+      const deltaPxX = e.clientX - modalDragState.startX;
+      const deltaPxY = e.clientY - modalDragState.startY;
+
+      const deltaPercentX = (deltaPxX / (modalDragState.frameW || 200)) * 100;
+      const deltaPercentY = (deltaPxY / (modalDragState.frameH || 260)) * 100;
+
+      const newX = Math.max(-100, Math.min(100, modalDragState.initialX + deltaPercentX));
+      const newY = Math.max(-100, Math.min(100, modalDragState.initialY + deltaPercentY));
+
+      setCanvaCropOffsetX(Math.round(newX * 10) / 10);
+      setCanvaCropOffsetY(Math.round(newY * 10) / 10);
+    };
+
+    const handlePointerUp = () => {
+      setModalDragState(null);
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+    window.addEventListener('pointercancel', handlePointerUp);
+
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointercancel', handlePointerUp);
+    };
+  }, [modalDragState]);
 
   // Pointer drag listener on window for ultra-smooth live pan and sticker placement
   useEffect(() => {
@@ -530,9 +636,9 @@ export default function EditorPhotostrip() {
         });
       }
     } else {
-      // 4R Portrait (1200 x 1800): Left Strip (2 photos) and Right Strip (2 photos) - 4:3 original aspect ratio
-      const photoH = 382.5;
-      const topPadding = 180;
+      // 4R Portrait (1200 x 1800): Left Strip (2 photos) and Right Strip (2 photos) - Grid 4 (46% side cut, 510 x 700)
+      const photoH = 700;
+      const topPadding = 100;
       const spacing = 50;
 
       // Left 2 photos
@@ -950,20 +1056,21 @@ export default function EditorPhotostrip() {
     const p = photos[idx];
     const isActive = activePhotoIdx === idx;
     const isAdjusted = (p?.zoom && p.zoom !== 1.0) || (p?.offsetX && p.offsetX !== 0) || (p?.offsetY && p.offsetY !== 0);
-    // Maintain 4:3 original photo aspect ratio so photos fit naturally and can be freely framed
-    const slotAspectClass = 'aspect-[4/3]';
+    // Grid 6: 4:3 landscape ratio; Grid 4: classic tall portrait 51/70 ratio (46% side-cut framing)
+    const slotAspectClass = layout === '4r_6cut' ? 'aspect-[4/3]' : 'aspect-[51/70]';
 
     return (
       <div
         key={idx}
         data-photo-slot="true"
         onClick={() => setActivePhotoIdx(idx)}
+        onDoubleClick={() => openCanvaCrop(idx)}
         onPointerDown={(e) => handlePhotoPointerDown(e, idx)}
         onWheel={(e) => handleSlotWheel(e, idx)}
         className={`w-full ${slotAspectClass} flex-none bg-gray-200 rounded-xs overflow-hidden relative group border-2 transition-all select-none cursor-grab active:cursor-grabbing touch-none ${
-          isActive ? 'border-red-500 shadow-md ring-2 ring-red-500/40' : 'border-transparent hover:border-gray-400/50'
+          isActive ? 'border-amber-400 shadow-md ring-2 ring-amber-400/40' : 'border-transparent hover:border-gray-400/50'
         }`}
-        title={`Foto #${idx + 1}: Tahan & geser untuk atur posisi, scroll atau tombol untuk zoom`}
+        title={`Foto #${idx + 1}: Tahan & geser untuk atur posisi, klik ganda untuk Atur Bingkai (Canva)`}
       >
         {p?.dataUrl ? (
           <div className="w-full h-full relative overflow-hidden pointer-events-none flex items-center justify-center bg-black/5">
@@ -980,12 +1087,49 @@ export default function EditorPhotostrip() {
               draggable={false}
             />
 
-            {/* IN-FRAME ACTIVE CONTROLS: ZOOM -, +, READOUT, RESET GESER & ZOOM, DAN TAMBAH STIKER */}
+            {/* RULE OF THIRDS & CORNER BRACKETS WHEN ACTIVE (Canva Frame Framing Guide) */}
+            {isActive && (
+              <>
+                <div className="absolute inset-0 grid grid-cols-3 grid-rows-3 pointer-events-none z-15">
+                  <div className="border-r border-b border-white/25" />
+                  <div className="border-r border-b border-white/25" />
+                  <div className="border-b border-white/25" />
+                  <div className="border-r border-b border-white/25" />
+                  <div className="border-r border-b border-white/25" />
+                  <div className="border-b border-white/25" />
+                  <div className="border-r border-white/25" />
+                  <div className="border-r border-white/25" />
+                  <div />
+                </div>
+                <div className="absolute top-1 left-1 w-2.5 h-2.5 border-t-2 border-l-2 border-amber-400 z-15 pointer-events-none" />
+                <div className="absolute top-1 right-1 w-2.5 h-2.5 border-t-2 border-r-2 border-amber-400 z-15 pointer-events-none" />
+                <div className="absolute bottom-1 left-1 w-2.5 h-2.5 border-b-2 border-l-2 border-amber-400 z-15 pointer-events-none" />
+                <div className="absolute bottom-1 right-1 w-2.5 h-2.5 border-b-2 border-r-2 border-amber-400 z-15 pointer-events-none" />
+              </>
+            )}
+
+            {/* IN-FRAME ACTIVE CONTROLS: ATUR BINGKAI (CANVA), ZOOM -, +, READOUT, RESET, DAN STIKER */}
             {isActive && (
               <div
-                className="absolute top-1.5 left-1/2 -translate-x-1/2 z-30 bg-black/90 backdrop-blur-md text-white px-2 py-0.5 rounded-full flex items-center gap-1.5 shadow-2xl border border-white/30 text-[9px] select-none pointer-events-auto animate-fadeIn max-w-[96%]"
+                className="absolute top-1.5 left-1/2 -translate-x-1/2 z-30 bg-black/90 backdrop-blur-md text-white px-2 py-0.5 rounded-full flex items-center gap-1 shadow-2xl border border-white/30 text-[9px] select-none pointer-events-auto animate-fadeIn max-w-[96%]"
                 onClick={(e) => e.stopPropagation()}
               >
+                {/* Canva Crop Button */}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openCanvaCrop(idx);
+                  }}
+                  className="bg-amber-400 hover:bg-amber-300 text-gray-950 font-extrabold px-1.5 py-0.5 rounded flex items-center gap-0.5 transition-colors text-[8px] whitespace-nowrap shadow-xs"
+                  title="Buka penyesuaian bingkai ala Canva (geser & zoom foto utuh)"
+                >
+                  <Crop size={8.5} />
+                  <span>Bingkai</span>
+                </button>
+
+                <span className="w-px h-3 bg-white/30" />
+
                 <button
                   type="button"
                   onClick={(e) => {
@@ -1055,8 +1199,8 @@ export default function EditorPhotostrip() {
 
             {/* Helper hint for drag when active */}
             {isActive && !dragState && (
-              <div className="absolute bottom-1 left-1/2 -translate-x-1/2 z-20 bg-black/60 backdrop-blur-xs text-white/90 text-[7px] font-medium px-2 py-0.5 rounded-full pointer-events-none whitespace-nowrap shadow-xs">
-                👆 Geser foto / stiker di dalam frame
+              <div className="absolute bottom-1 left-1/2 -translate-x-1/2 z-20 bg-black/75 backdrop-blur-xs text-white/90 text-[7px] font-medium px-2 py-0.5 rounded-full pointer-events-none whitespace-nowrap shadow-xs">
+                👆 Geser posisi • Klik ganda untuk Atur Bingkai
               </div>
             )}
 
@@ -2047,17 +2191,26 @@ export default function EditorPhotostrip() {
               </button>
             </div>
 
-            {/* Quick Photo Controls: Reset All & Slot Ratio */}
-            <div className="flex items-center gap-1">
-              {/* Reset All Adjustments Button */}
+            {/* Quick Photo Controls: Canva Frame Adjuster & Reset All */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <button
+                type="button"
+                onClick={() => openCanvaCrop(activePhotoIdx)}
+                className="px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 text-gray-950 bg-amber-400 hover:bg-amber-300 transition-all text-xs shadow-xs"
+                title="Buka penyesuaian bingkai ala Canva (geser posisi & zoom foto utuh)"
+              >
+                <Crop size={13} />
+                <span>Atur Bingkai Foto #{activePhotoIdx + 1}</span>
+              </button>
+
               <button
                 type="button"
                 onClick={handleResetAllPhotosAdjust}
-                className="px-2.5 py-1.5 rounded-lg font-bold flex items-center gap-1 text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors"
+                className="px-2.5 py-1.5 rounded-lg font-bold flex items-center gap-1 text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors text-xs"
                 title="Reset semua posisi geser dan zoom foto ke default (1.0x, tengah)"
               >
                 <RotateCcw size={12} className="text-gray-500" />
-                <span>Reset Semua Foto</span>
+                <span>Reset Semua</span>
               </button>
             </div>
           </div>
@@ -2146,13 +2299,19 @@ export default function EditorPhotostrip() {
               <span className="absolute top-1 left-1/2 -translate-x-1/2 text-base pointer-events-none z-10">🎀</span>
             )}
 
-            {/* Strip Top Header - Fixed Reserved Height */}
+            {/* Strip Top Header - Fixed Reserved Height (NO Grid 4 or Grid 6 text inside frame) */}
             <div className="flex justify-between items-center h-4 px-1 text-[8px] sm:text-[8.5px] font-bold tracking-widest opacity-80 shrink-0">
               <span>{activeFrame.overlayType === 'film' ? '► KODAK 400 35MM' : 'SNAP.E MEMORIES'}</span>
               <div className="flex items-center gap-1.5 pointer-events-auto">
-                <span className="text-[7px] bg-red-100 text-red-700 px-1.5 py-0.2 rounded font-bold whitespace-nowrap">
-                  {layout === '4r_6cut' ? 'Grid 6' : 'Grid 4'}
-                </span>
+                <button
+                  type="button"
+                  onClick={() => openCanvaCrop(activePhotoIdx)}
+                  className="text-[7.5px] bg-amber-400 hover:bg-amber-300 text-gray-950 font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5 transition-colors shadow-2xs whitespace-nowrap"
+                  title="Atur bingkai foto ini ala Canva"
+                >
+                  <Crop size={8} />
+                  <span>Bingkai #{activePhotoIdx + 1}</span>
+                </button>
                 <button
                   type="button"
                   onClick={() => handleResetPhotoAdjust(activePhotoIdx)}
@@ -2160,7 +2319,7 @@ export default function EditorPhotostrip() {
                   title="Reset posisi geser & zoom foto aktif ke normal (1.0x, tengah)"
                 >
                   <RotateCcw size={8} />
-                  <span>Reset Foto #{activePhotoIdx + 1}</span>
+                  <span>Reset</span>
                 </button>
               </div>
             </div>
@@ -2535,6 +2694,253 @@ export default function EditorPhotostrip() {
           </div>
         </div>
       )}
+
+      {/* CANVA FRAME ADJUSTER MODAL (FITUR BINGKAI ALA CANVA) */}
+      {canvaCropIdx !== null && photos[canvaCropIdx]?.dataUrl && (() => {
+        const activePhoto = photos[canvaCropIdx];
+        const isGrid4 = layout !== '4r_6cut';
+        // Frame dimensions inside adjuster stage:
+        // Grid 4: aspect ratio 51:70 (tall portrait 240 x 330)
+        // Grid 6: aspect ratio 4:3 (landscape 320 x 240)
+        const frameW = isGrid4 ? 240 : 320;
+        const frameH = isGrid4 ? 330 : 240;
+        // Uncropped original 4:3 image width when matched to frame height
+        const uncroppedPhotoW = isGrid4 ? Math.round(frameH * (4 / 3)) : frameW;
+
+        return (
+          <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex flex-col items-center justify-between p-3 sm:p-5 select-none animate-fadeIn">
+            {/* Modal Header */}
+            <div className="w-full max-w-2xl flex items-center justify-between text-white border-b border-white/10 pb-3 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-amber-400 text-gray-950 flex items-center justify-center font-bold shadow-md">
+                  <Crop size={18} />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm sm:text-base text-white flex items-center gap-1.5">
+                    <span>Atur Bingkai Foto Ala Canva</span>
+                    <span className="text-amber-400 font-mono text-xs font-bold">Foto #{canvaCropIdx + 1}</span>
+                  </h3>
+                  <p className="text-[11px] text-gray-300">
+                    Foto asli tidak terpotong. Geser posisi foto agar pas di dalam bingkai cetak.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setCanvaCropIdx(null)}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
+                title="Tutup / Batal"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Central Stage: Canva Frame Mask Window */}
+            <div className="flex-1 w-full flex flex-col items-center justify-center relative overflow-hidden py-3">
+              {/* Floating Helper Pill */}
+              <div className="mb-3 px-3 py-1 rounded-full bg-black/75 border border-white/20 text-gray-200 text-[11px] flex items-center gap-1.5 shadow-md">
+                <Move size={12} className="text-amber-400 shrink-0" />
+                <span>Tahan & geser foto • Scroll mouse untuk zoom • Hanya area terang yang dicetak</span>
+              </div>
+
+              {/* The Frame Mask Window */}
+              <div
+                onPointerDown={(e) => handleModalPhotoPointerDown(e, frameW, frameH)}
+                onWheel={handleModalWheel}
+                className="relative cursor-grab active:cursor-grabbing select-none touch-none"
+                style={{ width: `${frameW}px`, height: `${frameH}px` }}
+              >
+                {/* 1. UNCROPPED ORIGINAL PHOTO BEHIND (DIMMED AT 35% OPACITY - SHOWS WHAT IS OUTSIDE FRAME) */}
+                <div className="absolute inset-0 pointer-events-none flex items-center justify-center overflow-visible">
+                  <div
+                    style={{
+                      width: `${frameW}px`,
+                      height: `${frameH}px`,
+                      transform: `translate(${canvaCropOffsetX}%, ${canvaCropOffsetY}%) scale(${canvaCropZoom})`,
+                      transformOrigin: 'center center',
+                      transition: modalDragState ? 'none' : 'transform 0.1s ease-out'
+                    }}
+                    className="relative flex items-center justify-center shrink-0"
+                  >
+                    <img
+                      src={activePhoto.dataUrl}
+                      alt="Full Original Photo Uncropped"
+                      className="max-w-none select-none opacity-35 filter brightness-75 contrast-75"
+                      style={{
+                        width: `${uncroppedPhotoW}px`,
+                        height: `${frameH}px`,
+                        objectFit: 'cover'
+                      }}
+                      draggable={false}
+                    />
+                  </div>
+                </div>
+
+                {/* 2. BRIGHT HIGHLIGHTED PHOTO INSIDE FRAME CUTOUT (EXACT PRINT BOUNDS) */}
+                <div className="w-full h-full relative overflow-hidden rounded-xs border-2 border-white shadow-[0_0_0_9999px_rgba(0,0,0,0.65),0_15px_40px_rgba(0,0,0,0.9)] pointer-events-none">
+                  <div
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      transform: `translate(${canvaCropOffsetX}%, ${canvaCropOffsetY}%) scale(${canvaCropZoom})`,
+                      transformOrigin: 'center center',
+                      transition: modalDragState ? 'none' : 'transform 0.1s ease-out'
+                    }}
+                    className="relative flex items-center justify-center"
+                  >
+                    <img
+                      src={activePhoto.dataUrl}
+                      alt="Framed Photo Inside Area"
+                      className="max-w-none select-none"
+                      style={{
+                        width: `${uncroppedPhotoW}px`,
+                        height: '100%',
+                        objectFit: 'cover',
+                        filter: activePhoto.filterCss || 'none'
+                      }}
+                      draggable={false}
+                    />
+                  </div>
+
+                  {/* 3x3 Rule of Thirds Guide inside frame */}
+                  <div className="absolute inset-0 grid grid-cols-3 grid-rows-3 pointer-events-none">
+                    <div className="border-r border-b border-white/35" />
+                    <div className="border-r border-b border-white/35" />
+                    <div className="border-b border-white/35" />
+                    <div className="border-r border-b border-white/35" />
+                    <div className="border-r border-b border-white/35" />
+                    <div className="border-b border-white/35" />
+                    <div className="border-r border-b border-white/35" />
+                    <div className="border-r border-b border-white/35" />
+                    <div />
+                  </div>
+
+                  {/* Center Target Mark */}
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-40">
+                    <div className="w-4 h-0.5 bg-white/70" />
+                    <div className="h-4 w-0.5 bg-white/70 absolute" />
+                  </div>
+                </div>
+
+                {/* Canva Corner Brackets: ┌ ┐ └ ┘ */}
+                <div className="absolute -top-1 -left-1 w-4 h-4 border-t-3 border-l-3 border-amber-400 pointer-events-none z-20" />
+                <div className="absolute -top-1 -right-1 w-4 h-4 border-t-3 border-r-3 border-amber-400 pointer-events-none z-20" />
+                <div className="absolute -bottom-1 -left-1 w-4 h-4 border-b-3 border-l-3 border-amber-400 pointer-events-none z-20" />
+                <div className="absolute -bottom-1 -right-1 w-4 h-4 border-b-3 border-r-3 border-amber-400 pointer-events-none z-20" />
+
+                {/* Frame Badge: 46% side cut info for Grid 4 */}
+                {isGrid4 && (
+                  <div className="absolute -bottom-7 left-1/2 -translate-x-1/2 whitespace-nowrap text-[10px] text-gray-400 bg-black/60 px-2 py-0.5 rounded-full pointer-events-none">
+                    Format Vertikal Grid 4 (Potongan sisi samping ~46%)
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Bottom Controls Bar */}
+            <div className="w-full max-w-lg bg-gray-900/90 border border-white/15 backdrop-blur-md p-3.5 sm:p-4 rounded-2xl space-y-3 shadow-2xl shrink-0">
+              {/* Quick Alignment Presets */}
+              <div className="flex items-center justify-between gap-1.5 text-xs">
+                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider shrink-0">Posisi:</span>
+                <div className="flex items-center gap-1.5 overflow-x-auto hide-scrollbar">
+                  <button
+                    type="button"
+                    onClick={() => { setCanvaCropOffsetX(25); setCanvaCropOffsetY(0); }}
+                    className="px-2.5 py-1 bg-white/10 hover:bg-white/20 text-white rounded-lg font-medium text-[11px] transition-colors"
+                    title="Geser foto ke kiri"
+                  >
+                    Rata Kiri
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setCanvaCropOffsetX(0); setCanvaCropOffsetY(0); }}
+                    className="px-2.5 py-1 bg-white/15 hover:bg-white/25 text-white rounded-lg font-bold text-[11px] transition-colors"
+                    title="Posisikan foto tepat di tengah bingkai"
+                  >
+                    Tengah
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setCanvaCropOffsetX(-25); setCanvaCropOffsetY(0); }}
+                    className="px-2.5 py-1 bg-white/10 hover:bg-white/20 text-white rounded-lg font-medium text-[11px] transition-colors"
+                    title="Geser foto ke kanan"
+                  >
+                    Rata Kanan
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleModalReset}
+                    className="px-2 py-1 bg-gray-800 hover:bg-gray-700 text-amber-300 rounded-lg font-medium text-[11px] flex items-center gap-1 transition-colors"
+                    title="Reset posisi dan zoom (1.0x, tengah)"
+                  >
+                    <RotateCcw size={10} />
+                    <span>Reset</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Zoom Slider Bar */}
+              <div className="flex items-center gap-2 pt-1 border-t border-white/10">
+                <button
+                  type="button"
+                  onClick={() => handleModalStepZoom(-0.1)}
+                  disabled={canvaCropZoom <= 0.6}
+                  className="w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 text-white flex items-center justify-center font-bold text-sm disabled:opacity-30 transition-colors"
+                  title="Perkecil zoom"
+                >
+                  -
+                </button>
+
+                <div className="flex-1 flex items-center gap-2">
+                  <input
+                    type="range"
+                    min="0.6"
+                    max="3.0"
+                    step="0.05"
+                    value={canvaCropZoom}
+                    onChange={(e) => setCanvaCropZoom(parseFloat(e.target.value))}
+                    className="w-full accent-amber-400 cursor-pointer h-1.5 bg-white/20 rounded-lg appearance-none"
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleModalStepZoom(0.1)}
+                  disabled={canvaCropZoom >= 3.0}
+                  className="w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 text-white flex items-center justify-center font-bold text-sm disabled:opacity-30 transition-colors"
+                  title="Perbesar zoom"
+                >
+                  +
+                </button>
+
+                <span className="font-mono font-bold text-amber-400 text-xs min-w-[36px] text-right">
+                  {canvaCropZoom.toFixed(2)}x
+                </span>
+              </div>
+
+              {/* Action Buttons: Cancel and Apply */}
+              <div className="flex items-center justify-between gap-3 pt-2 border-t border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setCanvaCropIdx(null)}
+                  className="flex-1 py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-xl font-bold text-xs transition-colors"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  onClick={handleApplyCanvaCrop}
+                  className="flex-1 py-2.5 bg-amber-400 hover:bg-amber-300 text-gray-950 rounded-xl font-extrabold text-xs shadow-lg shadow-amber-400/20 flex items-center justify-center gap-1.5 transition-all"
+                >
+                  <Check size={14} />
+                  <span>Terapkan Bingkai</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Payment Modal for Expired Session */}
       <PaymentModal
