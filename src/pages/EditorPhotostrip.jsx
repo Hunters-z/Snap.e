@@ -24,7 +24,9 @@ import {
   CreditCard,
   Cloud,
   Crop,
-  Check
+  Check,
+  Share2,
+  ExternalLink
 } from 'lucide-react';
 import { FILTER_CATEGORIES, CAMERA_PRESETS } from '../data/cameraPresets';
 import { drawFrameGraphicDecorations } from '../data/defaultFrames';
@@ -46,7 +48,8 @@ export default function EditorPhotostrip() {
     startNewSession,
     sessionAlbum,
     deletePhotoFromAlbum,
-    selectPhotoForSlot
+    selectPhotoForSlot,
+    currentSessionId
   } = useBooth();
 
   const [showPaymentModalInEditor, setShowPaymentModalInEditor] = useState(false);
@@ -636,10 +639,10 @@ export default function EditorPhotostrip() {
         });
       }
     } else {
-      // 4R Portrait (1200 x 1800): Left Strip (2 photos) and Right Strip (2 photos) - Grid 4 (46% side cut, 510 x 700)
-      const photoH = 700;
+      // 4R Portrait (1200 x 1800): Left Strip (2 photos) and Right Strip (2 photos) - Grid 4 (Rasio 3:4 per foto, 510 x 680)
+      const photoH = 680; // 510 x 680 is strictly 3:4 aspect ratio
       const topPadding = 100;
-      const spacing = 50;
+      const spacing = 40;
 
       // Left 2 photos
       for (let i = 0; i < 2; i++) {
@@ -862,9 +865,9 @@ export default function EditorPhotostrip() {
         const itemW = 136;
 
         const countPerCol = isStrip ? (isStrip4 ? 4 : 3) : (is4R6 ? 3 : 2);
-        const itemH = isStrip ? (isStrip4 ? 88 : 118) : (is4R6 ? 102 : 136);
+        const itemH = isStrip ? (isStrip4 ? 88 : 118) : (is4R6 ? 102 : Math.round(itemW * (4 / 3)));
         const topY = isStrip ? (isStrip4 ? 18 : 20) : (is4R6 ? 20 : 25);
-        const sp = isStrip ? (isStrip4 ? 6 : 9) : (is4R6 ? 7 : 12);
+        const sp = isStrip ? (isStrip4 ? 6 : 9) : (is4R6 ? 7 : 14);
 
         // Draw left col photos (or single strip photos)
         for (let s = 0; s < countPerCol; s++) {
@@ -1056,8 +1059,8 @@ export default function EditorPhotostrip() {
     const p = photos[idx];
     const isActive = activePhotoIdx === idx;
     const isAdjusted = (p?.zoom && p.zoom !== 1.0) || (p?.offsetX && p.offsetX !== 0) || (p?.offsetY && p.offsetY !== 0);
-    // Grid 6: 4:3 landscape ratio; Grid 4: classic tall portrait 51/70 ratio (46% side-cut framing)
-    const slotAspectClass = layout === '4r_6cut' ? 'aspect-[4/3]' : 'aspect-[51/70]';
+    // Grid 6: 4:3 landscape ratio; Grid 4: portrait 3:4 ratio (width 3, height 4)
+    const slotAspectClass = layout === '4r_6cut' ? 'aspect-[4/3]' : 'aspect-[3/4]';
 
     return (
       <div
@@ -1461,6 +1464,49 @@ export default function EditorPhotostrip() {
                       <span>+ Foto Baru</span>
                     </button>
                   )}
+                </div>
+
+                {/* Public Album Share Card with Unique Link */}
+                <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-xl p-3 space-y-2">
+                  <div className="flex items-center justify-between gap-1 text-xs">
+                    <span className="font-extrabold text-emerald-950 flex items-center gap-1.5 text-[11px]">
+                      <Share2 size={12} className="text-emerald-600" />
+                      <span>Link Unik Album Publik</span>
+                    </span>
+                    <span className="text-[9px] font-bold bg-emerald-200/70 text-emerald-900 px-1.5 py-0.2 rounded font-mono">
+                      Publik
+                    </span>
+                  </div>
+                  <p className="text-[10.5px] text-emerald-900/80 leading-tight">
+                    Album dapat dilihat oleh siapa saja hanya dengan link unik ini tanpa perlu login. Sementara editor hanya tersedia ketika login.
+                  </p>
+                  <div className="flex items-center gap-1.5 pt-0.5">
+                    <div className="flex-1 bg-white border border-emerald-300/70 rounded-lg px-2 py-1 text-[10.5px] font-mono text-gray-700 truncate select-all">
+                      {typeof window !== 'undefined' ? `${window.location.origin}/album/${currentSessionId}` : ''}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const url = `${window.location.origin}/album/${currentSessionId}`;
+                        navigator.clipboard.writeText(url);
+                        showToast('Link unik album publik berhasil disalin!');
+                      }}
+                      className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-[10.5px] flex items-center gap-1 shrink-0 transition-colors shadow-xs"
+                      title="Salin link album publik"
+                    >
+                      <Copy size={11} />
+                      <span>Salin</span>
+                    </button>
+                    <a
+                      href={`/album/${currentSessionId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-1 text-emerald-700 hover:text-emerald-900 hover:bg-emerald-100 rounded-lg transition-colors"
+                      title="Buka tampilan album publik di tab baru"
+                    >
+                      <ExternalLink size={13} />
+                    </a>
+                  </div>
                 </div>
 
                 {/* Media Filter Tabs */}
@@ -2700,10 +2746,10 @@ export default function EditorPhotostrip() {
         const activePhoto = photos[canvaCropIdx];
         const isGrid4 = layout !== '4r_6cut';
         // Frame dimensions inside adjuster stage:
-        // Grid 4: aspect ratio 51:70 (tall portrait 240 x 330)
-        // Grid 6: aspect ratio 4:3 (landscape 320 x 240)
+        // Grid 4: portrait 3:4 ratio (240 x 320)
+        // Grid 6: landscape 4:3 ratio (320 x 240)
         const frameW = isGrid4 ? 240 : 320;
-        const frameH = isGrid4 ? 330 : 240;
+        const frameH = isGrid4 ? 320 : 240;
         // Uncropped original 4:3 image width when matched to frame height
         const uncroppedPhotoW = isGrid4 ? Math.round(frameH * (4 / 3)) : frameW;
 
@@ -2829,10 +2875,10 @@ export default function EditorPhotostrip() {
                 <div className="absolute -bottom-1 -left-1 w-4 h-4 border-b-3 border-l-3 border-amber-400 pointer-events-none z-20" />
                 <div className="absolute -bottom-1 -right-1 w-4 h-4 border-b-3 border-r-3 border-amber-400 pointer-events-none z-20" />
 
-                {/* Frame Badge: 46% side cut info for Grid 4 */}
+                {/* Frame Badge: 3:4 ratio info for Grid 4 */}
                 {isGrid4 && (
-                  <div className="absolute -bottom-7 left-1/2 -translate-x-1/2 whitespace-nowrap text-[10px] text-gray-400 bg-black/60 px-2 py-0.5 rounded-full pointer-events-none">
-                    Format Vertikal Grid 4 (Potongan sisi samping ~46%)
+                  <div className="absolute -bottom-7 left-1/2 -translate-x-1/2 whitespace-nowrap text-[10px] text-gray-300 bg-black/75 border border-white/10 px-2.5 py-0.5 rounded-full pointer-events-none font-medium">
+                    Format Vertikal Grid 4 (Rasio 3:4 per foto)
                   </div>
                 )}
               </div>

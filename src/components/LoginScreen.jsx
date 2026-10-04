@@ -28,7 +28,7 @@ export default function LoginScreen({ redirectPath = null, isModal = false, onCl
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
-  // Auto-dismiss loading and immediately redirect to home (beranda) as soon as currentUser is authenticated
+  // Auto-dismiss loading and immediately redirect to target as soon as currentUser is authenticated
   useEffect(() => {
     if (currentUser) {
       setLoading(false);
@@ -36,8 +36,10 @@ export default function LoginScreen({ redirectPath = null, isModal = false, onCl
       if (closeAuthModal) closeAuthModal();
 
       const target = redirectPath || authRedirectUrl;
-      // If user joined a specific LDR room link, go to that room, otherwise directly to beranda
+      // If user joined a specific LDR room link, go to that room
       if (target && target.includes('/capture') && target.includes('room=')) {
+        navigate(target, { replace: true });
+      } else if (target && target !== '/' && target !== '/login') {
         navigate(target, { replace: true });
       } else {
         navigate('/', { replace: true });
@@ -51,8 +53,9 @@ export default function LoginScreen({ redirectPath = null, isModal = false, onCl
     if (closeAuthModal) closeAuthModal();
 
     const target = redirectPath || authRedirectUrl;
-    // If user clicked an explicit room link, honor it, otherwise enter beranda directly
     if (target && target.includes('/capture') && target.includes('room=')) {
+      navigate(target, { replace: true });
+    } else if (target && target !== '/' && target !== '/login') {
       navigate(target, { replace: true });
     } else {
       navigate('/', { replace: true });
@@ -154,7 +157,9 @@ export default function LoginScreen({ redirectPath = null, isModal = false, onCl
           </p>
         </div>
         <p className="text-xs text-gray-500 max-w-xs mx-auto leading-relaxed pt-1">
-          Silakan masuk terlebih dahulu untuk mengakses bilik kamera, menyimpan album 7 hari, dan layanan cetak lab studio.
+          {redirectPath?.includes('/editor')
+            ? 'Editor Photostrip hanya tersedia ketika login. Silakan masuk terlebih dahulu untuk mengedit dan mencetak strip foto Anda.'
+            : 'Silakan masuk terlebih dahulu untuk mengakses editor, menyimpan album 7 hari, dan layanan cetak studio.'}
         </p>
       </div>
 

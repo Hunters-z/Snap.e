@@ -22,7 +22,8 @@ import {
   Grid,
   Download,
   Cloud,
-  CreditCard
+  CreditCard,
+  ExternalLink
 } from 'lucide-react';
 import { useBooth } from '../context/BoothContext';
 import { FILTER_CATEGORIES, CAMERA_PRESETS } from '../data/cameraPresets';
@@ -100,6 +101,7 @@ export default function LiveCapture() {
   const [autoPlayAllGifs, setAutoPlayAllGifs] = useState(false);
   const [showGrid, setShowGrid] = useState(true);
   const [showPaymentModalInCapture, setShowPaymentModalInCapture] = useState(false);
+  const [copiedAlbumLink, setCopiedAlbumLink] = useState(false);
 
   // Automatically open the Album Modal immediately when session timer expires!
   useEffect(() => {
@@ -1417,6 +1419,48 @@ export default function LiveCapture() {
             )}
 
             {/* Cloud Storage & Filter Bar */}
+            <div className="bg-emerald-950/40 border border-emerald-500/30 p-2.5 sm:p-3 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs">
+              <div className="space-y-0.5">
+                <p className="font-bold text-emerald-300 flex items-center gap-1.5 text-[11px]">
+                  <span>Link Unik Album Publik:</span>
+                  <span className="font-mono text-emerald-200/90 text-[10px] bg-emerald-900/50 px-1.5 py-0.5 rounded">
+                    {typeof window !== 'undefined' ? `${window.location.origin}/album/${currentSessionId}` : ''}
+                  </span>
+                </p>
+                <p className="text-[10px] text-gray-400">
+                  Dapat dilihat publik tanpa login menggunakan link unik ini.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-1.5 shrink-0 w-full sm:w-auto">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const url = `${window.location.origin}/album/${currentSessionId}`;
+                    navigator.clipboard.writeText(url);
+                    setCopiedAlbumLink(true);
+                    setTimeout(() => setCopiedAlbumLink(false), 2000);
+                  }}
+                  className={`flex-1 sm:flex-none px-3 py-1.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1 transition-colors ${
+                    copiedAlbumLink ? 'bg-white text-gray-900' : 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                  }`}
+                >
+                  <Copy size={12} />
+                  <span>{copiedAlbumLink ? 'Link Disalin!' : 'Salin Link'}</span>
+                </button>
+                <a
+                  href={`/album/${currentSessionId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="p-1.5 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-colors flex items-center justify-center"
+                  title="Buka tampilan album publik di tab baru"
+                >
+                  <ExternalLink size={14} />
+                </a>
+              </div>
+            </div>
+
+            {/* Media Filter Bar */}
             <div className="flex flex-wrap items-center justify-between gap-2 bg-white/5 border border-white/10 p-2 sm:p-2.5 rounded-2xl text-xs">
               {/* Media type filter tabs */}
               <div className="flex items-center gap-1 bg-black/40 p-1 rounded-xl">

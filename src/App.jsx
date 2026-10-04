@@ -4,6 +4,7 @@ import BoothHome from './pages/BoothHome';
 import LiveCapture from './pages/LiveCapture';
 import EditorPhotostrip from './pages/EditorPhotostrip';
 import AdminDashboard from './pages/AdminDashboard';
+import PublicAlbum from './pages/PublicAlbum';
 import ProtectedRoute from './components/ProtectedRoute';
 import AuthModal from './components/AuthModal';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -15,22 +16,8 @@ function App() {
         <AuthModal />
         <Routes>
           <Route path="/" element={<BoothHome />} />
-          <Route 
-            path="/setup" 
-            element={
-              <ProtectedRoute>
-                <BoothHome />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/capture" 
-            element={
-              <ProtectedRoute>
-                <LiveCapture />
-              </ProtectedRoute>
-            } 
-          />
+          <Route path="/setup" element={<BoothHome />} />
+          <Route path="/capture" element={<LiveCapture />} />
           <Route 
             path="/editor" 
             element={
@@ -39,6 +26,8 @@ function App() {
               </ProtectedRoute>
             } 
           />
+          <Route path="/album/:albumId" element={<PublicAlbum />} />
+          <Route path="/shared-album/:albumId" element={<PublicAlbum />} />
           <Route 
             path="/admin" 
             element={
