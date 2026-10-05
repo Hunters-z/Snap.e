@@ -26,6 +26,10 @@ import {
   LogOut,
   Menu,
   Users,
+  UserPlus,
+  Edit2,
+  Search,
+  Shield,
   QrCode,
   CreditCard,
   Sparkles,
@@ -57,6 +61,11 @@ export default function AdminDashboard() {
     updateWebsiteConfig,
     registeredUsers,
     registeredUsersCount,
+    addUser,
+    updateUser,
+    deleteUser,
+    toggleUserRole,
+    toggleUserStatus,
     isAdminAuth, 
     adminLogin, 
     adminLogout,
@@ -70,9 +79,125 @@ export default function AdminDashboard() {
   const [googleLoading, setGoogleLoading] = useState(false);
 
   // Active Tab
-  // 'console' | 'orders' | 'frames' | 'pricing' | 'presets' | 'qris_api' | 'website' | 'stickers' | 'hardware'
+  // 'console' | 'orders' | 'frames' | 'pricing' | 'presets' | 'qris_api' | 'website' | 'stickers' | 'hardware' | 'users'
   const [activeTab, setActiveTab] = useState('console');
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+
+  // User Management State
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [userRoleFilter, setUserRoleFilter] = useState('all'); // 'all' | 'admin' | 'customer'
+  const [userStatusFilter, setUserStatusFilter] = useState('all'); // 'all' | 'active' | 'suspended'
+  const [showAddUserModal, setShowAddUserModal] = useState(false);
+  const [editingUser, setEditingUser] = useState(null);
+  const [userModalForm, setUserModalForm] = useState({
+    displayName: '',
+    email: '',
+    role: 'customer',
+    status: 'active',
+    notes: ''
+  });
+  const [userToast, setUserToast] = useState(null);
+
+  const showUserToast = (msg) => {
+    setUserToast(msg);
+    setTimeout(() => setUserToast(null), 3000);
+  };
+
+  const handleOpenAddUser = () => {
+    setUserModalForm({
+      displayName: '',
+      email: '',
+      role: 'customer',
+      status: 'active',
+      notes: ''
+    });
+    setShowAddUserModal(true);
+  };
+
+  const handleOpenEditUser = (user) => {
+    setEditingUser(user);
+    setUserModalForm({
+      displayName: user.displayName || '',
+      email: user.email || '',
+      role: user.role || 'customer',
+      status: user.status || 'active',
+      notes: user.notes || ''
+    });
+  };
+
+  const handleSaveAddUser = async (e) => {
+    e.preventDefault();
+    if (!userModalForm.email) return;
+    const newUid = `user_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
+    const userData = {
+      uid: newUid,
+      id: newUid,
+      displayName: userModalForm.displayName || userModalForm.email.split('@')[0],
+      email: userModalForm.email,
+      role: userModalForm.role,
+      status: userModalForm.status,
+      notes: userModalForm.notes,
+      createdAt: new Date().toISOString(),
+      lastLoginAt: new Date().toISOString()
+    };
+    if (addUser) {
+      await addUser(userData);
+    }
+    setShowAddUserModal(false);
+    showUserToast(`Pengguna "${userData.displayName}" berhasil didaftarkan!`);
+  };
+
+  const handleSaveEditUser = async (e) => {
+    e.preventDefault();
+    if (!editingUser) return;
+    const updated = {
+      displayName: userModalForm.displayName,
+      email: userModalForm.email,
+      role: userModalForm.role,
+      status: userModalForm.status,
+      notes: userModalForm.notes
+    };
+    if (updateUser) {
+      await updateUser(editingUser.uid || editingUser.id, updated);
+    }
+    setEditingUser(null);
+    showUserToast(`Data pengguna "${userModalForm.displayName}" berhasil diperbarui!`);
+  };
+
+  const handleToggleUserRole = async (u) => {
+    const targetUid = u.uid || u.id;
+    if (toggleUserRole) {
+      const nextRole = await toggleUserRole(targetUid, u.role);
+      showUserToast(`Role ${u.displayName || u.email} diubah ke ${nextRole === 'admin' ? 'Studio Owner' : 'Customer'}!`);
+    } else if (updateUser) {
+      const nextRole = u.role === 'admin' ? 'customer' : 'admin';
+      await updateUser(targetUid, { role: nextRole });
+      showUserToast(`Role ${u.displayName || u.email} diubah ke ${nextRole === 'admin' ? 'Studio Owner' : 'Customer'}!`);
+    }
+  };
+
+  const handleToggleUserStatus = async (u) => {
+    const targetUid = u.uid || u.id;
+    const currentStatus = u.status || 'active';
+    if (toggleUserStatus) {
+      const nextStatus = await toggleUserStatus(targetUid, currentStatus);
+      showUserToast(`Status ${u.displayName || u.email} diubah ke ${nextStatus === 'active' ? 'Aktif' : 'Ditangguhkan'}!`);
+    } else if (updateUser) {
+      const nextStatus = currentStatus === 'suspended' ? 'active' : 'suspended';
+      await updateUser(targetUid, { status: nextStatus });
+      showUserToast(`Status ${u.displayName || u.email} diubah ke ${nextStatus === 'active' ? 'Aktif' : 'Ditangguhkan'}!`);
+    }
+  };
+
+  const handleDeleteUser = async (u) => {
+    const confirmed = window.confirm(`Apakah Anda yakin ingin menghapus akun pengguna "${u.displayName || u.email}" dari database studio? Tindakan ini tidak dapat dibatalkan.`);
+    if (!confirmed) return;
+    const targetUid = u.uid || u.id;
+    if (deleteUser) {
+      await deleteUser(targetUid);
+      showUserToast(`Pengguna "${u.displayName || u.email}" berhasil dihapus.`);
+    }
+  };
 
   // Modals for Custom Frames & Guide
   const [showAddFrameModal, setShowAddFrameModal] = useState(false);
@@ -653,6 +778,24 @@ export default function AdminDashboard() {
             <PrinterIcon size={16} />
             Hardware Mesin Cetak
           </button>
+
+          {/* 10. User Management */}
+          <button
+            onClick={() => { setActiveTab('users'); setMobileSidebarOpen(false); }}
+            className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
+              activeTab === 'users'
+                ? 'bg-gray-900 text-white shadow-xs'
+                : 'text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            <span className="flex items-center gap-3">
+              <Users size={16} />
+              Kelola Pengguna
+            </span>
+            <span className="px-1.5 py-0.5 rounded-full text-[10px] font-mono bg-blue-100 text-blue-700 font-bold">
+              {registeredUsers?.length || 5}
+            </span>
+          </button>
         </nav>
 
         {/* Studio Info & Logout */}
@@ -702,6 +845,7 @@ export default function AdminDashboard() {
               {activeTab === 'website' && 'Editor Tampilan & Konten Website'}
               {activeTab === 'stickers' && 'Kelola Stiker Mandiri'}
               {activeTab === 'hardware' && 'Mesin Cetak Lab'}
+              {activeTab === 'users' && 'Manajemen Pengguna & Hak Akses Studio'}
             </span>
           </div>
 
@@ -800,6 +944,13 @@ export default function AdminDashboard() {
                       </h3>
                       <p className="text-xs text-gray-500 mt-0.5">Pengguna yang telah login dan terdaftar dalam database studio.</p>
                     </div>
+                    <button
+                      onClick={() => setActiveTab('users')}
+                      className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                    >
+                      <Users size={13} />
+                      <span>Kelola Semua Pengguna →</span>
+                    </button>
                   </div>
 
                   <div className="overflow-x-auto">
@@ -2179,6 +2330,275 @@ export default function AdminDashboard() {
               </div>
             )}
 
+            {/* TAB 10: USER MANAGEMENT */}
+            {activeTab === 'users' && (
+              <div className="space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight flex items-center gap-2.5">
+                      <Users size={24} className="text-blue-600" />
+                      <span>Manajemen Pengguna & Hak Akses Studio</span>
+                    </h1>
+                    <p className="text-xs sm:text-sm text-gray-500 mt-1">
+                      Kelola daftar pelanggan, peran akun (Studio Owner / Customer), status operasional, dan riwayat login.
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleOpenAddUser}
+                    className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 self-start sm:self-auto cursor-pointer"
+                  >
+                    <UserPlus size={15} />
+                    <span>+ Tambah Pengguna Baru</span>
+                  </button>
+                </div>
+
+                {/* 4 Summary Stats Cards */}
+                {(() => {
+                  const sampleFallback = [
+                    { uid: 'u_1', displayName: 'Randi Kurnia', email: '0601randikurnia.s@gmail.com', role: 'admin', status: 'active', createdAt: '2026-09-20', lastLoginAt: 'Baru saja', notes: 'Master Admin' },
+                    { uid: 'u_2', displayName: 'Nabila Azzahra', email: 'nabila.azzahra@gmail.com', role: 'customer', status: 'active', createdAt: '2026-09-22', lastLoginAt: '2 jam lalu', notes: 'Pelanggan reguler' },
+                    { uid: 'u_3', displayName: 'Dimas Prasetya', email: 'dimas.prasetya@gmail.com', role: 'customer', status: 'active', createdAt: '2026-09-23', lastLoginAt: '6 jam lalu', notes: '' },
+                    { uid: 'u_4', displayName: 'Alisya Putri', email: 'alisya.putri@gmail.com', role: 'customer', status: 'active', createdAt: '2026-09-24', lastLoginAt: 'Kemarin', notes: '' },
+                    { uid: 'u_5', displayName: 'Kevin Pratama', email: 'kevin.pratama@gmail.com', role: 'customer', status: 'suspended', createdAt: '2026-09-26', lastLoginAt: 'Hari ini', notes: 'Ditangguhkan' }
+                  ];
+                  const usersList = (registeredUsers && registeredUsers.length > 0) ? registeredUsers : sampleFallback;
+                  const totalUsers = usersList.length;
+                  const adminCount = usersList.filter(u => u.role === 'admin').length;
+                  const customerCount = usersList.filter(u => u.role !== 'admin').length;
+                  const activeCount = usersList.filter(u => (u.status || 'active') === 'active').length;
+
+                  const filteredList = usersList.filter(u => {
+                    const q = userSearchQuery.toLowerCase().trim();
+                    const matchQ = !q || (u.displayName || '').toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q) || (u.notes || '').toLowerCase().includes(q);
+                    const matchRole = userRoleFilter === 'all' || u.role === userRoleFilter;
+                    const matchStatus = userStatusFilter === 'all' || (u.status || 'active') === userStatusFilter;
+                    return matchQ && matchRole && matchStatus;
+                  });
+
+                  return (
+                    <div className="space-y-6">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                        <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-xs">
+                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Pengguna</p>
+                          <p className="text-2xl font-extrabold text-gray-900 mt-1">{totalUsers}</p>
+                          <p className="text-[10px] text-gray-500 mt-1">Akun Terdaftar</p>
+                        </div>
+                        <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-xs">
+                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Studio Owner (Admin)</p>
+                          <p className="text-2xl font-extrabold text-amber-600 mt-1">{adminCount}</p>
+                          <p className="text-[10px] text-gray-500 mt-1">Hak Akses Penuh</p>
+                        </div>
+                        <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-xs">
+                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Pelanggan (Customer)</p>
+                          <p className="text-2xl font-extrabold text-blue-600 mt-1">{customerCount}</p>
+                          <p className="text-[10px] text-gray-500 mt-1">Akses Photobooth & Galeri</p>
+                        </div>
+                        <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-xs">
+                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Pengguna Aktif</p>
+                          <p className="text-2xl font-extrabold text-emerald-600 mt-1">{activeCount}</p>
+                          <p className="text-[10px] text-gray-500 mt-1">{totalUsers - activeCount} Ditangguhkan</p>
+                        </div>
+                      </div>
+
+                      {/* Search & Filter Toolbar */}
+                      <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                        <div className="relative flex-1 max-w-md">
+                          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                          <input
+                            type="text"
+                            value={userSearchQuery}
+                            onChange={(e) => setUserSearchQuery(e.target.value)}
+                            placeholder="Cari nama, email, atau catatan pengguna..."
+                            className="w-full pl-9 pr-8 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-900 focus:outline-hidden focus:border-blue-500 focus:bg-white transition-all"
+                          />
+                          {userSearchQuery && (
+                            <button
+                              onClick={() => setUserSearchQuery('')}
+                              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
+                            >
+                              <X size={13} />
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-2 flex-wrap text-xs">
+                          {/* Role Filter */}
+                          <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl">
+                            {[
+                              { id: 'all', label: 'Semua Role' },
+                              { id: 'admin', label: 'Admin' },
+                              { id: 'customer', label: 'Pelanggan' }
+                            ].map(rf => (
+                              <button
+                                key={rf.id}
+                                onClick={() => setUserRoleFilter(rf.id)}
+                                className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                                  userRoleFilter === rf.id
+                                    ? 'bg-white text-gray-900 shadow-xs'
+                                    : 'text-gray-500 hover:text-gray-900'
+                                }`}
+                              >
+                                {rf.label}
+                              </button>
+                            ))}
+                          </div>
+
+                          {/* Status Filter */}
+                          <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl">
+                            {[
+                              { id: 'all', label: 'Semua Status' },
+                              { id: 'active', label: 'Aktif' },
+                              { id: 'suspended', label: 'Ditangguhkan' }
+                            ].map(sf => (
+                              <button
+                                key={sf.id}
+                                onClick={() => setUserStatusFilter(sf.id)}
+                                className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                                  userStatusFilter === sf.id
+                                    ? 'bg-white text-gray-900 shadow-xs'
+                                    : 'text-gray-500 hover:text-gray-900'
+                                }`}
+                              >
+                                {sf.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Users Table */}
+                      <div className="bg-white border border-gray-200 rounded-2xl shadow-xs overflow-hidden">
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left text-xs">
+                            <thead className="bg-gray-50 border-b border-gray-200 text-gray-500 font-bold uppercase tracking-wider">
+                              <tr>
+                                <th className="p-3.5">Pengguna</th>
+                                <th className="p-3.5">Email Akun</th>
+                                <th className="p-3.5">Role / Hak Akses</th>
+                                <th className="p-3.5">Status</th>
+                                <th className="p-3.5">Bergabung</th>
+                                <th className="p-3.5 text-right">Aksi Kelola</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                              {filteredList.length === 0 ? (
+                                <tr>
+                                  <td colSpan={6} className="p-8 text-center text-gray-400 space-y-2">
+                                    <Users size={32} className="mx-auto text-gray-300" />
+                                    <p className="font-semibold text-gray-600">Tidak ada pengguna yang sesuai kriteria pencarian.</p>
+                                    <p className="text-[11px] text-gray-400">Coba ubah kata kunci atau reset filter role/status.</p>
+                                  </td>
+                                </tr>
+                              ) : (
+                                filteredList.map((u, i) => {
+                                  const isUserAdmin = u.role === 'admin';
+                                  const isUserActive = (u.status || 'active') === 'active';
+                                  return (
+                                    <tr key={u.uid || u.id || i} className="hover:bg-gray-50/60 transition-colors">
+                                      <td className="p-3.5">
+                                        <div className="flex items-center gap-2.5">
+                                          <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs uppercase shadow-2xs ${
+                                            isUserAdmin ? 'bg-amber-100 text-amber-800 border border-amber-300' : 'bg-blue-100 text-blue-800 border border-blue-300'
+                                          }`}>
+                                            {u.displayName?.[0] || 'U'}
+                                          </div>
+                                          <div>
+                                            <p className="font-bold text-gray-900 flex items-center gap-1.5">
+                                              <span>{u.displayName || 'Pengguna Photobooth'}</span>
+                                              {isUserAdmin && (
+                                                <span title="Studio Owner / Admin"><Shield size={11} className="text-amber-600 fill-amber-500" /></span>
+                                              )}
+                                            </p>
+                                            {u.notes && (
+                                              <p className="text-[10px] text-gray-400 truncate max-w-[180px]">{u.notes}</p>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </td>
+                                      <td className="p-3.5 font-mono text-gray-600">
+                                        <div className="flex items-center gap-1.5">
+                                          <span>{u.email}</span>
+                                          <button
+                                            onClick={() => {
+                                              navigator.clipboard.writeText(u.email);
+                                              showUserToast('Email disalin ke clipboard');
+                                            }}
+                                            className="text-gray-400 hover:text-gray-700 cursor-pointer"
+                                            title="Salin email"
+                                          >
+                                            <Copy size={11} />
+                                          </button>
+                                        </div>
+                                      </td>
+                                      <td className="p-3.5">
+                                        <div className="flex items-center gap-2">
+                                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                                            isUserAdmin ? 'bg-amber-100 text-amber-800 border border-amber-200' : 'bg-blue-100 text-blue-800 border border-blue-200'
+                                          }`}>
+                                            {isUserAdmin ? 'Studio Owner' : 'Customer'}
+                                          </span>
+                                          <button
+                                            onClick={() => handleToggleUserRole(u)}
+                                            className="text-[10px] text-gray-500 hover:text-blue-600 font-semibold underline underline-offset-2 cursor-pointer"
+                                            title={`Ubah role menjadi ${isUserAdmin ? 'Customer' : 'Admin'}`}
+                                          >
+                                            {isUserAdmin ? 'Jadikan Customer' : 'Jadikan Admin'}
+                                          </button>
+                                        </div>
+                                      </td>
+                                      <td className="p-3.5">
+                                        <div className="flex items-center gap-2">
+                                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase flex items-center gap-1 ${
+                                            isUserActive ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-amber-100 text-amber-800 border border-amber-200'
+                                          }`}>
+                                            <span className={`w-1.5 h-1.5 rounded-full ${isUserActive ? 'bg-emerald-600' : 'bg-amber-600'}`} />
+                                            {isUserActive ? 'Aktif' : 'Ditangguhkan'}
+                                          </span>
+                                          <button
+                                            onClick={() => handleToggleUserStatus(u)}
+                                            className="text-[10px] text-gray-500 hover:text-amber-600 font-semibold underline underline-offset-2 cursor-pointer"
+                                            title={isUserActive ? 'Tangguhkan akun' : 'Aktifkan akun'}
+                                          >
+                                            {isUserActive ? 'Tangguhkan' : 'Aktifkan'}
+                                          </button>
+                                        </div>
+                                      </td>
+                                      <td className="p-3.5 text-gray-500">
+                                        <p>{u.createdAt ? (typeof u.createdAt === 'string' && u.createdAt.includes('-') ? new Date(u.createdAt).toLocaleDateString('id-ID') : u.createdAt) : 'Aktif'}</p>
+                                        <p className="text-[10px] text-gray-400">{u.lastLoginAt ? (typeof u.lastLoginAt === 'string' && u.lastLoginAt.includes('T') ? new Date(u.lastLoginAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : u.lastLoginAt) : 'Online'}</p>
+                                      </td>
+                                      <td className="p-3.5 text-right">
+                                        <div className="flex items-center justify-end gap-1.5">
+                                          <button
+                                            onClick={() => handleOpenEditUser(u)}
+                                            className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                                            title="Edit detail pengguna"
+                                          >
+                                            <Edit2 size={14} />
+                                          </button>
+                                          <button
+                                            onClick={() => handleDeleteUser(u)}
+                                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                                            title="Hapus pengguna dari database"
+                                          >
+                                            <Trash2 size={14} />
+                                          </button>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  );
+                                })
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+
           </div>
         </div>
       </main>
@@ -2195,6 +2615,212 @@ export default function AdminDashboard() {
         onClose={() => setShowGuideModal(false)}
         onOpenAddFrame={() => setShowAddFrameModal(true)}
       />
+
+      {/* ADD USER MODAL */}
+      {showAddUserModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-gray-100 animate-fadeIn">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <h3 className="font-extrabold text-base text-gray-900 flex items-center gap-2">
+                <UserPlus size={18} className="text-blue-600" />
+                <span>Tambah Pengguna Baru</span>
+              </h3>
+              <button
+                onClick={() => setShowAddUserModal(false)}
+                className="text-gray-400 hover:text-gray-600 cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveAddUser} className="space-y-3.5 text-xs">
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">Nama Lengkap</label>
+                <input
+                  type="text"
+                  required
+                  value={userModalForm.displayName}
+                  onChange={(e) => setUserModalForm({ ...userModalForm, displayName: e.target.value })}
+                  placeholder="Misal: Kevin Wardhana"
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:outline-hidden focus:border-blue-500 focus:bg-white"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">Alamat Email (Google / Login)</label>
+                <input
+                  type="email"
+                  required
+                  value={userModalForm.email}
+                  onChange={(e) => setUserModalForm({ ...userModalForm, email: e.target.value })}
+                  placeholder="kevin@example.com"
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:outline-hidden focus:border-blue-500 focus:bg-white font-mono"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Role Akun</label>
+                  <select
+                    value={userModalForm.role}
+                    onChange={(e) => setUserModalForm({ ...userModalForm, role: e.target.value })}
+                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:outline-hidden focus:border-blue-500 focus:bg-white font-semibold cursor-pointer"
+                  >
+                    <option value="customer">Pelanggan (Customer)</option>
+                    <option value="admin">Studio Owner (Admin)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Status Akun</label>
+                  <select
+                    value={userModalForm.status}
+                    onChange={(e) => setUserModalForm({ ...userModalForm, status: e.target.value })}
+                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:outline-hidden focus:border-blue-500 focus:bg-white font-semibold cursor-pointer"
+                  >
+                    <option value="active">Aktif</option>
+                    <option value="suspended">Ditangguhkan</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">Catatan Tambahan (Opsional)</label>
+                <input
+                  type="text"
+                  value={userModalForm.notes}
+                  onChange={(e) => setUserModalForm({ ...userModalForm, notes: e.target.value })}
+                  placeholder="Misal: Pelanggan VIP / Member studio"
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:outline-hidden focus:border-blue-500 focus:bg-white"
+                />
+              </div>
+
+              <div className="pt-2 border-t border-gray-100 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAddUserModal(false)}
+                  className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-bold cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-xs flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Check size={14} />
+                  <span>Simpan Pengguna</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT USER MODAL */}
+      {editingUser && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-gray-100 animate-fadeIn">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <h3 className="font-extrabold text-base text-gray-900 flex items-center gap-2">
+                <Edit2 size={18} className="text-blue-600" />
+                <span>Edit Pengguna: {editingUser.displayName || editingUser.email}</span>
+              </h3>
+              <button
+                onClick={() => setEditingUser(null)}
+                className="text-gray-400 hover:text-gray-600 cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditUser} className="space-y-3.5 text-xs">
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">Nama Lengkap</label>
+                <input
+                  type="text"
+                  required
+                  value={userModalForm.displayName}
+                  onChange={(e) => setUserModalForm({ ...userModalForm, displayName: e.target.value })}
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:outline-hidden focus:border-blue-500 focus:bg-white"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">Alamat Email</label>
+                <input
+                  type="email"
+                  required
+                  value={userModalForm.email}
+                  onChange={(e) => setUserModalForm({ ...userModalForm, email: e.target.value })}
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:outline-hidden focus:border-blue-500 focus:bg-white font-mono"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Role Akun</label>
+                  <select
+                    value={userModalForm.role}
+                    onChange={(e) => setUserModalForm({ ...userModalForm, role: e.target.value })}
+                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:outline-hidden focus:border-blue-500 focus:bg-white font-semibold cursor-pointer"
+                  >
+                    <option value="customer">Pelanggan (Customer)</option>
+                    <option value="admin">Studio Owner (Admin)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Status Akun</label>
+                  <select
+                    value={userModalForm.status}
+                    onChange={(e) => setUserModalForm({ ...userModalForm, status: e.target.value })}
+                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:outline-hidden focus:border-blue-500 focus:bg-white font-semibold cursor-pointer"
+                  >
+                    <option value="active">Aktif</option>
+                    <option value="suspended">Ditangguhkan</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">Catatan Tambahan</label>
+                <input
+                  type="text"
+                  value={userModalForm.notes}
+                  onChange={(e) => setUserModalForm({ ...userModalForm, notes: e.target.value })}
+                  placeholder="Catatan pelanggan atau admin"
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:outline-hidden focus:border-blue-500 focus:bg-white"
+                />
+              </div>
+
+              <div className="pt-2 border-t border-gray-100 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingUser(null)}
+                  className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-bold cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-xs flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Check size={14} />
+                  <span>Perbarui Data</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* USER MANAGEMENT TOAST NOTIFICATION */}
+      {userToast && (
+        <div className="fixed bottom-6 right-6 z-50 bg-gray-900 text-white text-xs px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-2 border border-white/10 animate-bounce">
+          <CheckCircle size={16} className="text-emerald-400 shrink-0" />
+          <span className="font-semibold">{userToast}</span>
+        </div>
+      )}
 
     </div>
   );

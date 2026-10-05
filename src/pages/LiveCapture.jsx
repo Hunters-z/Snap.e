@@ -46,6 +46,7 @@ export default function LiveCapture() {
     mode, 
     setMode,
     layout, 
+    setLayout,
     capturedPhotos,
     sessionTimeRemaining,
     startOrResumeSession,
@@ -899,8 +900,41 @@ export default function LiveCapture() {
           )}
         </div>
 
-        {/* Slot selector chips */}
-        <div className="flex items-center gap-1.5">
+        {/* Layout Format & Slot selector chips */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Grid 4 / Grid 6 Toggle */}
+          <div className="flex items-center bg-white/10 rounded-full p-0.5 text-[10px] font-bold">
+            <button
+              type="button"
+              onClick={() => {
+                if (setLayout) setLayout('4r_4cut');
+                if (activeSlotIndex >= 4) setActiveSlotIndex(0);
+              }}
+              className={`px-2 py-0.5 rounded-full transition-colors ${
+                layout !== '4r_6cut'
+                  ? 'bg-white text-black font-extrabold shadow-xs'
+                  : 'text-gray-300 hover:text-white'
+              }`}
+              title="Mode Grid 4 (4 Pose)"
+            >
+              Grid 4
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (setLayout) setLayout('4r_6cut');
+              }}
+              className={`px-2 py-0.5 rounded-full transition-colors ${
+                layout === '4r_6cut'
+                  ? 'bg-white text-black font-extrabold shadow-xs'
+                  : 'text-gray-300 hover:text-white'
+              }`}
+              title="Mode Grid 6 (6 Pose)"
+            >
+              Grid 6
+            </button>
+          </div>
+
           <span className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider hidden sm:inline">
             Ambil Slot:
           </span>

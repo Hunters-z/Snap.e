@@ -16,7 +16,9 @@ import {
   X, 
   Cloud,
   Maximize2,
-  RefreshCw
+  RefreshCw,
+  Lock,
+  Eye
 } from 'lucide-react';
 import { useBooth } from '../context/BoothContext';
 import { 
@@ -66,6 +68,7 @@ export default function PublicAlbum() {
     sessionAlbum, 
     capturedPhotos,
     currentSessionId,
+    currentUser,
     showToast 
   } = useBooth();
 
@@ -382,16 +385,27 @@ export default function PublicAlbum() {
             </span>
           </div>
 
-          {/* Right Header Action: Only Editor (No Camera Button for Public Album) */}
+          {/* Right Header Action: Mode Publik (Hanya Lihat & Unduh) vs Mode Pemilik (Editor) */}
           <div className="flex items-center gap-2">
-            <button
-              onClick={handleOpenEditor}
-              className="px-4 py-2 rounded-xl text-xs font-extrabold text-white bg-red-600 hover:bg-red-700 shadow-sm shadow-red-600/20 flex items-center gap-1.5 transition-all active:scale-98 cursor-pointer"
-              title="Buka Editor Photostrip (memerlukan login)"
-            >
-              <Edit3 size={13} />
-              <span>Buka di Editor</span>
-            </button>
+            {currentUser ? (
+              <button
+                onClick={handleOpenEditor}
+                className="px-4 py-2 rounded-xl text-xs font-extrabold text-white bg-red-600 hover:bg-red-700 shadow-sm shadow-red-600/20 flex items-center gap-1.5 transition-all active:scale-98 cursor-pointer"
+                title="Buka Editor Photostrip (Mode Pemilik)"
+              >
+                <Edit3 size={13} />
+                <span>Buka di Editor</span>
+              </button>
+            ) : (
+              <div 
+                className="flex items-center gap-1.5 text-xs text-gray-500 bg-gray-100/90 px-3.5 py-2 rounded-xl border border-gray-200/80 font-medium select-none"
+                title="Pengunjung publik hanya memiliki hak melihat & mengunduh foto. Pengeditan dikunci."
+              >
+                <Lock size={12} className="text-gray-400" />
+                <span className="hidden sm:inline">Mode Publik (Hanya Lihat & Unduh)</span>
+                <span className="sm:hidden">Hanya Lihat</span>
+              </div>
+            )}
           </div>
         </div>
       </header>
@@ -416,6 +430,14 @@ export default function PublicAlbum() {
                   <Cloud size={11} className="text-blue-500" />
                   Akses Publik Tanpa Login
                 </span>
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200/60">
+                  <Eye size={11} className="text-emerald-600" />
+                  Bebas Lihat & Unduh
+                </span>
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-gray-100 text-gray-700 border border-gray-200/60">
+                  <Lock size={11} className="text-gray-500" />
+                  Edit Terkunci
+                </span>
               </div>
 
               <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 tracking-tight">
@@ -423,8 +445,8 @@ export default function PublicAlbum() {
               </h1>
 
               <p className="text-xs sm:text-sm text-gray-600 max-w-2xl leading-relaxed">
-                Album ini dapat dilihat secara publik oleh siapa saja hanya dengan menggunakan link unik ini. 
-                Anda dapat melihat foto hasil jepretan, memutar animasi gerak GIF, mengunduh file HD, atau melanjutkan kreasi photostrip ke editor (tersedia ketika login).
+                Sebagai pengunjung publik, Anda dapat melihat galeri foto dan mengunduh seluruh file (foto resolusi HD & animasi gerak GIF) secara bebas hanya dengan link unik ini. 
+                Pengeditan isi album dikunci demi menjaga keaslian momen, dan editor hanya tersedia bagi pemilik sesi yang telah login.
               </p>
             </div>
 

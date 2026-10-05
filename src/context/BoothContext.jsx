@@ -615,6 +615,9 @@ export function BoothProvider({ children }) {
   const selectPhotoForSlot = useCallback((slotIndex, photoItem) => {
     setCapturedPhotos(prev => {
       const next = [...prev];
+      while (next.length <= slotIndex) {
+        next.push(null);
+      }
       next[slotIndex] = {
         ...photoItem,
         zoom: photoItem.zoom ?? 1.0,
@@ -903,6 +906,70 @@ export function BoothProvider({ children }) {
 
     return () => unsubscribe();
   }, []);
+
+  // User Management functions for Admin Dashboard
+  const addUser = async (userData) => {
+    const uid = userData.uid || `usr_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
+    const newUser = {
+      uid,
+      id: uid,
+      displayName: userData.displayName || 'Pengguna Baru',
+      email: userData.email,
+      role: userData.role || 'customer',
+      status: userData.status || 'active',
+      createdAt: new Date().toISOString(),
+      lastLoginAt: new Date().toISOString(),
+      ...userData
+    };
+
+    setRegisteredUsers(prev => [newUser, ...prev]);
+
+    try {
+      if (db) {
+        await setDoc(doc(db, 'users', uid), newUser, { merge: true });
+      }
+    } catch (err) {
+      console.warn('Error saving user to Firestore:', err);
+    }
+    return newUser;
+  };
+
+  const updateUser = async (uid, updatedData) => {
+    setRegisteredUsers(prev => prev.map(u => (u.uid === uid || u.id === uid) ? { ...u, ...updatedData } : u));
+    try {
+      if (db) {
+        await updateDoc(doc(db, 'users', uid), {
+          ...updatedData,
+          updatedAt: new Date().toISOString()
+        });
+      }
+    } catch (err) {
+      console.warn('Error updating user in Firestore:', err);
+    }
+  };
+
+  const deleteUser = async (uid) => {
+    setRegisteredUsers(prev => prev.filter(u => u.uid !== uid && u.id !== uid));
+    try {
+      if (db) {
+        await deleteDoc(doc(db, 'users', uid));
+      }
+    } catch (err) {
+      console.warn('Error deleting user from Firestore:', err);
+    }
+  };
+
+  const toggleUserRole = async (uid, currentRole) => {
+    const nextRole = currentRole === 'admin' ? 'customer' : 'admin';
+    await updateUser(uid, { role: nextRole });
+    return nextRole;
+  };
+
+  const toggleUserStatus = async (uid, currentStatus) => {
+    const nextStatus = currentStatus === 'suspended' ? 'active' : 'suspended';
+    await updateUser(uid, { status: nextStatus });
+    return nextStatus;
+  };
 
   // Save config changes to Firestore & local
   const updateAppConfig = async (newConfig) => {
@@ -1487,6 +1554,11 @@ export function BoothProvider({ children }) {
         updateWebsiteConfig,
         registeredUsers,
         registeredUsersCount: registeredUsers.length,
+        addUser,
+        updateUser,
+        deleteUser,
+        toggleUserRole,
+        toggleUserStatus,
         currentUser,
         authLoading,
         isAdminAuth: Boolean(currentUser?.isAdmin || isAdminAuth),

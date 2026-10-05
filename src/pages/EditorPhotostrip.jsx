@@ -26,7 +26,8 @@ import {
   Crop,
   Check,
   Share2,
-  ExternalLink
+  ExternalLink,
+  Upload
 } from 'lucide-react';
 import { FILTER_CATEGORIES, CAMERA_PRESETS } from '../data/cameraPresets';
 import { drawFrameGraphicDecorations } from '../data/defaultFrames';
@@ -47,6 +48,7 @@ export default function EditorPhotostrip() {
     sessionTimeRemaining,
     startNewSession,
     sessionAlbum,
+    addPhotoToAlbum,
     deletePhotoFromAlbum,
     selectPhotoForSlot,
     currentSessionId
@@ -88,12 +90,112 @@ export default function EditorPhotostrip() {
   const [photos, setPhotos] = useState(capturedPhotos);
   const [activePhotoIdx, setActivePhotoIdx] = useState(0);
 
+  // File upload refs & target slot for local photo uploads
+  const fileInputRef = useRef(null);
+  const slotUploadInputRef = useRef(null);
+  const [targetUploadSlot, setTargetUploadSlot] = useState(null);
+
   // Synchronize photos whenever capturedPhotos from context changes
   useEffect(() => {
     if (capturedPhotos && capturedPhotos.length > 0) {
-      setPhotos(capturedPhotos);
+      setPhotos(() => {
+        // Keep existing slots if capturedPhotos has updated items
+        const next = [...capturedPhotos];
+        while (next.length < totalSlots) {
+          next.push(null);
+        }
+        return next;
+      });
     }
-  }, [capturedPhotos]);
+  }, [capturedPhotos, totalSlots]);
+
+  // When switching to Grid 6 ('4r_6cut'), ensure array has at least 6 slots and auto-fill empty slots if sessionAlbum has photos
+  useEffect(() => {
+    if (layout === '4r_6cut') {
+      setPhotos(prev => {
+        const next = [...prev];
+        while (next.length < 6) {
+          next.push(null);
+        }
+        // If slots 4 or 5 are empty and sessionAlbum has photos that can fill them
+        if (Array.isArray(sessionAlbum) && sessionAlbum.length > 0) {
+          for (let i = 0; i < 6; i++) {
+            if (!next[i]?.dataUrl && sessionAlbum[i]?.dataUrl) {
+              next[i] = {
+                ...sessionAlbum[i],
+                zoom: sessionAlbum[i].zoom ?? 1.0,
+                offsetX: sessionAlbum[i].offsetX ?? 0,
+                offsetY: sessionAlbum[i].offsetY ?? 0,
+                stickers: sessionAlbum[i].stickers || []
+              };
+            }
+          }
+        }
+        return next;
+      });
+    }
+  }, [layout, sessionAlbum]);
+
+  // Handle direct file upload (from device/gallery)
+  const handleFileUpload = (e, specificSlot = null) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    files.forEach((file, fIdx) => {
+      if (!file.type.startsWith('image/')) return;
+      const reader = new FileReader();
+      reader.onload = (uploadEvent) => {
+        const dataUrl = uploadEvent.target.result;
+        const newPhotoItem = {
+          id: `upload_${Date.now()}_${fIdx}_${Math.random().toString(36).substr(2, 4)}`,
+          dataUrl,
+          gifUrl: null,
+          zoom: 1.0,
+          offsetX: 0,
+          offsetY: 0,
+          filterCss: 'none',
+          filterId: 'natural',
+          filterName: 'Natural',
+          filterBrand: 'RAW',
+          dateStamp: null,
+          stickers: [],
+          capturedAt: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
+        };
+
+        // Add to session album
+        if (addPhotoToAlbum) {
+          addPhotoToAlbum(newPhotoItem);
+        }
+
+        // If specific slot requested, place it there
+        if (specificSlot !== null && specificSlot !== undefined) {
+          handleAssignPhotoToSlot(newPhotoItem, specificSlot);
+        } else {
+          // Find first empty slot up to totalSlots
+          setPhotos(prev => {
+            const next = [...prev];
+            while (next.length < totalSlots) next.push(null);
+            let emptyIdx = -1;
+            for (let s = 0; s < totalSlots; s++) {
+              if (!next[s]?.dataUrl) {
+                emptyIdx = s;
+                break;
+              }
+            }
+            if (emptyIdx !== -1) {
+              next[emptyIdx] = newPhotoItem;
+              selectPhotoForSlot(emptyIdx, newPhotoItem);
+            }
+            return next;
+          });
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+
+    showToast(`${files.length} foto berhasil diunggah!`);
+    if (e.target) e.target.value = '';
+  };
 
   // Filter presets & category
   const availablePresets = appConfig.customFilters?.length > 0 ? appConfig.customFilters : CAMERA_PRESETS;
@@ -546,15 +648,20 @@ export default function EditorPhotostrip() {
   // Assign photo from session album into selected slot
   const handleAssignPhotoToSlot = (photoItem, slotIdx) => {
     selectPhotoForSlot(slotIdx, photoItem);
-    const next = [...photos];
-    next[slotIdx] = {
-      ...photoItem,
-      zoom: photoItem.zoom ?? 1.0,
-      offsetX: photoItem.offsetX ?? 0,
-      offsetY: photoItem.offsetY ?? 0,
-      stickers: Array.isArray(photoItem.stickers) ? photoItem.stickers : []
-    };
-    setPhotos(next);
+    setPhotos(prev => {
+      const next = [...prev];
+      while (next.length <= slotIdx) {
+        next.push(null);
+      }
+      next[slotIdx] = {
+        ...photoItem,
+        zoom: photoItem.zoom ?? 1.0,
+        offsetX: photoItem.offsetX ?? 0,
+        offsetY: photoItem.offsetY ?? 0,
+        stickers: Array.isArray(photoItem.stickers) ? photoItem.stickers : []
+      };
+      return next;
+    });
     showToast(`Foto berhasil dipasang pada Slot #${slotIdx + 1}`);
   };
 
@@ -1284,9 +1391,21 @@ export default function EditorPhotostrip() {
             })}
           </div>
         ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center bg-gray-100 text-gray-400 p-1 text-center pointer-events-none select-none">
-            <Camera size={13} className="text-gray-300" />
-            <span className="text-[8px] font-bold font-mono text-gray-500">#{idx + 1}</span>
+          <div 
+            onClick={(e) => {
+              e.stopPropagation();
+              setActivePhotoIdx(idx);
+              setTargetUploadSlot(idx);
+              if (slotUploadInputRef.current) slotUploadInputRef.current.click();
+            }}
+            className="w-full h-full flex flex-col items-center justify-center bg-gray-50/90 hover:bg-gray-100/90 text-gray-400 p-2 text-center select-none cursor-pointer transition-colors group/slot"
+            title={`Klik untuk memasang atau mengunggah foto ke Slot #${idx + 1}`}
+          >
+            <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-white shadow-xs border border-gray-200 flex items-center justify-center text-gray-500 group-hover/slot:text-red-600 group-hover/slot:border-red-300 transition-colors mb-1">
+              <Upload size={13} />
+            </div>
+            <span className="text-[9px] font-bold text-gray-700">Slot #{idx + 1}</span>
+            <span className="text-[7.5px] text-gray-400 group-hover/slot:text-gray-600">+ Pasang Foto</span>
           </div>
         )}
 
@@ -1446,24 +1565,45 @@ export default function EditorPhotostrip() {
                     </span>
                   </div>
 
-                  {sessionTimeRemaining <= 0 ? (
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {/* Upload from local device/gallery */}
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={(e) => handleFileUpload(e)}
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                    />
                     <button
-                      onClick={() => setShowPaymentModalInEditor(true)}
-                      className="flex items-center gap-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold rounded-lg shadow-xs transition-colors shrink-0"
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="flex items-center gap-1 px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 text-[11px] font-bold rounded-lg border border-gray-200 transition-colors shadow-xs"
+                      title="Unggah foto langsung dari galeri HP atau laptop (bisa pilih hingga 6 foto)"
                     >
-                      <CreditCard size={13} />
-                      <span>Beli Sesi Baru</span>
+                      <Upload size={12} />
+                      <span>+ Unggah</span>
                     </button>
-                  ) : (
-                    <button
-                      onClick={() => navigate('/capture')}
-                      className="flex items-center gap-1 px-2.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 text-[11px] font-bold rounded-lg border border-red-200 transition-colors shrink-0"
-                      title="Buka kamera untuk mengambil pose tambahan"
-                    >
-                      <Camera size={13} />
-                      <span>+ Foto Baru</span>
-                    </button>
-                  )}
+
+                    {sessionTimeRemaining <= 0 ? (
+                      <button
+                        onClick={() => setShowPaymentModalInEditor(true)}
+                        className="flex items-center gap-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold rounded-lg shadow-xs transition-colors shrink-0"
+                      >
+                        <CreditCard size={13} />
+                        <span>Beli Sesi Baru</span>
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => navigate('/capture')}
+                        className="flex items-center gap-1 px-2.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 text-[11px] font-bold rounded-lg border border-red-200 transition-colors shrink-0"
+                        title="Buka kamera untuk mengambil pose tambahan"
+                      >
+                        <Camera size={13} />
+                        <span>+ Kamera</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* Public Album Share Card with Unique Link */}
@@ -1818,22 +1958,25 @@ export default function EditorPhotostrip() {
                     </button>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
-                    {photos.slice(0, totalSlots).map((p, i) => (
-                      <button
-                        key={i}
-                        onClick={() => setActivePhotoIdx(i)}
-                        className={`flex-1 min-w-[55px] py-1.5 rounded-lg text-xs font-bold flex flex-col items-center transition-colors ${
-                          activePhotoIdx === i
-                            ? 'bg-gray-900 text-white shadow-xs'
-                            : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-100'
-                        }`}
-                      >
-                        <span>Foto {i + 1}</span>
-                        <span className="text-[9px] font-normal opacity-70 truncate max-w-full">
-                          {p?.filterBrand || 'RAW'}
-                        </span>
-                      </button>
-                    ))}
+                    {Array.from({ length: totalSlots }).map((_, i) => {
+                      const p = photos[i];
+                      return (
+                        <button
+                          key={i}
+                          onClick={() => setActivePhotoIdx(i)}
+                          className={`flex-1 min-w-[55px] py-1.5 rounded-lg text-xs font-bold flex flex-col items-center transition-colors ${
+                            activePhotoIdx === i
+                              ? 'bg-gray-900 text-white shadow-xs'
+                              : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-100'
+                          }`}
+                        >
+                          <span>Foto {i + 1}</span>
+                          <span className="text-[9px] font-normal opacity-70 truncate max-w-full">
+                            {p?.dataUrl ? (p?.filterBrand || 'RAW') : 'Kosong'}
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -1939,7 +2082,7 @@ export default function EditorPhotostrip() {
                     </span>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
-                    {photos.slice(0, totalSlots).map((_, i) => (
+                    {Array.from({ length: totalSlots }).map((_, i) => (
                       <button
                         key={i}
                         type="button"
@@ -2987,6 +3130,18 @@ export default function EditorPhotostrip() {
           </div>
         );
       })()}
+
+      {/* Hidden input for direct slot upload */}
+      <input
+        type="file"
+        ref={slotUploadInputRef}
+        onChange={(e) => {
+          handleFileUpload(e, targetUploadSlot);
+          setTargetUploadSlot(null);
+        }}
+        accept="image/*"
+        className="hidden"
+      />
 
       {/* Payment Modal for Expired Session */}
       <PaymentModal
