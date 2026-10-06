@@ -95,11 +95,12 @@ export default function EditorPhotostrip() {
   const slotUploadInputRef = useRef(null);
   const [targetUploadSlot, setTargetUploadSlot] = useState(null);
 
-  // Synchronize photos whenever capturedPhotos from context changes
+  // Synchronize photos once on initial mount or merge non-empty slots without clobbering newly added photos
+  const isInitializedRef = useRef(false);
   useEffect(() => {
-    if (capturedPhotos && capturedPhotos.length > 0) {
+    if (!isInitializedRef.current && capturedPhotos && capturedPhotos.length > 0) {
+      isInitializedRef.current = true;
       setPhotos(() => {
-        // Keep existing slots if capturedPhotos has updated items
         const next = [...capturedPhotos];
         while (next.length < totalSlots) {
           next.push(null);
@@ -109,32 +110,37 @@ export default function EditorPhotostrip() {
     }
   }, [capturedPhotos, totalSlots]);
 
-  // When switching to Grid 6 ('4r_6cut'), ensure array has at least 6 slots and auto-fill empty slots if sessionAlbum has photos
+  // When switching layout, ensure photos array matches totalSlots
   useEffect(() => {
-    if (layout === '4r_6cut') {
-      setPhotos(prev => {
-        const next = [...prev];
-        while (next.length < 6) {
-          next.push(null);
-        }
-        // If slots 4 or 5 are empty and sessionAlbum has photos that can fill them
-        if (Array.isArray(sessionAlbum) && sessionAlbum.length > 0) {
-          for (let i = 0; i < 6; i++) {
-            if (!next[i]?.dataUrl && sessionAlbum[i]?.dataUrl) {
-              next[i] = {
-                ...sessionAlbum[i],
-                zoom: sessionAlbum[i].zoom ?? 1.0,
-                offsetX: sessionAlbum[i].offsetX ?? 0,
-                offsetY: sessionAlbum[i].offsetY ?? 0,
-                stickers: sessionAlbum[i].stickers || []
-              };
-            }
+    setPhotos(prev => {
+      const next = [...prev];
+      while (next.length < totalSlots) {
+        next.push(null);
+      }
+      // If switching to Grid 6 and slots 4 or 5 are empty, try auto-filling from unassigned photos in sessionAlbum
+      if (layout === '4r_6cut' && Array.isArray(sessionAlbum) && sessionAlbum.length > 0) {
+        const unassigned = sessionAlbum.filter(item => {
+          const uUrl = item?.dataUrl || item?.url;
+          return uUrl && !next.some(p => p && (p.dataUrl === uUrl || (p.id && item.id && p.id === item.id)));
+        });
+        let unassignedIdx = 0;
+        for (let i = 0; i < 6; i++) {
+          if (!next[i]?.dataUrl && unassignedIdx < unassigned.length) {
+            const cand = unassigned[unassignedIdx++];
+            next[i] = {
+              ...cand,
+              dataUrl: cand.dataUrl || cand.url,
+              zoom: cand.zoom ?? 1.0,
+              offsetX: cand.offsetX ?? 0,
+              offsetY: cand.offsetY ?? 0,
+              stickers: cand.stickers || []
+            };
           }
         }
-        return next;
-      });
-    }
-  }, [layout, sessionAlbum]);
+      }
+      return next;
+    });
+  }, [layout, totalSlots, sessionAlbum]);
 
   // Handle direct file upload (from device/gallery)
   const handleFileUpload = (e, specificSlot = null) => {
@@ -182,10 +188,9 @@ export default function EditorPhotostrip() {
                 break;
               }
             }
-            if (emptyIdx !== -1) {
-              next[emptyIdx] = newPhotoItem;
-              selectPhotoForSlot(emptyIdx, newPhotoItem);
-            }
+            const targetIdx = emptyIdx !== -1 ? emptyIdx : activePhotoIdx;
+            next[targetIdx] = newPhotoItem;
+            updateCapturedPhotos(next);
             return next;
           });
         }
@@ -647,22 +652,37 @@ export default function EditorPhotostrip() {
 
   // Assign photo from session album into selected slot
   const handleAssignPhotoToSlot = (photoItem, slotIdx) => {
-    selectPhotoForSlot(slotIdx, photoItem);
+    if (!photoItem) return;
+    const itemUrl = photoItem.dataUrl || photoItem.url || photoItem.src || photoItem.imageUrl || '';
+    if (!itemUrl) return;
+    const cleanSlotIdx = Math.max(0, Math.min(totalSlots - 1, slotIdx));
+    
+    const normalizedItem = {
+      ...photoItem,
+      dataUrl: itemUrl,
+      zoom: photoItem.zoom ?? 1.0,
+      offsetX: photoItem.offsetX ?? 0,
+      offsetY: photoItem.offsetY ?? 0,
+      stickers: Array.isArray(photoItem.stickers) ? photoItem.stickers : []
+    };
+
+    if (selectPhotoForSlot) {
+      selectPhotoForSlot(cleanSlotIdx, normalizedItem);
+    }
+
     setPhotos(prev => {
       const next = [...prev];
-      while (next.length <= slotIdx) {
+      while (next.length < totalSlots) {
         next.push(null);
       }
-      next[slotIdx] = {
-        ...photoItem,
-        zoom: photoItem.zoom ?? 1.0,
-        offsetX: photoItem.offsetX ?? 0,
-        offsetY: photoItem.offsetY ?? 0,
-        stickers: Array.isArray(photoItem.stickers) ? photoItem.stickers : []
-      };
+      next[cleanSlotIdx] = normalizedItem;
+      // Immediately sync with context and persistent storage
+      updateCapturedPhotos(next);
       return next;
     });
-    showToast(`Foto berhasil dipasang pada Slot #${slotIdx + 1}`);
+
+    setActivePhotoIdx(cleanSlotIdx);
+    showToast(`Foto berhasil dipasang pada Frame Slot #${cleanSlotIdx + 1}`);
   };
 
   /**
@@ -1396,16 +1416,34 @@ export default function EditorPhotostrip() {
               e.stopPropagation();
               setActivePhotoIdx(idx);
               setTargetUploadSlot(idx);
-              if (slotUploadInputRef.current) slotUploadInputRef.current.click();
+              if (sessionAlbum && sessionAlbum.length > 0) {
+                setActiveTab('album');
+                showToast(`Silakan klik foto di album atau tombol angka untuk mengisi Slot #${idx + 1}`);
+              } else {
+                if (slotUploadInputRef.current) slotUploadInputRef.current.click();
+              }
             }}
             className="w-full h-full flex flex-col items-center justify-center bg-gray-50/90 hover:bg-gray-100/90 text-gray-400 p-2 text-center select-none cursor-pointer transition-colors group/slot"
-            title={`Klik untuk memasang atau mengunggah foto ke Slot #${idx + 1}`}
+            title={`Klik untuk memilih dari album atau mengunggah foto ke Slot #${idx + 1}`}
           >
-            <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-white shadow-xs border border-gray-200 flex items-center justify-center text-gray-500 group-hover/slot:text-red-600 group-hover/slot:border-red-300 transition-colors mb-1">
-              <Upload size={13} />
+            <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-white shadow-xs border border-gray-200 flex items-center justify-center text-gray-500 group-hover/slot:text-red-600 group-hover/slot:border-red-300 transition-colors mb-0.5">
+              <Upload size={12} />
             </div>
             <span className="text-[9px] font-bold text-gray-700">Slot #{idx + 1}</span>
             <span className="text-[7.5px] text-gray-400 group-hover/slot:text-gray-600">+ Pasang Foto</span>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setActivePhotoIdx(idx);
+                setTargetUploadSlot(idx);
+                if (slotUploadInputRef.current) slotUploadInputRef.current.click();
+              }}
+              className="mt-1 px-1.5 py-0.5 rounded bg-white hover:bg-gray-100 text-gray-700 text-[7px] font-bold border border-gray-200 shadow-2xs pointer-events-auto cursor-pointer"
+              title="Unggah file dari perangkat"
+            >
+              Unggah File
+            </button>
           </div>
         )}
 
@@ -1709,7 +1747,8 @@ export default function EditorPhotostrip() {
                           return true;
                         })
                         .map((item, idx) => {
-                          const assignedSlot = photos.findIndex(p => p.dataUrl === item.dataUrl);
+                          const itemUrl = item.dataUrl || item.url || '';
+                          const assignedSlot = photos.findIndex(p => p && (p.dataUrl === itemUrl || (p.id && item.id && p.id === item.id)));
                           const isPlayingGif = previewingGifId === item.id;
                           const hasGif = Boolean(item.gifUrl);
 
@@ -1720,13 +1759,32 @@ export default function EditorPhotostrip() {
                                 assignedSlot !== -1 ? 'border-red-400 ring-1 ring-red-400/30' : 'border-gray-200'
                               }`}
                             >
-                              {/* 4:3 Thumbnail Viewport */}
-                              <div className="relative aspect-[4/3] bg-gray-100 overflow-hidden">
+                              {/* 4:3 Thumbnail Viewport (Click to add to active or first empty frame slot) */}
+                              <div 
+                                onClick={() => {
+                                  let targetSlot = activePhotoIdx;
+                                  if (photos[targetSlot]?.dataUrl) {
+                                    const firstEmpty = photos.findIndex((p, pIdx) => pIdx < totalSlots && !p?.dataUrl);
+                                    if (firstEmpty !== -1) {
+                                      targetSlot = firstEmpty;
+                                    }
+                                  }
+                                  handleAssignPhotoToSlot(item, targetSlot);
+                                }}
+                                className="relative aspect-[4/3] bg-gray-100 overflow-hidden cursor-pointer group/thumb"
+                                title={`Klik untuk memasang foto ini ke Frame Slot #${activePhotoIdx + 1}`}
+                              >
                                 <img
                                   src={isPlayingGif && item.gifUrl ? item.gifUrl : item.dataUrl}
                                   alt={`Foto ${idx + 1}`}
-                                  className="w-full h-full object-cover select-none"
+                                  className="w-full h-full object-cover select-none transition-transform duration-200 group-hover/thumb:scale-105"
                                 />
+
+                                {/* Hover Prompt */}
+                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/thumb:opacity-100 flex flex-col items-center justify-center text-white text-[10px] font-bold transition-opacity z-10 pointer-events-none">
+                                  <span>+ Pasang ke Frame</span>
+                                  <span className="text-[8px] text-amber-300 font-mono">Slot #{activePhotoIdx + 1}</span>
+                                </div>
 
                                 {/* GIF Toggle Pill */}
                                 {hasGif && (

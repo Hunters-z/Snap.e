@@ -29,6 +29,7 @@ import {
   persistCapturedPhotos,
   getPersistedCapturedPhotos
 } from '../utils/persistentStorage';
+import { compressImageForCloud } from '../utils/photoCaptureHelper';
 
 export const ADMIN_EMAILS = [
   '0601randikurnia.s@gmail.com',
@@ -380,36 +381,73 @@ export function BoothProvider({ children }) {
     if (!db || !sessionId || !Array.isArray(photosList) || photosList.length === 0) return;
     try {
       const now = Date.now();
-      const compactPhotos = photosList.slice(0, 10).map((p, idx) => ({
-        id: p.id || `snap_${now}_${idx}`,
-        sessionId,
-        capturedAt: p.capturedAt || 'snap.e photo',
-        dataUrl: p.dataUrl || p.url || '',
-        gifUrl: p.gifUrl || null,
-        filterName: p.filterName || 'Natural',
-        filterCss: p.filterCss || 'none',
-        dateStamp: p.dateStamp || null,
-        createdAt: p.createdAt || new Date().toISOString(),
-        expiresAt: p.expiresAt || new Date(now + SEVEN_DAYS_MS).toISOString()
-      }));
+      const cleanSessionId = String(sessionId).replace(/[^a-zA-Z0-9_-]/g, '_');
+      const validPhotos = photosList.slice(0, 10);
 
-      // 1. Write parent doc with full photos array for instant, single-query retrieval
-      await setDoc(doc(db, 'cloud_albums', sessionId), {
-        sessionId,
-        updatedAt: new Date().toISOString(),
-        expiresAt: new Date(now + SEVEN_DAYS_MS).toISOString(),
-        photosCount: compactPhotos.length,
-        photos: compactPhotos
-      }, { merge: true });
+      // Compress photos before saving to Cloud Firestore so documents are ~80KB-120KB (well under 1MB limit)
+      const processed = await Promise.all(
+        validPhotos.map(async (p, idx) => {
+          const photoId = String(p.id || '').replace(/[^a-zA-Z0-9_-]/g, '_') || `snap_${now}_${idx}`;
+          const rawUrl = p.dataUrl || p.url || '';
+          let compressedUrl = rawUrl;
+          let thumbUrl = rawUrl;
 
-      // 2. Also populate subcollection for subcollection queries
-      for (const p of compactPhotos) {
+          try {
+            if (rawUrl && rawUrl.startsWith('data:image/')) {
+              compressedUrl = await compressImageForCloud(rawUrl, 960, 0.82);
+              thumbUrl = await compressImageForCloud(rawUrl, 320, 0.65);
+            }
+          } catch {
+            // fallback to raw
+          }
+
+          return {
+            id: photoId,
+            sessionId: cleanSessionId,
+            capturedAt: p.capturedAt || 'snap.e photo',
+            dataUrl: compressedUrl || rawUrl,
+            thumbUrl: thumbUrl || compressedUrl || rawUrl,
+            gifUrl: p.gifUrl || null,
+            filterName: p.filterName || 'Natural',
+            filterCss: p.filterCss || 'none',
+            dateStamp: p.dateStamp || null,
+            createdAt: p.createdAt || new Date().toISOString(),
+            expiresAt: p.expiresAt || new Date(now + SEVEN_DAYS_MS).toISOString()
+          };
+        })
+      );
+
+      // 1. Write individual documents to subcollection cloud_albums/{cleanSessionId}/photos/{photoId}
+      for (const p of processed) {
         try {
-          await setDoc(doc(db, 'cloud_albums', sessionId, 'photos', p.id), p, { merge: true });
-        } catch (_subErr) {
-          // ignore individual doc error
+          await setDoc(doc(db, 'cloud_albums', cleanSessionId, 'photos', p.id), p, { merge: true });
+        } catch (subErr) {
+          console.warn('Error saving subcollection photo doc:', subErr);
         }
       }
+
+      // 2. Write lightweight thumbnail array to parent doc for instant single-query retrieval
+      const thumbnails = processed.map(p => ({
+        id: p.id,
+        sessionId: p.sessionId,
+        capturedAt: p.capturedAt,
+        dataUrl: p.thumbUrl,
+        fullUrl: p.dataUrl,
+        gifUrl: p.gifUrl,
+        filterName: p.filterName,
+        filterCss: p.filterCss,
+        dateStamp: p.dateStamp,
+        createdAt: p.createdAt
+      }));
+
+      await setDoc(doc(db, 'cloud_albums', cleanSessionId), {
+        sessionId: cleanSessionId,
+        updatedAt: new Date().toISOString(),
+        expiresAt: new Date(now + SEVEN_DAYS_MS).toISOString(),
+        photosCount: processed.length,
+        photos: thumbnails
+      }, { merge: true });
+
     } catch (cloudErr) {
       console.warn('Cloud album sync error:', cloudErr);
     }

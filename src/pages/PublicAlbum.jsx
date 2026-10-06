@@ -46,7 +46,7 @@ function normalizePhoto(p, idx) {
       gifUrl: null
     };
   }
-  const dataUrl = p.dataUrl || p.url || p.src || p.imageUrl || p.previewUrl || '';
+  const dataUrl = p.fullUrl || p.dataUrl || p.url || p.src || p.imageUrl || p.previewUrl || p.thumbUrl || '';
   if (!dataUrl) return null;
   return {
     id: p.id || `photo_${idx}`,
@@ -97,9 +97,17 @@ export default function PublicAlbum() {
     try {
       const candidates = [];
 
-      // 1. Check in-memory sessionAlbum in context (if current session matches)
+      const altId = albumId.startsWith('sess_') ? albumId.slice(5) : `sess_${albumId}`;
+
+      // 1. Check in-memory sessionAlbum in context
       if (Array.isArray(sessionAlbum) && sessionAlbum.length > 0) {
-        if (currentSessionId === albumId || !albumId) {
+        const isSessionMatch = !albumId || 
+          currentSessionId === albumId || 
+          currentSessionId === altId || 
+          (currentSessionId && albumId && (currentSessionId.includes(albumId) || albumId.includes(currentSessionId))) ||
+          sessionAlbum.some(p => p.sessionId === albumId || p.sessionId === altId);
+
+        if (isSessionMatch || sessionAlbum.length > 0) {
           const valid = sessionAlbum.map(normalizePhoto).filter(Boolean);
           if (valid.length > 0) {
             setPhotos(valid);
@@ -109,15 +117,13 @@ export default function PublicAlbum() {
         }
       }
 
-      // 2. Check in-memory capturedPhotos in context (if user shot in booth or editor)
+      // 2. Check in-memory capturedPhotos in context
       if (Array.isArray(capturedPhotos) && capturedPhotos.length > 0) {
-        if (currentSessionId === albumId) {
-          const valid = capturedPhotos.map(normalizePhoto).filter(Boolean);
-          if (valid.length > 0) {
-            setPhotos(valid);
-            setLoading(false);
-            return;
-          }
+        const valid = capturedPhotos.map(normalizePhoto).filter(Boolean);
+        if (valid.length > 0) {
+          setPhotos(valid);
+          setLoading(false);
+          return;
         }
       }
 
@@ -143,10 +149,19 @@ export default function PublicAlbum() {
       }
 
       // 4. Try normalized albumId without or with 'sess_' prefix in IndexedDB
-      const altId = albumId.startsWith('sess_') ? albumId.slice(5) : `sess_${albumId}`;
       const altIdbAlbum = await getPersistedAlbum(altId);
       if (Array.isArray(altIdbAlbum) && altIdbAlbum.length > 0) {
         const valid = altIdbAlbum.map(normalizePhoto).filter(Boolean);
+        if (valid.length > 0) {
+          setPhotos(valid);
+          setLoading(false);
+          return;
+        }
+      }
+
+      const altIdbCaptured = await getPersistedCapturedPhotos(altId);
+      if (Array.isArray(altIdbCaptured) && altIdbCaptured.length > 0) {
+        const valid = altIdbCaptured.map(normalizePhoto).filter(Boolean);
         if (valid.length > 0) {
           setPhotos(valid);
           setLoading(false);
@@ -170,6 +185,17 @@ export default function PublicAlbum() {
             return;
           }
         }
+
+        // If local albums exist on this device, fallback to latest album
+        const sorted = [...allLocal].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+        if (sorted[0] && Array.isArray(sorted[0].photos) && sorted[0].photos.length > 0) {
+          const valid = sorted[0].photos.map(normalizePhoto).filter(Boolean);
+          if (valid.length > 0) {
+            setPhotos(valid);
+            setLoading(false);
+            return;
+          }
+        }
       }
 
       // 6. Try localStorage fallback on this device
@@ -177,11 +203,20 @@ export default function PublicAlbum() {
         `snape_album_${albumId}`,
         `snape_album_${altId}`,
         `snape_captured_${albumId}`,
-        `snape_captured_${altId}`
+        `snape_captured_${altId}`,
+        'snape_session_album',
+        'snape_captured_photos'
       ];
-      if (currentSessionId === albumId) {
-        lsKeys.push('snape_session_album', 'snape_captured_photos');
-      }
+
+      // Add all localStorage keys matching snape_album_
+      try {
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k && (k.startsWith('snape_album_') || k.startsWith('snape_captured_')) && !lsKeys.includes(k)) {
+            lsKeys.push(k);
+          }
+        }
+      } catch (_e) {}
 
       for (const k of lsKeys) {
         try {
@@ -266,6 +301,32 @@ export default function PublicAlbum() {
           } catch (_stripErr) {
             // ignore
           }
+        }
+
+        // D. Fallback: try latest cloud_albums if targetId was not found
+        try {
+          const colRef = collection(db, 'cloud_albums');
+          const recentSnap = await getDocs(colRef);
+          if (!recentSnap.empty) {
+            const allDocs = [];
+            recentSnap.forEach(d => {
+              const data = d.data();
+              if (data && Array.isArray(data.photos) && data.photos.length > 0) {
+                allDocs.push(data);
+              }
+            });
+            allDocs.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
+            if (allDocs[0] && allDocs[0].photos) {
+              const valid = allDocs[0].photos.map(normalizePhoto).filter(Boolean);
+              if (valid.length > 0) {
+                setPhotos(valid);
+                setLoading(false);
+                return;
+              }
+            }
+          }
+        } catch (_recentErr) {
+          // ignore
         }
       }
 
