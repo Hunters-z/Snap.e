@@ -85,10 +85,9 @@ service cloud.firestore {
       allow delete: if isValidId(sessionId);
     }
 
-    // 4. LDR Realtime Signaling & Rooms
+    // 4. LDR Realtime Signaling & Rooms (WebRTC peer-to-peer exchange)
     match /ldr_rooms/{roomId} {
-      allow get, list: if true;
-      allow create, update, delete: if isValidId(roomId);
+      allow read, write: if true;
     }
 
     // 5. Cloud Albums Collection (Retained for 7 days in cloud)

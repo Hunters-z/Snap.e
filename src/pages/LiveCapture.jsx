@@ -18,6 +18,7 @@ import {
   Play,
   Copy,
   Check,
+  CheckCircle2,
   Heart,
   Grid,
   Download,
@@ -34,7 +35,7 @@ import {
   recordLiveVideoClip 
 } from '../utils/photoCaptureHelper';
 import { db } from '../firebase';
-import { doc, setDoc, updateDoc, onSnapshot, arrayUnion } from 'firebase/firestore';
+import { doc, setDoc, onSnapshot, arrayUnion } from 'firebase/firestore';
 import PaymentModal from '../components/PaymentModal';
 
 export default function LiveCapture() {
@@ -60,7 +61,8 @@ export default function LiveCapture() {
     isAdmin,
     isSessionPaid,
     markSessionPaid,
-    openAuthModal
+    openAuthModal,
+    uploadFullSessionToCloud
   } = useBooth();
 
   // Route parameters for LDR
@@ -108,22 +110,46 @@ export default function LiveCapture() {
   const [showGrid, setShowGrid] = useState(true);
   const [showPaymentModalInCapture, setShowPaymentModalInCapture] = useState(false);
   const [copiedAlbumLink, setCopiedAlbumLink] = useState(false);
+  const [isFinishingSession, setIsFinishingSession] = useState(false);
+  const hasAutoUploadedRef = useRef(false);
 
-  // Automatically open the Album Modal immediately when session timer expires!
+  // Automatically upload all photos to Cloud Firestore immediately when session timer expires!
   useEffect(() => {
     if (sessionTimeRemaining <= 0) {
       setShowAlbumModal(true);
+      if (!hasAutoUploadedRef.current) {
+        hasAutoUploadedRef.current = true;
+        if (uploadFullSessionToCloud) {
+          uploadFullSessionToCloud(currentSessionId);
+        }
+      }
     }
-  }, [sessionTimeRemaining]);
+  }, [sessionTimeRemaining, uploadFullSessionToCloud, currentSessionId]);
+
+  // Handler for finishing session and saving all photos to public cloud album
+  const handleFinishSession = async () => {
+    setIsFinishingSession(true);
+    try {
+      if (uploadFullSessionToCloud) {
+        await uploadFullSessionToCloud(currentSessionId);
+      }
+      navigate(`/album/${currentSessionId}`);
+    } catch (_err) {
+      navigate(`/album/${currentSessionId}`);
+    } finally {
+      setIsFinishingSession(false);
+    }
+  };
 
   // LDR Peer and Realtime states
   const [peerConnected, setPeerConnected] = useState(false);
   const [remotePeerName, setRemotePeerName] = useState('Pasangan LDR');
-  const [remoteLiveFrame, setRemoteLiveFrame] = useState(null);
   const [partnerOnline, setPartnerOnline] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const lastShutterTriggerRef = useRef(0);
   const handleTriggerCaptureRef = useRef(null);
+  const pcRef = useRef(null);
+  const dataChannelRef = useRef(null);
 
   const handleCopyLdrLink = () => {
     if (!roomParam) return;
@@ -232,6 +258,24 @@ export default function LiveCapture() {
       }
 
       localStreamRef.current = stream;
+
+      // Attach track to WebRTC peer connection immediately if active
+      if (pcRef.current) {
+        const senders = pcRef.current.getSenders();
+        stream.getTracks().forEach(track => {
+          const sender = senders.find(s => s.track && s.track.kind === track.kind);
+          if (sender) {
+            sender.replaceTrack(track).catch(() => {});
+          } else {
+            try {
+              pcRef.current.addTrack(track, stream);
+            } catch (_e) {
+              console.warn('Track add error:', _e);
+            }
+          }
+        });
+      }
+
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = stream;
         localVideoRef.current.onloadedmetadata = async () => {
@@ -261,15 +305,16 @@ export default function LiveCapture() {
     await startCamera(nextFacing);
   };
 
-  // Setup WebRTC + Firestore Realtime Signaling and Live Frame Sync
+  // Setup Real-Time WebRTC Peer Connection + Firestore Signaling
   useEffect(() => {
     if (mode !== 'ldr' || !roomParam) return;
 
     const sanitizedRoom = roomParam.trim().replace(/[^a-zA-Z0-9_-]/g, '_');
     const roomRef = doc(db, 'ldr_rooms', sanitizedRoom);
     let unsubSnapshot = null;
-    let frameBroadcastTimer = null;
     let pc = null;
+    let hasRemoteDesc = false;
+    const queuedCandidates = [];
 
     const RTC_CONFIG = {
       iceServers: [
@@ -293,24 +338,27 @@ export default function LiveCapture() {
 
     try {
       pc = new RTCPeerConnection(RTC_CONFIG);
+      pcRef.current = pc;
 
-      // Add local tracks if available
-      if (localStreamRef.current) {
-        localStreamRef.current.getTracks().forEach(track => {
+      // Add local stream tracks immediately if available
+      const stream = localStreamRef.current;
+      if (stream) {
+        stream.getTracks().forEach(track => {
           try {
-            pc.addTrack(track, localStreamRef.current);
+            pc.addTrack(track, stream);
           } catch (e) {
             console.warn('WebRTC addTrack warning:', e);
           }
         });
       }
 
-      // Handle incoming remote media track
+      // Handle incoming remote media track in real time
       pc.ontrack = (event) => {
         if (event.streams && event.streams[0]) {
           setPeerConnected(true);
           if (remoteVideoRef.current) {
             remoteVideoRef.current.srcObject = event.streams[0];
+            remoteVideoRef.current.play().catch(() => {});
           }
         }
       };
@@ -327,11 +375,54 @@ export default function LiveCapture() {
       pc.onicecandidate = (event) => {
         if (event.candidate) {
           const targetField = roleParam === 'host' ? 'hostCandidates' : 'guestCandidates';
-          updateDoc(roomRef, {
+          setDoc(roomRef, {
             [targetField]: arrayUnion(event.candidate.toJSON())
-          }).catch(() => {});
+          }, { merge: true }).catch(() => {});
         }
       };
+
+      // Setup DataChannel for instant sub-millisecond P2P synchronization
+      if (roleParam === 'host') {
+        const dc = pc.createDataChannel('ldr-sync', { ordered: true });
+        dataChannelRef.current = dc;
+        dc.onmessage = (event) => {
+          try {
+            const msg = JSON.parse(event.data);
+            if (msg.type === 'SYNC_SHUTTER' && msg.timestamp > lastShutterTriggerRef.current) {
+              lastShutterTriggerRef.current = msg.timestamp;
+              if (msg.slot !== undefined) {
+                setActiveSlotIndex(msg.slot);
+              }
+              if (handleTriggerCaptureRef.current) {
+                handleTriggerCaptureRef.current(true);
+              }
+            }
+          } catch (_e) {
+            console.warn('Data channel message parse error:', _e);
+          }
+        };
+      } else {
+        pc.ondatachannel = (event) => {
+          const dc = event.channel;
+          dataChannelRef.current = dc;
+          dc.onmessage = (event) => {
+            try {
+              const msg = JSON.parse(event.data);
+              if (msg.type === 'SYNC_SHUTTER' && msg.timestamp > lastShutterTriggerRef.current) {
+                lastShutterTriggerRef.current = msg.timestamp;
+                if (msg.slot !== undefined) {
+                  setActiveSlotIndex(msg.slot);
+                }
+                if (handleTriggerCaptureRef.current) {
+                  handleTriggerCaptureRef.current(true);
+                }
+              }
+            } catch (_e) {
+              console.warn('Data channel guest message parse error:', _e);
+            }
+          };
+        };
+      }
     } catch (e) {
       console.warn('RTCPeerConnection init warning:', e);
     }
@@ -387,12 +478,17 @@ export default function LiveCapture() {
       if (roleParam === 'host') {
         if (data.guestName) setRemotePeerName(data.guestName);
         if (data.guestOnline) setPartnerOnline(true);
-        if (data.guestFrame) setRemoteLiveFrame(data.guestFrame);
 
         // Host receives Answer from Guest
-        if (pc && data.guestAnswer && !pc.currentRemoteDescription) {
+        if (pc && data.guestAnswer && !pc.currentRemoteDescription && pc.signalingState === 'have-local-offer') {
           try {
             await pc.setRemoteDescription(new RTCSessionDescription(data.guestAnswer));
+            hasRemoteDesc = true;
+            // Drain any queued candidates
+            while (queuedCandidates.length > 0) {
+              const cand = queuedCandidates.shift();
+              pc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
+            }
           } catch (e) {
             console.warn('Host setRemoteDescription error:', e);
           }
@@ -404,10 +500,10 @@ export default function LiveCapture() {
             const candKey = cand?.candidate;
             if (candKey && !processedCandidates.has(candKey)) {
               processedCandidates.add(candKey);
-              try {
-                await pc.addIceCandidate(new RTCIceCandidate(cand));
-              } catch (e) {
-                // Ignore timing races
+              if (hasRemoteDesc && pc.remoteDescription) {
+                pc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
+              } else {
+                queuedCandidates.push(cand);
               }
             }
           }
@@ -416,20 +512,26 @@ export default function LiveCapture() {
         // Guest handles Host
         if (data.hostName) setRemotePeerName(data.hostName);
         if (data.hostOnline) setPartnerOnline(true);
-        if (data.hostFrame) setRemoteLiveFrame(data.hostFrame);
 
         // Guest receives Offer and creates Answer
         if (pc && data.hostOffer && !pc.currentRemoteDescription) {
           try {
             await pc.setRemoteDescription(new RTCSessionDescription(data.hostOffer));
+            hasRemoteDesc = true;
+            // Drain any queued candidates
+            while (queuedCandidates.length > 0) {
+              const cand = queuedCandidates.shift();
+              pc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
+            }
+
             const answer = await pc.createAnswer();
             await pc.setLocalDescription(answer);
 
-            await updateDoc(roomRef, {
+            await setDoc(roomRef, {
               guestAnswer: { type: answer.type, sdp: answer.sdp },
               guestOnline: true,
               lastPing: Date.now()
-            });
+            }, { merge: true });
           } catch (e) {
             console.warn('Guest answer error:', e);
           }
@@ -441,63 +543,39 @@ export default function LiveCapture() {
             const candKey = cand?.candidate;
             if (candKey && !processedCandidates.has(candKey)) {
               processedCandidates.add(candKey);
-              try {
-                await pc.addIceCandidate(new RTCIceCandidate(cand));
-              } catch (e) {
-                // Ignore timing races
+              if (hasRemoteDesc && pc.remoteDescription) {
+                pc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
+              } else {
+                queuedCandidates.push(cand);
               }
             }
           }
         }
       }
 
-      // Synchronized Shutter
+      // Synchronized Shutter via Firestore fallback
       if (data.syncShutter && data.syncShutter.timestamp) {
         if (data.syncShutter.timestamp > lastShutterTriggerRef.current) {
           lastShutterTriggerRef.current = data.syncShutter.timestamp;
           if (data.syncShutter.slot !== undefined) {
             setActiveSlotIndex(data.syncShutter.slot);
           }
-          if (handleTriggerCaptureRef.current && !isCapturing) {
+          if (handleTriggerCaptureRef.current) {
             handleTriggerCaptureRef.current(true);
           }
         }
       }
     });
 
-    // Realtime Lightweight Live Frame Sync (Fallback if direct WebRTC blocked by mobile carrier)
-    frameBroadcastTimer = setInterval(() => {
-      try {
-        const videoEl = localVideoRef.current;
-        if (!videoEl || videoEl.videoWidth === 0) return;
-
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = 240;
-        tempCanvas.height = 180;
-        const ctx = tempCanvas.getContext('2d');
-        drawCover(ctx, videoEl, 0, 0, 240, 180, facingMode === 'user');
-        const frameData = tempCanvas.toDataURL('image/jpeg', 0.4);
-
-        const frameField = roleParam === 'host' ? 'hostFrame' : 'guestFrame';
-        const onlineField = roleParam === 'host' ? 'hostOnline' : 'guestOnline';
-        updateDoc(roomRef, {
-          [frameField]: frameData,
-          [onlineField]: true,
-          lastPing: Date.now()
-        }).catch(() => {});
-      } catch (e) {
-        // Ignore canvas export errors
-      }
-    }, 1800);
-
     return () => {
       if (unsubSnapshot) unsubSnapshot();
-      if (frameBroadcastTimer) clearInterval(frameBroadcastTimer);
       if (pc) {
         pc.close();
       }
+      pcRef.current = null;
+      dataChannelRef.current = null;
     };
-  }, [mode, roomParam, roleParam, userName, facingMode, isCapturing]);
+  }, [mode, roomParam, roleParam, userName]);
 
   // Initial camera start
   useEffect(() => {
@@ -589,29 +667,24 @@ export default function LiveCapture() {
       }
     } else {
       const hasRemoteVideo = peerConnected && remoteEl && remoteEl.videoWidth > 0;
-      const hasRemoteLiveFrame = Boolean(remoteLiveFrame);
 
-      if (mode === 'solo' || (!hasRemoteVideo && !hasRemoteLiveFrame)) {
+      if (mode === 'solo' || !hasRemoteVideo) {
         // Solo mode: drawCover with mirror = true, center-cropped to target aspect ratio (4:3)
         // No stretching or distorting!
         drawCover(ctx, videoEl, 0, 0, canvas.width, canvas.height, true);
       } else {
-        // LDR mode: Split 50/50 vertically
+        // LDR mode: Split 50/50 vertically (Host always on left, Guest always on right)
         const halfW = canvas.width / 2;
-        // Left: Local user (mirrored, center cropped to 2:3)
-        drawCover(ctx, videoEl, 0, 0, halfW, canvas.height, true);
-
-        // Right: Remote user (center cropped to 2:3)
-        if (hasRemoteVideo) {
+        if (roleParam === 'guest') {
+          drawCover(ctx, remoteEl, 0, 0, halfW, canvas.height, false);
+          drawCover(ctx, videoEl, halfW, 0, halfW, canvas.height, true);
+        } else {
+          drawCover(ctx, videoEl, 0, 0, halfW, canvas.height, true);
           drawCover(ctx, remoteEl, halfW, 0, halfW, canvas.height, false);
-        } else if (hasRemoteLiveFrame) {
-          const img = new window.Image();
-          img.src = remoteLiveFrame;
-          drawCover(ctx, img, halfW, 0, halfW, canvas.height, false);
         }
 
         // Subtle split line
-        ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+        ctx.strokeStyle = 'rgba(255,255,255,0.45)';
         ctx.lineWidth = 3;
         ctx.beginPath();
         ctx.moveTo(halfW, 0);
@@ -680,16 +753,28 @@ export default function LiveCapture() {
     if (isCapturing) return;
     setIsCapturing(true);
 
-    // If local user tapped capture and in LDR mode, sync to partner via Firestore
+    // If local user tapped capture and in LDR mode, sync to partner via WebRTC DataChannel + Firestore
     if (!isRemoteInitiated && mode === 'ldr' && roomParam) {
+      if (dataChannelRef.current && dataChannelRef.current.readyState === 'open') {
+        try {
+          dataChannelRef.current.send(JSON.stringify({
+            type: 'SYNC_SHUTTER',
+            timestamp: Date.now(),
+            slot: activeSlotIndex,
+            sender: roleParam
+          }));
+        } catch (_dcErr) {
+          console.warn('DataChannel shutter send error:', _dcErr);
+        }
+      }
       const sanitizedRoom = roomParam.trim().replace(/[^a-zA-Z0-9_-]/g, '_');
-      updateDoc(doc(db, 'ldr_rooms', sanitizedRoom), {
+      setDoc(doc(db, 'ldr_rooms', sanitizedRoom), {
         syncShutter: {
           timestamp: Date.now(),
           slot: activeSlotIndex,
           sender: roleParam
         }
-      }).catch(() => {});
+      }, { merge: true }).catch(() => {});
     }
 
     const burstFrames = [];
@@ -775,6 +860,8 @@ export default function LiveCapture() {
     setIsCapturing(false);
   };
 
+  handleTriggerCaptureRef.current = handleTriggerCapture;
+
   // Retake current slot
   const handleRetakeActiveSlot = () => {
     handleTriggerCapture();
@@ -820,6 +907,17 @@ export default function LiveCapture() {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Selesai Sesi Button */}
+          <button
+            onClick={handleFinishSession}
+            disabled={isFinishingSession}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all shadow-xs cursor-pointer disabled:opacity-50"
+            title="Selesaikan sesi dan simpan semua foto ke Cloud Album publik"
+          >
+            <CheckCircle2 size={13} />
+            <span>{isFinishingSession ? 'Menyimpan...' : 'Selesai Sesi'}</span>
+          </button>
+
           {/* Temporary Album Button with Counter */}
           <button
             onClick={() => setShowAlbumModal(true)}
@@ -882,10 +980,10 @@ export default function LiveCapture() {
       {/* Sub Header / Active Slot Selector */}
       <div className="px-3 sm:px-6 py-1.5 flex items-center justify-between shrink-0 bg-black/60 text-xs border-b border-white/5">
         <div className="flex items-center gap-2">
-          <span className={`w-2 h-2 rounded-full ${peerConnected ? 'bg-emerald-500' : (remoteLiveFrame ? 'bg-cyan-400' : 'bg-amber-400 animate-pulse')}`}></span>
+          <span className={`w-2 h-2 rounded-full ${peerConnected ? 'bg-emerald-500' : 'bg-amber-400 animate-pulse'}`}></span>
           <span className="text-gray-300 font-medium text-[11px] sm:text-xs">
             {mode === 'ldr' 
-              ? (peerConnected ? `Tersambung (HD) · ${remotePeerName}` : (remoteLiveFrame ? `Live Sync · ${remotePeerName}` : 'Menunggu pasangan LDR...')) 
+              ? (peerConnected ? `Tersambung (HD WebRTC) · ${remotePeerName}` : 'Menunggu pasangan LDR via WebRTC...') 
               : `Bilik Foto: ${userName}`}
           </span>
           {mode === 'ldr' && roomParam && (
@@ -957,7 +1055,7 @@ export default function LiveCapture() {
       </div>
 
       {/* LDR Partner Waiting / Invitation Banner */}
-      {mode === 'ldr' && !peerConnected && !remoteLiveFrame && (
+      {mode === 'ldr' && !peerConnected && (
         <div className="bg-rose-950/70 border-b border-rose-500/30 px-3 sm:px-6 py-2 flex flex-col sm:flex-row items-center justify-between gap-2.5 text-xs text-rose-200 shrink-0">
           <div className="flex items-center gap-2">
             <Heart size={16} className="text-rose-400 fill-rose-400 shrink-0" />
@@ -1027,81 +1125,136 @@ export default function LiveCapture() {
             mode === 'ldr' ? 'flex-col sm:flex-row' : 'flex-col'
           }`}
         >
-          {/* Simulated Canvas (shown if camera blocked) */}
-          <canvas
-            ref={animCanvasRef}
-            width={640}
-            height={480}
-            style={{ filter: activeFilter.css }}
-            className={`w-full h-full object-cover ${isSimulatedCam ? 'block' : 'hidden'}`}
-          />
+          {/* In LDR mode: Host on Left, Guest on Right via WebRTC */}
+          {mode === 'ldr' ? (
+            <>
+              {roleParam === 'guest' ? (
+                <>
+                  {/* Left: Remote Host Video Stream over WebRTC */}
+                  <div className="relative flex-1 h-full min-h-0 overflow-hidden bg-gray-950 flex items-center justify-center">
+                    <video
+                      ref={remoteVideoRef}
+                      autoPlay
+                      playsInline
+                      className={`w-full h-full object-cover ${peerConnected ? 'block' : 'hidden'}`}
+                    />
+                    {!peerConnected && (
+                      <div className="flex flex-col items-center justify-center p-4 text-center text-gray-400 space-y-2">
+                        <div className="w-10 h-10 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center animate-pulse">
+                          <Heart size={20} className="fill-rose-400" />
+                        </div>
+                        <p className="text-xs font-bold text-gray-200">{remotePeerName} (Host)</p>
+                        <p className="text-[10px] text-gray-400 max-w-[200px] leading-tight">
+                          Menghubungkan WebRTC real-time ke kamera Host...
+                        </p>
+                      </div>
+                    )}
+                    <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-full text-[11px] font-semibold flex items-center gap-1.5 z-10">
+                      <span className={`w-1.5 h-1.5 rounded-full ${peerConnected ? 'bg-emerald-400' : 'bg-amber-400 animate-pulse'}`}></span>
+                      {peerConnected ? `${remotePeerName} (Host) · WebRTC HD` : `${remotePeerName} · Menghubungkan...`}
+                    </div>
+                  </div>
 
-          {/* Local Video Stream with object-cover */}
-          <div className={`relative flex-1 h-full min-h-0 overflow-hidden ${isSimulatedCam ? 'hidden' : 'block'}`}>
-            <video
-              ref={localVideoRef}
-              autoPlay
-              playsInline
-              muted
-              style={{ filter: activeFilter.css }}
-              className={`w-full h-full object-cover transform transition-transform ${facingMode === 'user' ? 'scale-x-[-1]' : 'scale-x-100'}`}
-            />
-            <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-full text-[11px] font-semibold flex items-center gap-1.5 z-10">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-              {userName} (Lokal)
-            </div>
-          </div>
+                  {/* Right: Local Guest Video Stream */}
+                  <div className="relative flex-1 h-full min-h-0 overflow-hidden border-t sm:border-t-0 sm:border-l border-white/20">
+                    <video
+                      ref={localVideoRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      style={{ filter: activeFilter.css }}
+                      className={`w-full h-full object-cover transform transition-transform ${facingMode === 'user' ? 'scale-x-[-1]' : 'scale-x-100'}`}
+                    />
+                    <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-full text-[11px] font-semibold flex items-center gap-1.5 z-10">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                      {userName} (Kamera Anda · Pasangan)
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* Left: Local Host Video Stream */}
+                  <div className="relative flex-1 h-full min-h-0 overflow-hidden">
+                    <video
+                      ref={localVideoRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      style={{ filter: activeFilter.css }}
+                      className={`w-full h-full object-cover transform transition-transform ${facingMode === 'user' ? 'scale-x-[-1]' : 'scale-x-100'}`}
+                    />
+                    <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-full text-[11px] font-semibold flex items-center gap-1.5 z-10">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                      {userName} (Kamera Anda · Host)
+                    </div>
+                  </div>
 
-          {/* Remote Video Stream for LDR */}
-          {mode === 'ldr' && (
-            <div className="relative flex-1 h-full min-h-0 overflow-hidden border-t sm:border-t-0 sm:border-l border-white/20 bg-gray-950 flex items-center justify-center">
-              {/* WebRTC Video Stream */}
-              <video
-                ref={remoteVideoRef}
-                autoPlay
-                playsInline
-                className={`w-full h-full object-cover ${peerConnected ? 'block' : 'hidden'}`}
+                  {/* Right: Remote Guest Video Stream over WebRTC */}
+                  <div className="relative flex-1 h-full min-h-0 overflow-hidden border-t sm:border-t-0 sm:border-l border-white/20 bg-gray-950 flex items-center justify-center">
+                    <video
+                      ref={remoteVideoRef}
+                      autoPlay
+                      playsInline
+                      className={`w-full h-full object-cover ${peerConnected ? 'block' : 'hidden'}`}
+                    />
+                    {!peerConnected && (
+                      <div className="flex flex-col items-center justify-center p-4 text-center text-gray-400 space-y-2">
+                        <div className="w-10 h-10 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center animate-pulse">
+                          <Heart size={20} className="fill-rose-400" />
+                        </div>
+                        <p className="text-xs font-bold text-gray-200">{remotePeerName}</p>
+                        <p className="text-[10px] text-gray-400 max-w-[200px] leading-tight">
+                          {partnerOnline 
+                            ? 'Pasangan terhubung! Mengaktifkan WebRTC real-time...' 
+                            : 'Menunggu pasangan bergabung. Klik "Salin Link" dan kirimkan ke pasangan.'}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={handleCopyLdrLink}
+                          className="px-3 py-1 bg-white/10 hover:bg-white/20 text-white rounded-full text-[10px] font-bold flex items-center gap-1 mt-1 transition-all"
+                        >
+                          <Copy size={11} />
+                          <span>{copiedLink ? 'Link Tersalin!' : 'Salin Link Pasangan'}</span>
+                        </button>
+                      </div>
+                    )}
+                    <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-full text-[11px] font-semibold flex items-center gap-1.5 z-10">
+                      <span className={`w-1.5 h-1.5 rounded-full ${peerConnected ? 'bg-emerald-400' : 'bg-amber-400 animate-pulse'}`}></span>
+                      {peerConnected 
+                        ? `${remotePeerName} · WebRTC Real-Time` 
+                        : `${remotePeerName} · Menghubungkan WebRTC...`}
+                    </div>
+                  </div>
+                </>
+              )}
+            </>
+          ) : (
+            <>
+              {/* Solo Mode: Simulated Canvas if camera blocked */}
+              <canvas
+                ref={animCanvasRef}
+                width={640}
+                height={480}
+                style={{ filter: activeFilter.css }}
+                className={`w-full h-full object-cover ${isSimulatedCam ? 'block' : 'hidden'}`}
               />
 
-              {/* Fallback Live Stream frame from Partner */}
-              {!peerConnected && remoteLiveFrame && (
-                <img
-                  src={remoteLiveFrame}
-                  alt="Partner Stream"
-                  className="w-full h-full object-cover"
+              {/* Solo Mode: Local Video Stream */}
+              <div className={`relative flex-1 h-full min-h-0 overflow-hidden ${isSimulatedCam ? 'hidden' : 'block'}`}>
+                <video
+                  ref={localVideoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  style={{ filter: activeFilter.css }}
+                  className={`w-full h-full object-cover transform transition-transform ${facingMode === 'user' ? 'scale-x-[-1]' : 'scale-x-100'}`}
                 />
-              )}
-
-              {/* Waiting placeholder when neither is active */}
-              {!peerConnected && !remoteLiveFrame && (
-                <div className="flex flex-col items-center justify-center p-4 text-center text-gray-400 space-y-2">
-                  <div className="w-10 h-10 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center animate-pulse">
-                    <Heart size={20} className="fill-rose-400" />
-                  </div>
-                  <p className="text-xs font-bold text-gray-200">{remotePeerName}</p>
-                  <p className="text-[10px] text-gray-400 max-w-[200px] leading-tight">
-                    {partnerOnline 
-                      ? 'Pasangan sedang menyiapkan kamera...' 
-                      : 'Menunggu pasangan bergabung. Klik "Salin Link" dan kirimkan ke pasangan.'}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={handleCopyLdrLink}
-                    className="px-3 py-1 bg-white/10 hover:bg-white/20 text-white rounded-full text-[10px] font-bold flex items-center gap-1 mt-1 transition-all"
-                  >
-                    <Copy size={11} />
-                    <span>{copiedLink ? 'Link Tersalin!' : 'Salin Link Pasangan'}</span>
-                  </button>
+                <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-full text-[11px] font-semibold flex items-center gap-1.5 z-10">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                  {userName} (Kamera Anda)
                 </div>
-              )}
-
-              <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-full text-[11px] font-semibold flex items-center gap-1.5 z-10">
-                <span className={`w-1.5 h-1.5 rounded-full ${peerConnected ? 'bg-emerald-400' : (remoteLiveFrame ? 'bg-cyan-400' : 'bg-amber-400 animate-pulse')}`}></span>
-                {peerConnected 
-                  ? `${remotePeerName} (WebRTC HD)` 
-                  : (remoteLiveFrame ? `${remotePeerName} (Live Sync)` : 'Menghubungkan Pasangan...')}
               </div>
-            </div>
+            </>
           )}
 
           {/* Live Recording Motion Badge */}
@@ -1441,6 +1594,16 @@ export default function LiveCapture() {
             </button>
 
             <button
+              onClick={handleFinishSession}
+              disabled={isFinishingSession}
+              className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors shadow-md shadow-emerald-600/20 cursor-pointer disabled:opacity-50"
+              title="Selesai sesi dan buka album publik"
+            >
+              <CheckCircle2 size={13} />
+              <span>{isFinishingSession ? 'Menyimpan...' : 'Selesai'}</span>
+            </button>
+
+            <button
               onClick={() => navigate('/editor')}
               className="px-3.5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 transition-colors shadow-md shadow-red-600/20"
             >
@@ -1734,20 +1897,41 @@ export default function LiveCapture() {
             {/* Modal Footer */}
             <div className="pt-2 border-t border-white/10 flex items-center justify-between gap-2">
               {sessionTimeRemaining > 0 ? (
-                <button
-                  onClick={() => { setShowAlbumModal(false); setPreviewLiveItem(null); }}
-                  className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold transition-colors"
-                >
-                  Kembali ke Kamera
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => { setShowAlbumModal(false); setPreviewLiveItem(null); }}
+                    className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold transition-colors"
+                  >
+                    Kembali ke Kamera
+                  </button>
+                  <button
+                    onClick={handleFinishSession}
+                    disabled={isFinishingSession}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors shadow-md shadow-emerald-600/20 disabled:opacity-50 cursor-pointer"
+                    title="Selesaikan sesi dan simpan semua foto ke Cloud Album publik"
+                  >
+                    <CheckCircle2 size={14} />
+                    <span>{isFinishingSession ? 'Menyimpan...' : 'Selesai Sesi'}</span>
+                  </button>
+                </div>
               ) : (
-                <button
-                  onClick={() => setShowPaymentModalInCapture(true)}
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors shadow-md shadow-emerald-600/20"
-                >
-                  <CreditCard size={14} />
-                  <span>Beli Sesi Baru (Bayar)</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setShowPaymentModalInCapture(true)}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors shadow-md shadow-emerald-600/20"
+                  >
+                    <CreditCard size={14} />
+                    <span>Beli Sesi Baru (Bayar)</span>
+                  </button>
+                  <button
+                    onClick={handleFinishSession}
+                    disabled={isFinishingSession}
+                    className="px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors shadow-md shadow-teal-600/20 disabled:opacity-50 cursor-pointer"
+                  >
+                    <CheckCircle2 size={14} />
+                    <span>Buka Album Publik</span>
+                  </button>
+                </div>
               )}
 
               <button

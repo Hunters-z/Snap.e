@@ -26,8 +26,7 @@ import {
   Crop,
   Check,
   Share2,
-  ExternalLink,
-  Upload
+  ExternalLink
 } from 'lucide-react';
 import { FILTER_CATEGORIES, CAMERA_PRESETS } from '../data/cameraPresets';
 import { drawFrameGraphicDecorations } from '../data/defaultFrames';
@@ -48,15 +47,16 @@ export default function EditorPhotostrip() {
     sessionTimeRemaining,
     startNewSession,
     sessionAlbum,
-    addPhotoToAlbum,
     deletePhotoFromAlbum,
     selectPhotoForSlot,
-    currentSessionId
+    currentSessionId,
+    uploadFullSessionToCloud
   } = useBooth();
 
   const [showPaymentModalInEditor, setShowPaymentModalInEditor] = useState(false);
   const [editorAlbumFilter, setEditorAlbumFilter] = useState('all'); // 'all' | 'photo' | 'gif'
   const [previewingGifId, setPreviewingGifId] = useState(null);
+  const [isFinishingSession, setIsFinishingSession] = useState(false);
 
   // Selected frame
   const frames = appConfig.customFrames || [];
@@ -90,10 +90,34 @@ export default function EditorPhotostrip() {
   const [photos, setPhotos] = useState(capturedPhotos);
   const [activePhotoIdx, setActivePhotoIdx] = useState(0);
 
-  // File upload refs & target slot for local photo uploads
-  const fileInputRef = useRef(null);
-  const slotUploadInputRef = useRef(null);
-  const [targetUploadSlot, setTargetUploadSlot] = useState(null);
+  // Automatic upload to Cloud when session timer expires
+  const hasAutoUploadedRef = useRef(false);
+  useEffect(() => {
+    if (sessionTimeRemaining <= 0 && !hasAutoUploadedRef.current) {
+      hasAutoUploadedRef.current = true;
+      if (uploadFullSessionToCloud) {
+        uploadFullSessionToCloud(currentSessionId);
+      }
+    }
+  }, [sessionTimeRemaining, uploadFullSessionToCloud, currentSessionId]);
+
+  // Handler for Selesai & Buka Album Publik
+  const handleFinishSession = async () => {
+    setIsFinishingSession(true);
+    showToast('Menyimpan seluruh foto sesi ke Cloud Album publik...');
+    try {
+      if (uploadFullSessionToCloud) {
+        await uploadFullSessionToCloud(currentSessionId);
+      }
+      showToast('Selesai! Seluruh foto sesi tersimpan ke Cloud Album publik.');
+      navigate(`/album/${currentSessionId}`);
+    } catch (err) {
+      console.warn('Error finishing session:', err);
+      navigate(`/album/${currentSessionId}`);
+    } finally {
+      setIsFinishingSession(false);
+    }
+  };
 
   // Synchronize photos once on initial mount or merge non-empty slots without clobbering newly added photos
   const isInitializedRef = useRef(false);
@@ -141,66 +165,6 @@ export default function EditorPhotostrip() {
       return next;
     });
   }, [layout, totalSlots, sessionAlbum]);
-
-  // Handle direct file upload (from device/gallery)
-  const handleFileUpload = (e, specificSlot = null) => {
-    const files = Array.from(e.target.files || []);
-    if (files.length === 0) return;
-
-    files.forEach((file, fIdx) => {
-      if (!file.type.startsWith('image/')) return;
-      const reader = new FileReader();
-      reader.onload = (uploadEvent) => {
-        const dataUrl = uploadEvent.target.result;
-        const newPhotoItem = {
-          id: `upload_${Date.now()}_${fIdx}_${Math.random().toString(36).substr(2, 4)}`,
-          dataUrl,
-          gifUrl: null,
-          zoom: 1.0,
-          offsetX: 0,
-          offsetY: 0,
-          filterCss: 'none',
-          filterId: 'natural',
-          filterName: 'Natural',
-          filterBrand: 'RAW',
-          dateStamp: null,
-          stickers: [],
-          capturedAt: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
-        };
-
-        // Add to session album
-        if (addPhotoToAlbum) {
-          addPhotoToAlbum(newPhotoItem);
-        }
-
-        // If specific slot requested, place it there
-        if (specificSlot !== null && specificSlot !== undefined) {
-          handleAssignPhotoToSlot(newPhotoItem, specificSlot);
-        } else {
-          // Find first empty slot up to totalSlots
-          setPhotos(prev => {
-            const next = [...prev];
-            while (next.length < totalSlots) next.push(null);
-            let emptyIdx = -1;
-            for (let s = 0; s < totalSlots; s++) {
-              if (!next[s]?.dataUrl) {
-                emptyIdx = s;
-                break;
-              }
-            }
-            const targetIdx = emptyIdx !== -1 ? emptyIdx : activePhotoIdx;
-            next[targetIdx] = newPhotoItem;
-            updateCapturedPhotos(next);
-            return next;
-          });
-        }
-      };
-      reader.readAsDataURL(file);
-    });
-
-    showToast(`${files.length} foto berhasil diunggah!`);
-    if (e.target) e.target.value = '';
-  };
 
   // Filter presets & category
   const availablePresets = appConfig.customFilters?.length > 0 ? appConfig.customFilters : CAMERA_PRESETS;
@@ -1415,35 +1379,21 @@ export default function EditorPhotostrip() {
             onClick={(e) => {
               e.stopPropagation();
               setActivePhotoIdx(idx);
-              setTargetUploadSlot(idx);
               if (sessionAlbum && sessionAlbum.length > 0) {
                 setActiveTab('album');
-                showToast(`Silakan klik foto di album atau tombol angka untuk mengisi Slot #${idx + 1}`);
+                showToast(`Pilih foto dari Album Sesi untuk mengisi Slot #${idx + 1}`);
               } else {
-                if (slotUploadInputRef.current) slotUploadInputRef.current.click();
+                navigate('/capture');
               }
             }}
             className="w-full h-full flex flex-col items-center justify-center bg-gray-50/90 hover:bg-gray-100/90 text-gray-400 p-2 text-center select-none cursor-pointer transition-colors group/slot"
-            title={`Klik untuk memilih dari album atau mengunggah foto ke Slot #${idx + 1}`}
+            title={`Klik untuk memilih foto dari Album Sesi ke Slot #${idx + 1}`}
           >
             <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-white shadow-xs border border-gray-200 flex items-center justify-center text-gray-500 group-hover/slot:text-red-600 group-hover/slot:border-red-300 transition-colors mb-0.5">
-              <Upload size={12} />
+              <Camera size={12} />
             </div>
             <span className="text-[9px] font-bold text-gray-700">Slot #{idx + 1}</span>
-            <span className="text-[7.5px] text-gray-400 group-hover/slot:text-gray-600">+ Pasang Foto</span>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setActivePhotoIdx(idx);
-                setTargetUploadSlot(idx);
-                if (slotUploadInputRef.current) slotUploadInputRef.current.click();
-              }}
-              className="mt-1 px-1.5 py-0.5 rounded bg-white hover:bg-gray-100 text-gray-700 text-[7px] font-bold border border-gray-200 shadow-2xs pointer-events-auto cursor-pointer"
-              title="Unggah file dari perangkat"
-            >
-              Unggah File
-            </button>
+            <span className="text-[7.5px] text-gray-400 group-hover/slot:text-gray-600">Pilih Pose Sesi</span>
           </div>
         )}
 
@@ -1511,13 +1461,24 @@ export default function EditorPhotostrip() {
               </button>
             </div>
           ) : (
-            <button
-              onClick={() => navigate('/capture')}
-              className="flex items-center gap-1.5 px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold text-xs transition-colors shadow-xs"
-            >
-              <Camera size={13} />
-              <span>📸 Ambil Foto Lagi / Retake Pose</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => navigate('/capture')}
+                className="flex items-center gap-1.5 px-3 py-1 bg-white/10 hover:bg-white/20 text-white rounded-lg font-bold text-xs transition-colors shadow-xs"
+              >
+                <Camera size={13} />
+                <span>+ Ambil Pose Lagi</span>
+              </button>
+              <button
+                onClick={handleFinishSession}
+                disabled={isFinishingSession}
+                className="flex items-center gap-1.5 px-3.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold text-xs transition-colors shadow-xs disabled:opacity-50 cursor-pointer"
+                title="Selesaikan sesi dan simpan semua foto ke Cloud Album publik"
+              >
+                <CheckCircle2 size={13} />
+                <span>{isFinishingSession ? 'Menyimpan ke Cloud...' : 'Selesai & Buka Album Publik'}</span>
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -1604,25 +1565,6 @@ export default function EditorPhotostrip() {
                   </div>
 
                   <div className="flex items-center gap-1.5 shrink-0">
-                    {/* Upload from local device/gallery */}
-                    <input
-                      type="file"
-                      ref={fileInputRef}
-                      onChange={(e) => handleFileUpload(e)}
-                      accept="image/*"
-                      multiple
-                      className="hidden"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="flex items-center gap-1 px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 text-[11px] font-bold rounded-lg border border-gray-200 transition-colors shadow-xs"
-                      title="Unggah foto langsung dari galeri HP atau laptop (bisa pilih hingga 6 foto)"
-                    >
-                      <Upload size={12} />
-                      <span>+ Unggah</span>
-                    </button>
-
                     {sessionTimeRemaining <= 0 ? (
                       <button
                         onClick={() => setShowPaymentModalInEditor(true)}
@@ -2709,6 +2651,16 @@ export default function EditorPhotostrip() {
               <span>Salin Tautan Strip Foto</span>
             </button>
 
+            {/* Selesai Sesi & Simpan ke Album Publik */}
+            <button
+              onClick={handleFinishSession}
+              disabled={isFinishingSession}
+              className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-md shadow-emerald-600/20 active:scale-98 disabled:opacity-50 cursor-pointer"
+            >
+              <CheckCircle2 size={16} />
+              <span>{isFinishingSession ? 'Menyimpan ke Cloud...' : 'Selesai Sesi & Buka Album Publik'}</span>
+            </button>
+
             <div className="border-t border-gray-100 pt-3">
               <button
                 onClick={() => navigate('/capture')}
@@ -3188,18 +3140,6 @@ export default function EditorPhotostrip() {
           </div>
         );
       })()}
-
-      {/* Hidden input for direct slot upload */}
-      <input
-        type="file"
-        ref={slotUploadInputRef}
-        onChange={(e) => {
-          handleFileUpload(e, targetUploadSlot);
-          setTargetUploadSlot(null);
-        }}
-        accept="image/*"
-        className="hidden"
-      />
 
       {/* Payment Modal for Expired Session */}
       <PaymentModal

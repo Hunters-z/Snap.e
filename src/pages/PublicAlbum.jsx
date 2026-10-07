@@ -216,7 +216,9 @@ export default function PublicAlbum() {
             lsKeys.push(k);
           }
         }
-      } catch (_e) {}
+      } catch (_e) {
+        console.warn('Could not scan localStorage keys:', _e);
+      }
 
       for (const k of lsKeys) {
         try {

@@ -382,9 +382,10 @@ export function BoothProvider({ children }) {
     try {
       const now = Date.now();
       const cleanSessionId = String(sessionId).replace(/[^a-zA-Z0-9_-]/g, '_');
-      const validPhotos = photosList.slice(0, 10);
+      // Upload all session photos (up to 50 photos taken during the session)
+      const validPhotos = photosList.slice(0, 50);
 
-      // Compress photos before saving to Cloud Firestore so documents are ~80KB-120KB (well under 1MB limit)
+      // Compress photos before saving to Cloud Firestore so documents are ~70KB-100KB (well under 1MB limit)
       const processed = await Promise.all(
         validPhotos.map(async (p, idx) => {
           const photoId = String(p.id || '').replace(/[^a-zA-Z0-9_-]/g, '_') || `snap_${now}_${idx}`;
@@ -394,8 +395,8 @@ export function BoothProvider({ children }) {
 
           try {
             if (rawUrl && rawUrl.startsWith('data:image/')) {
-              compressedUrl = await compressImageForCloud(rawUrl, 960, 0.82);
-              thumbUrl = await compressImageForCloud(rawUrl, 320, 0.65);
+              compressedUrl = await compressImageForCloud(rawUrl, 900, 0.78);
+              thumbUrl = await compressImageForCloud(rawUrl, 260, 0.55);
             }
           } catch {
             // fallback to raw
@@ -442,6 +443,7 @@ export function BoothProvider({ children }) {
 
       await setDoc(doc(db, 'cloud_albums', cleanSessionId), {
         sessionId: cleanSessionId,
+        isPublic: true,
         updatedAt: new Date().toISOString(),
         expiresAt: new Date(now + SEVEN_DAYS_MS).toISOString(),
         photosCount: processed.length,
@@ -452,6 +454,67 @@ export function BoothProvider({ children }) {
       console.warn('Cloud album sync error:', cloudErr);
     }
   }, []);
+
+  // Guarantee that all photos in session are uploaded to Cloud Firestore
+  // Called when session time expires OR when user taps "Selesai"
+  const uploadFullSessionToCloud = useCallback(async (targetSessionId = currentSessionId) => {
+    const sessId = targetSessionId || currentSessionId;
+    if (!sessId) return false;
+
+    // Combine sessionAlbum and capturedPhotos to ensure every shot is included
+    const allPhotosMap = new Map();
+    if (Array.isArray(sessionAlbum)) {
+      sessionAlbum.forEach(p => {
+        if (p && (p.dataUrl || p.url)) {
+          allPhotosMap.set(p.id || p.dataUrl, p);
+        }
+      });
+    }
+    if (Array.isArray(capturedPhotos)) {
+      capturedPhotos.forEach(p => {
+        if (p && (p.dataUrl || p.url)) {
+          allPhotosMap.set(p.id || p.dataUrl, p);
+        }
+      });
+    }
+
+    // Also check IndexedDB for any shots persisted previously
+    try {
+      const persistedAlbum = await getPersistedAlbum(sessId);
+      if (Array.isArray(persistedAlbum)) {
+        persistedAlbum.forEach(p => {
+          if (p && (p.dataUrl || p.url)) allPhotosMap.set(p.id || p.dataUrl, p);
+        });
+      }
+      const persistedCaptures = await getPersistedCapturedPhotos(sessId);
+      if (Array.isArray(persistedCaptures)) {
+        persistedCaptures.forEach(p => {
+          if (p && (p.dataUrl || p.url)) allPhotosMap.set(p.id || p.dataUrl, p);
+        });
+      }
+    } catch (_idbErr) {
+      console.warn('Could not read IDB for full session upload:', _idbErr);
+    }
+
+    const photosToUpload = Array.from(allPhotosMap.values());
+    if (photosToUpload.length === 0) return true;
+
+    // Persist to IndexedDB
+    try {
+      await persistAlbum(sessId, photosToUpload);
+    } catch (_err) {
+      console.warn('Could not persist album to IDB:', _err);
+    }
+
+    // Upload to Cloud Firestore
+    try {
+      await syncAlbumToCloud(sessId, photosToUpload);
+    } catch (_err) {
+      console.warn('Could not sync album to cloud:', _err);
+    }
+
+    return true;
+  }, [currentSessionId, sessionAlbum, capturedPhotos, syncAlbumToCloud]);
 
   // HYDRATE FROM INDEXEDDB & CLOUD FIRESTORE ON MOUNT / RELOAD
   // This guarantees that even after page refresh or browser reload,
@@ -1578,6 +1641,7 @@ export function BoothProvider({ children }) {
         addPhotoToAlbum,
         deletePhotoFromAlbum,
         selectPhotoForSlot,
+        uploadFullSessionToCloud,
         orders,
         addOrder,
         updateOrderStatus,
