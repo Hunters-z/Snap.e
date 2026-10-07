@@ -120,22 +120,24 @@ export default function LiveCapture() {
       if (!hasAutoUploadedRef.current) {
         hasAutoUploadedRef.current = true;
         if (uploadFullSessionToCloud) {
-          uploadFullSessionToCloud(currentSessionId);
+          const targetId = currentSessionId || localStorage.getItem('snape_current_session_id');
+          uploadFullSessionToCloud(targetId, sessionAlbum.length > 0 ? sessionAlbum : capturedPhotos);
         }
       }
     }
-  }, [sessionTimeRemaining, uploadFullSessionToCloud, currentSessionId]);
+  }, [sessionTimeRemaining, uploadFullSessionToCloud, currentSessionId, sessionAlbum, capturedPhotos]);
 
   // Handler for finishing session and saving all photos to public cloud album
   const handleFinishSession = async () => {
     setIsFinishingSession(true);
+    const targetId = currentSessionId || localStorage.getItem('snape_current_session_id') || `sess_${Date.now()}`;
     try {
       if (uploadFullSessionToCloud) {
-        await uploadFullSessionToCloud(currentSessionId);
+        await uploadFullSessionToCloud(targetId, sessionAlbum.length > 0 ? sessionAlbum : capturedPhotos);
       }
-      navigate(`/album/${currentSessionId}`);
+      navigate(`/album/${targetId}`);
     } catch (_err) {
-      navigate(`/album/${currentSessionId}`);
+      navigate(`/album/${targetId}`);
     } finally {
       setIsFinishingSession(false);
     }

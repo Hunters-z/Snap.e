@@ -141,15 +141,21 @@ export function recordLiveVideoClip(stream, durationMs = 1800) {
 
 /**
  * Compresses an image data URL for fast and reliable cloud storage under 1MB limits.
+ * Guaranteed to never hang or block execution.
  */
-export function compressImageForCloud(dataUrl, maxDim = 960, quality = 0.82) {
+export function compressImageForCloud(dataUrl, maxDim = 800, quality = 0.72) {
   if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image/')) {
     return Promise.resolve(dataUrl);
   }
   return new Promise((resolve) => {
+    // Safety timeout: resolve with original dataUrl if decoding takes more than 1000ms
+    const safetyTimer = setTimeout(() => {
+      resolve(dataUrl);
+    }, 1000);
+
     const img = new Image();
-    img.crossOrigin = 'anonymous';
     img.onload = () => {
+      clearTimeout(safetyTimer);
       try {
         let w = img.width || 800;
         let h = img.height || 600;
@@ -163,17 +169,24 @@ export function compressImageForCloud(dataUrl, maxDim = 960, quality = 0.82) {
           }
         }
         const canvas = document.createElement('canvas');
-        canvas.width = w;
-        canvas.height = h;
+        canvas.width = Math.max(1, w);
+        canvas.height = Math.max(1, h);
         const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(dataUrl);
+          return;
+        }
         ctx.drawImage(img, 0, 0, w, h);
         const compressed = canvas.toDataURL('image/jpeg', quality);
-        resolve(compressed);
+        resolve(compressed || dataUrl);
       } catch {
         resolve(dataUrl);
       }
     };
-    img.onerror = () => resolve(dataUrl);
+    img.onerror = () => {
+      clearTimeout(safetyTimer);
+      resolve(dataUrl);
+    };
     img.src = dataUrl;
   });
 }

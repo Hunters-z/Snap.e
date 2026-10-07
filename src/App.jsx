@@ -33,6 +33,7 @@ function App() {
               </ProtectedRoute>
             } 
           />
+          <Route path="/album" element={<PublicAlbum />} />
           <Route path="/album/:albumId" element={<PublicAlbum />} />
           <Route path="/shared-album/:albumId" element={<PublicAlbum />} />
           <Route 

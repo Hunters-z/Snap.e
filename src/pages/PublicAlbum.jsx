@@ -24,7 +24,8 @@ import { useBooth } from '../context/BoothContext';
 import { 
   getPersistedAlbum, 
   getPersistedCapturedPhotos, 
-  getAllPersistedAlbums 
+  getAllPersistedAlbums,
+  persistAlbum
 } from '../utils/persistentStorage';
 import { db } from '../firebase';
 import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
@@ -79,33 +80,38 @@ export default function PublicAlbum() {
   const [copiedLink, setCopiedLink] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(null);
 
+  const effectiveAlbumId = useMemo(() => {
+    return albumId || 
+      currentSessionId || 
+      (typeof localStorage !== 'undefined' ? localStorage.getItem('snape_current_session_id') : null) || 
+      (typeof localStorage !== 'undefined' ? localStorage.getItem('snape_last_active_album') : null) || 
+      '';
+  }, [albumId, currentSessionId]);
+
   const albumUrl = useMemo(() => {
     if (typeof window !== 'undefined') {
-      return `${window.location.origin}/album/${albumId}`;
+      const shareId = effectiveAlbumId || 'latest';
+      return `${window.location.origin}/album/${shareId}`;
     }
     return '';
-  }, [albumId]);
+  }, [effectiveAlbumId]);
 
   // Load photos for this unique album ID with multi-source fallback
   const loadAlbumPhotos = useCallback(async () => {
-    if (!albumId) {
-      setLoading(false);
-      return;
-    }
-
     setLoading(true);
     try {
-      const candidates = [];
-
-      const altId = albumId.startsWith('sess_') ? albumId.slice(5) : `sess_${albumId}`;
+      const targetId = effectiveAlbumId;
+      const cleanId = String(targetId || '').replace(/[^a-zA-Z0-9_-]/g, '_');
+      const altId = cleanId.startsWith('sess_') ? cleanId.slice(5) : `sess_${cleanId}`;
 
       // 1. Check in-memory sessionAlbum in context
       if (Array.isArray(sessionAlbum) && sessionAlbum.length > 0) {
-        const isSessionMatch = !albumId || 
-          currentSessionId === albumId || 
+        const isSessionMatch = !targetId || 
+          targetId === 'latest' ||
+          currentSessionId === targetId || 
+          currentSessionId === cleanId ||
           currentSessionId === altId || 
-          (currentSessionId && albumId && (currentSessionId.includes(albumId) || albumId.includes(currentSessionId))) ||
-          sessionAlbum.some(p => p.sessionId === albumId || p.sessionId === altId);
+          sessionAlbum.some(p => p.sessionId === targetId || p.sessionId === cleanId || p.sessionId === altId);
 
         if (isSessionMatch || sessionAlbum.length > 0) {
           const valid = sessionAlbum.map(normalizePhoto).filter(Boolean);
@@ -128,54 +134,46 @@ export default function PublicAlbum() {
       }
 
       // 3. Try loading directly from IndexedDB on this browser
-      const idbAlbum = await getPersistedAlbum(albumId);
-      if (Array.isArray(idbAlbum) && idbAlbum.length > 0) {
-        const valid = idbAlbum.map(normalizePhoto).filter(Boolean);
-        if (valid.length > 0) {
-          setPhotos(valid);
-          setLoading(false);
-          return;
+      if (targetId && targetId !== 'latest') {
+        const idbAlbum = await getPersistedAlbum(targetId);
+        if (Array.isArray(idbAlbum) && idbAlbum.length > 0) {
+          const valid = idbAlbum.map(normalizePhoto).filter(Boolean);
+          if (valid.length > 0) {
+            setPhotos(valid);
+            setLoading(false);
+            return;
+          }
+        }
+
+        const idbCleanAlbum = await getPersistedAlbum(cleanId);
+        if (Array.isArray(idbCleanAlbum) && idbCleanAlbum.length > 0) {
+          const valid = idbCleanAlbum.map(normalizePhoto).filter(Boolean);
+          if (valid.length > 0) {
+            setPhotos(valid);
+            setLoading(false);
+            return;
+          }
+        }
+
+        const idbCaptured = await getPersistedCapturedPhotos(targetId);
+        if (Array.isArray(idbCaptured) && idbCaptured.length > 0) {
+          const valid = idbCaptured.map(normalizePhoto).filter(Boolean);
+          if (valid.length > 0) {
+            setPhotos(valid);
+            setLoading(false);
+            return;
+          }
         }
       }
 
-      const idbCaptured = await getPersistedCapturedPhotos(albumId);
-      if (Array.isArray(idbCaptured) && idbCaptured.length > 0) {
-        const valid = idbCaptured.map(normalizePhoto).filter(Boolean);
-        if (valid.length > 0) {
-          setPhotos(valid);
-          setLoading(false);
-          return;
-        }
-      }
-
-      // 4. Try normalized albumId without or with 'sess_' prefix in IndexedDB
-      const altIdbAlbum = await getPersistedAlbum(altId);
-      if (Array.isArray(altIdbAlbum) && altIdbAlbum.length > 0) {
-        const valid = altIdbAlbum.map(normalizePhoto).filter(Boolean);
-        if (valid.length > 0) {
-          setPhotos(valid);
-          setLoading(false);
-          return;
-        }
-      }
-
-      const altIdbCaptured = await getPersistedCapturedPhotos(altId);
-      if (Array.isArray(altIdbCaptured) && altIdbCaptured.length > 0) {
-        const valid = altIdbCaptured.map(normalizePhoto).filter(Boolean);
-        if (valid.length > 0) {
-          setPhotos(valid);
-          setLoading(false);
-          return;
-        }
-      }
-
-      // 5. Try finding in all persisted albums in IndexedDB
+      // 4. Try finding in all persisted albums in IndexedDB
       const allLocal = await getAllPersistedAlbums();
       if (Array.isArray(allLocal) && allLocal.length > 0) {
         const found = allLocal.find(a => 
-          a.sessionId === albumId || 
-          a.sessionId === altId || 
-          (a.sessionId && albumId && (a.sessionId.includes(albumId) || albumId.includes(a.sessionId)))
+          a.sessionId === targetId || 
+          a.sessionId === cleanId || 
+          a.sessionId === altId ||
+          (a.sessionId && targetId && (a.sessionId.includes(targetId) || targetId.includes(a.sessionId)))
         );
         if (found && Array.isArray(found.photos) && found.photos.length > 0) {
           const valid = found.photos.map(normalizePhoto).filter(Boolean);
@@ -198,27 +196,16 @@ export default function PublicAlbum() {
         }
       }
 
-      // 6. Try localStorage fallback on this device
+      // 5. Try localStorage fallback on this device
       const lsKeys = [
-        `snape_album_${albumId}`,
+        `snape_album_${targetId}`,
+        `snape_album_${cleanId}`,
         `snape_album_${altId}`,
-        `snape_captured_${albumId}`,
-        `snape_captured_${altId}`,
+        `snape_captured_${targetId}`,
+        `snape_captured_${cleanId}`,
         'snape_session_album',
         'snape_captured_photos'
       ];
-
-      // Add all localStorage keys matching snape_album_
-      try {
-        for (let i = 0; i < localStorage.length; i++) {
-          const k = localStorage.key(i);
-          if (k && (k.startsWith('snape_album_') || k.startsWith('snape_captured_')) && !lsKeys.includes(k)) {
-            lsKeys.push(k);
-          }
-        }
-      } catch (_e) {
-        console.warn('Could not scan localStorage keys:', _e);
-      }
 
       for (const k of lsKeys) {
         try {
@@ -239,14 +226,14 @@ export default function PublicAlbum() {
         }
       }
 
-      // 7. Remote cross-device public load from Cloud Firestore
+      // 6. Remote cross-device public load from Cloud Firestore
       if (db) {
-        const idsToTry = [albumId, altId].filter(Boolean);
-        
-        for (const targetId of idsToTry) {
-          // A. Check parent doc cloud_albums/{targetId}
+        const idsToTry = [cleanId, targetId, altId].filter(id => Boolean(id) && id !== 'latest');
+
+        for (const tid of idsToTry) {
+          // A. Check parent doc cloud_albums/{tid}
           try {
-            const parentSnap = await getDoc(doc(db, 'cloud_albums', targetId));
+            const parentSnap = await getDoc(doc(db, 'cloud_albums', tid));
             if (parentSnap.exists()) {
               const data = parentSnap.data();
               if (Array.isArray(data?.photos) && data.photos.length > 0) {
@@ -254,17 +241,41 @@ export default function PublicAlbum() {
                 if (valid.length > 0) {
                   setPhotos(valid);
                   setLoading(false);
+
+                  // In background, also attempt to enrich with high-res or GIFs from subcollection
+                  try {
+                    const subCol = collection(db, 'cloud_albums', tid, 'photos');
+                    getDocs(subCol).then(subSnap => {
+                      if (!subSnap.empty) {
+                        const subList = [];
+                        subSnap.forEach(d => {
+                          const dData = d.data();
+                          if (dData && (dData.dataUrl || dData.url)) subList.push({ id: d.id, ...dData });
+                        });
+                        if (subList.length > 0) {
+                          const merged = subList.map(normalizePhoto).filter(Boolean);
+                          setPhotos(merged);
+                          persistAlbum(tid, merged);
+                        }
+                      }
+                    }).catch(() => {
+                      // ignore background subcollection fetch error
+                    });
+                  } catch (_enrichErr) {
+                    // ignore enrich error
+                  }
+
                   return;
                 }
               }
             }
           } catch (cloudErr) {
-            console.warn('Firestore parent doc check error:', cloudErr);
+            console.warn('Firestore parent doc check warning:', cloudErr);
           }
 
-          // B. Check subcollection cloud_albums/{targetId}/photos
+          // B. Check subcollection cloud_albums/{tid}/photos
           try {
-            const subCol = collection(db, 'cloud_albums', targetId, 'photos');
+            const subCol = collection(db, 'cloud_albums', tid, 'photos');
             const subSnap = await getDocs(subCol);
             if (!subSnap.empty) {
               const list = [];
@@ -278,34 +289,17 @@ export default function PublicAlbum() {
               const valid = list.map(normalizePhoto).filter(Boolean);
               if (valid.length > 0) {
                 setPhotos(valid);
+                persistAlbum(tid, valid);
                 setLoading(false);
                 return;
               }
             }
           } catch (subErr) {
-            console.warn('Firestore subcollection fetch error:', subErr);
-          }
-
-          // C. Check photostrips collection
-          try {
-            const stripSnap = await getDoc(doc(db, 'photostrips', targetId));
-            if (stripSnap.exists()) {
-              const data = stripSnap.data();
-              if (Array.isArray(data?.photos) && data.photos.length > 0) {
-                const valid = data.photos.map(normalizePhoto).filter(Boolean);
-                if (valid.length > 0) {
-                  setPhotos(valid);
-                  setLoading(false);
-                  return;
-                }
-              }
-            }
-          } catch (_stripErr) {
-            // ignore
+            console.warn('Firestore subcollection fetch warning:', subErr);
           }
         }
 
-        // D. Fallback: try latest cloud_albums if targetId was not found
+        // C. Fallback: try latest cloud_albums if specific ID not found or targetId was 'latest'
         try {
           const colRef = collection(db, 'cloud_albums');
           const recentSnap = await getDocs(colRef);
@@ -318,7 +312,7 @@ export default function PublicAlbum() {
               }
             });
             allDocs.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
-            if (allDocs[0] && allDocs[0].photos) {
+            if (allDocs[0] && Array.isArray(allDocs[0].photos) && allDocs[0].photos.length > 0) {
               const valid = allDocs[0].photos.map(normalizePhoto).filter(Boolean);
               if (valid.length > 0) {
                 setPhotos(valid);
@@ -328,18 +322,18 @@ export default function PublicAlbum() {
             }
           }
         } catch (_recentErr) {
-          // ignore
+          // ignore fallback error
         }
       }
 
-      setPhotos(candidates);
+      setPhotos([]);
       setLoading(false);
     } catch (err) {
       console.error('Error loading public album photos:', err);
       setPhotos([]);
       setLoading(false);
     }
-  }, [albumId, currentSessionId, sessionAlbum, capturedPhotos]);
+  }, [effectiveAlbumId, currentSessionId, sessionAlbum, capturedPhotos]);
 
   useEffect(() => {
     loadAlbumPhotos();

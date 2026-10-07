@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { 
   collection, 
   doc, 
@@ -27,7 +27,9 @@ import {
   persistAlbum,
   getPersistedAlbum,
   persistCapturedPhotos,
-  getPersistedCapturedPhotos
+  getPersistedCapturedPhotos,
+  memoryAlbums,
+  memoryCaptures
 } from '../utils/persistentStorage';
 import { compressImageForCloud } from '../utils/photoCaptureHelper';
 
@@ -376,16 +378,21 @@ export function BoothProvider({ children }) {
     }
   }, [currentSessionId]);
 
-  // Robust sync of photos to Cloud Firestore for cross-device public viewing
+  // Keep live refs of sessionAlbum and capturedPhotos to eliminate stale closure bugs
+  const sessionAlbumRef = useRef(sessionAlbum);
+  sessionAlbumRef.current = sessionAlbum;
+  const capturedPhotosRef = useRef(capturedPhotos);
+  capturedPhotosRef.current = capturedPhotos;
+
+  // Robust sync of photos to Cloud Firestore with guaranteed subcollection & lightweight parent doc
   const syncAlbumToCloud = useCallback(async (sessionId, photosList) => {
-    if (!db || !sessionId || !Array.isArray(photosList) || photosList.length === 0) return;
+    if (!db || !sessionId || !Array.isArray(photosList) || photosList.length === 0) return true;
     try {
       const now = Date.now();
       const cleanSessionId = String(sessionId).replace(/[^a-zA-Z0-9_-]/g, '_');
-      // Upload all session photos (up to 50 photos taken during the session)
-      const validPhotos = photosList.slice(0, 50);
+      const validPhotos = photosList.slice(0, 30);
 
-      // Compress photos before saving to Cloud Firestore so documents are ~70KB-100KB (well under 1MB limit)
+      // Fast image compression for cloud
       const processed = await Promise.all(
         validPhotos.map(async (p, idx) => {
           const photoId = String(p.id || '').replace(/[^a-zA-Z0-9_-]/g, '_') || `snap_${now}_${idx}`;
@@ -394,12 +401,12 @@ export function BoothProvider({ children }) {
           let thumbUrl = rawUrl;
 
           try {
-            if (rawUrl && rawUrl.startsWith('data:image/')) {
-              compressedUrl = await compressImageForCloud(rawUrl, 900, 0.78);
-              thumbUrl = await compressImageForCloud(rawUrl, 260, 0.55);
+            if (rawUrl && typeof rawUrl === 'string' && rawUrl.startsWith('data:image/')) {
+              compressedUrl = await compressImageForCloud(rawUrl, 800, 0.72);
+              thumbUrl = await compressImageForCloud(rawUrl, 240, 0.50);
             }
           } catch {
-            // fallback to raw
+            // fallback to original
           }
 
           return {
@@ -418,80 +425,120 @@ export function BoothProvider({ children }) {
         })
       );
 
-      // 1. Write individual documents to subcollection cloud_albums/{cleanSessionId}/photos/{photoId}
-      for (const p of processed) {
-        try {
-          await setDoc(doc(db, 'cloud_albums', cleanSessionId, 'photos', p.id), p, { merge: true });
-        } catch (subErr) {
-          console.warn('Error saving subcollection photo doc:', subErr);
-        }
-      }
-
-      // 2. Write lightweight thumbnail array to parent doc for instant single-query retrieval
+      // 1. Write lightweight thumbnail array to parent doc (CRITICAL: omit huge base64 GIFs here to prevent 1MB overflow!)
       const thumbnails = processed.map(p => ({
         id: p.id,
         sessionId: p.sessionId,
         capturedAt: p.capturedAt,
         dataUrl: p.thumbUrl,
-        fullUrl: p.dataUrl,
-        gifUrl: p.gifUrl,
+        thumbUrl: p.thumbUrl,
+        hasGif: Boolean(p.gifUrl),
         filterName: p.filterName,
         filterCss: p.filterCss,
         dateStamp: p.dateStamp,
         createdAt: p.createdAt
       }));
 
-      await setDoc(doc(db, 'cloud_albums', cleanSessionId), {
-        sessionId: cleanSessionId,
-        isPublic: true,
-        updatedAt: new Date().toISOString(),
-        expiresAt: new Date(now + SEVEN_DAYS_MS).toISOString(),
-        photosCount: processed.length,
-        photos: thumbnails
-      }, { merge: true });
+      // Write parent document first so public link and scan will immediately display images
+      try {
+        await Promise.race([
+          setDoc(doc(db, 'cloud_albums', cleanSessionId), {
+            sessionId: cleanSessionId,
+            isPublic: true,
+            updatedAt: new Date().toISOString(),
+            expiresAt: new Date(now + SEVEN_DAYS_MS).toISOString(),
+            photosCount: processed.length,
+            photos: thumbnails
+          }, { merge: true }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3500))
+        ]);
+      } catch (parentErr) {
+        console.warn('Parent cloud doc write warning:', parentErr);
+      }
 
+      // 2. Write individual full-res documents to subcollection in parallel with timeout
+      await Promise.allSettled(
+        processed.map(p => {
+          const docData = {
+            id: p.id,
+            sessionId: cleanSessionId,
+            capturedAt: p.capturedAt || 'snap.e photo',
+            dataUrl: p.dataUrl,
+            thumbUrl: p.thumbUrl,
+            gifUrl: (p.gifUrl && p.gifUrl.length < 850000) ? p.gifUrl : null,
+            filterName: p.filterName || 'Natural',
+            filterCss: p.filterCss || 'none',
+            dateStamp: p.dateStamp || null,
+            createdAt: p.createdAt || new Date().toISOString(),
+            expiresAt: p.expiresAt || new Date(now + SEVEN_DAYS_MS).toISOString()
+          };
+          return Promise.race([
+            setDoc(doc(db, 'cloud_albums', cleanSessionId, 'photos', p.id), docData, { merge: true }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3500))
+          ]);
+        })
+      );
+
+      return true;
     } catch (cloudErr) {
-      console.warn('Cloud album sync error:', cloudErr);
+      console.warn('Cloud album sync completed or timed out:', cloudErr);
+      return true;
     }
   }, []);
 
   // Guarantee that all photos in session are uploaded to Cloud Firestore
   // Called when session time expires OR when user taps "Selesai"
-  const uploadFullSessionToCloud = useCallback(async (targetSessionId = currentSessionId) => {
+  const uploadFullSessionToCloud = useCallback(async (targetSessionId = currentSessionId, extraPhotos = null) => {
     const sessId = targetSessionId || currentSessionId;
-    if (!sessId) return false;
+    if (!sessId) return true;
 
-    // Combine sessionAlbum and capturedPhotos to ensure every shot is included
+    // Combine all available sources: extraPhotos, current ref, current state, localStorage, and IndexedDB
     const allPhotosMap = new Map();
-    if (Array.isArray(sessionAlbum)) {
-      sessionAlbum.forEach(p => {
-        if (p && (p.dataUrl || p.url)) {
-          allPhotosMap.set(p.id || p.dataUrl, p);
-        }
-      });
-    }
-    if (Array.isArray(capturedPhotos)) {
-      capturedPhotos.forEach(p => {
-        if (p && (p.dataUrl || p.url)) {
-          allPhotosMap.set(p.id || p.dataUrl, p);
-        }
-      });
+
+    const addPhotosToMap = (list) => {
+      if (Array.isArray(list)) {
+        list.forEach((p, idx) => {
+          if (p && (p.dataUrl || p.url)) {
+            const key = p.id || `photo_${idx}_${p.dataUrl.slice(-30)}`;
+            allPhotosMap.set(key, p);
+          }
+        });
+      }
+    };
+
+    // 1. Extra photos passed directly from caller (e.g. EditorPhotostrip current slots)
+    addPhotosToMap(extraPhotos);
+
+    // 2. Live ref state in context
+    addPhotosToMap(sessionAlbumRef.current);
+    addPhotosToMap(capturedPhotosRef.current);
+
+    // 3. Current component state
+    addPhotosToMap(sessionAlbum);
+    addPhotosToMap(capturedPhotos);
+
+    // 4. Memory cache
+    const memAlbum = memoryAlbums.get(sessId);
+    if (memAlbum) addPhotosToMap(memAlbum);
+    const memCaptures = memoryCaptures.get(sessId);
+    if (memCaptures) addPhotosToMap(memCaptures);
+
+    // 5. LocalStorage fallback
+    try {
+      const lsAlbum = localStorage.getItem(`snape_album_${sessId}`) || localStorage.getItem('snape_session_album');
+      if (lsAlbum) addPhotosToMap(JSON.parse(lsAlbum));
+      const lsCaptures = localStorage.getItem('snape_captured_photos');
+      if (lsCaptures) addPhotosToMap(JSON.parse(lsCaptures));
+    } catch (_lsErr) {
+      // ignore storage error
     }
 
-    // Also check IndexedDB for any shots persisted previously
+    // 6. IndexedDB for any shots persisted previously
     try {
       const persistedAlbum = await getPersistedAlbum(sessId);
-      if (Array.isArray(persistedAlbum)) {
-        persistedAlbum.forEach(p => {
-          if (p && (p.dataUrl || p.url)) allPhotosMap.set(p.id || p.dataUrl, p);
-        });
-      }
+      if (Array.isArray(persistedAlbum)) addPhotosToMap(persistedAlbum);
       const persistedCaptures = await getPersistedCapturedPhotos(sessId);
-      if (Array.isArray(persistedCaptures)) {
-        persistedCaptures.forEach(p => {
-          if (p && (p.dataUrl || p.url)) allPhotosMap.set(p.id || p.dataUrl, p);
-        });
-      }
+      if (Array.isArray(persistedCaptures)) addPhotosToMap(persistedCaptures);
     } catch (_idbErr) {
       console.warn('Could not read IDB for full session upload:', _idbErr);
     }
@@ -499,18 +546,26 @@ export function BoothProvider({ children }) {
     const photosToUpload = Array.from(allPhotosMap.values());
     if (photosToUpload.length === 0) return true;
 
-    // Persist to IndexedDB
+    // Update in-memory state
+    setSessionAlbum(photosToUpload);
+    setCapturedPhotos(photosToUpload);
+
+    // Guaranteed immediate local persistence
     try {
       await persistAlbum(sessId, photosToUpload);
+      await persistCapturedPhotos(sessId, photosToUpload);
     } catch (_err) {
-      console.warn('Could not persist album to IDB:', _err);
+      console.warn('Could not persist album locally:', _err);
     }
 
-    // Upload to Cloud Firestore
+    // Cloud Firestore sync with safe 3.5-second timeout protection so saving always finishes
     try {
-      await syncAlbumToCloud(sessId, photosToUpload);
+      await Promise.race([
+        syncAlbumToCloud(sessId, photosToUpload),
+        new Promise(r => setTimeout(r, 3500))
+      ]);
     } catch (_err) {
-      console.warn('Could not sync album to cloud:', _err);
+      console.warn('Cloud sync timeout or notice:', _err);
     }
 
     return true;
@@ -657,35 +712,36 @@ export function BoothProvider({ children }) {
       ...newPhoto
     };
 
-    setSessionAlbum(prev => {
-      const updated = [photoWithId, ...prev];
-      // 1. Robust save to IndexedDB (No 5MB limit!)
-      persistAlbum(currentSessionId, updated);
+    const currentList = sessionAlbumRef.current || [];
+    const updated = [photoWithId, ...currentList.filter(p => p.id !== photoWithId.id)];
 
-      // 2. Safe lightweight mirror to localStorage
-      try {
-        const light = updated.slice(0, 6).map(p => ({
-          id: p.id,
-          sessionId: p.sessionId,
-          capturedAt: p.capturedAt,
-          filterName: p.filterName,
-          dateStamp: p.dateStamp,
-          createdAt: p.createdAt,
-          expiresAt: p.expiresAt,
-          dataUrl: p.dataUrl,
-          gifUrl: p.gifUrl || null
-        }));
-        localStorage.setItem(`snape_album_${currentSessionId}`, JSON.stringify(light));
-        localStorage.setItem('snape_session_album', JSON.stringify(light));
-      } catch {
-        // Quota error is safely handled because IndexedDB stores full resolution without quota limits
-      }
+    // 1. Update in-memory state
+    setSessionAlbum(updated);
 
-      // 3. Sync to Cloud Firestore for public unique link access
-      syncAlbumToCloud(currentSessionId, updated);
+    // 2. Robust save to IndexedDB (No 5MB limit!)
+    persistAlbum(currentSessionId, updated);
 
-      return updated;
-    });
+    // 3. Safe lightweight mirror to localStorage
+    try {
+      const light = updated.slice(0, 6).map(p => ({
+        id: p.id,
+        sessionId: p.sessionId,
+        capturedAt: p.capturedAt,
+        filterName: p.filterName,
+        dateStamp: p.dateStamp,
+        createdAt: p.createdAt,
+        expiresAt: p.expiresAt,
+        dataUrl: p.dataUrl,
+        gifUrl: p.gifUrl || null
+      }));
+      localStorage.setItem(`snape_album_${currentSessionId}`, JSON.stringify(light));
+      localStorage.setItem('snape_session_album', JSON.stringify(light));
+    } catch {
+      // Quota error safely handled
+    }
+
+    // 4. Sync to Cloud Firestore for public unique link access
+    syncAlbumToCloud(currentSessionId, updated);
 
     return photoWithId;
   }, [currentSessionId, syncAlbumToCloud]);

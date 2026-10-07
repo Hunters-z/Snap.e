@@ -96,24 +96,29 @@ export default function EditorPhotostrip() {
     if (sessionTimeRemaining <= 0 && !hasAutoUploadedRef.current) {
       hasAutoUploadedRef.current = true;
       if (uploadFullSessionToCloud) {
-        uploadFullSessionToCloud(currentSessionId);
+        const targetId = currentSessionId || localStorage.getItem('snape_current_session_id');
+        const validSlotPhotos = (photos || []).filter(p => p && (p.dataUrl || p.url));
+        uploadFullSessionToCloud(targetId, validSlotPhotos);
       }
     }
-  }, [sessionTimeRemaining, uploadFullSessionToCloud, currentSessionId]);
+  }, [sessionTimeRemaining, uploadFullSessionToCloud, currentSessionId, photos]);
 
   // Handler for Selesai & Buka Album Publik
   const handleFinishSession = async () => {
     setIsFinishingSession(true);
     showToast('Menyimpan seluruh foto sesi ke Cloud Album publik...');
+    const targetId = currentSessionId || localStorage.getItem('snape_current_session_id') || `sess_${Date.now()}`;
+    const validSlotPhotos = (photos || []).filter(p => p && (p.dataUrl || p.url));
+
     try {
       if (uploadFullSessionToCloud) {
-        await uploadFullSessionToCloud(currentSessionId);
+        await uploadFullSessionToCloud(targetId, validSlotPhotos);
       }
       showToast('Selesai! Seluruh foto sesi tersimpan ke Cloud Album publik.');
-      navigate(`/album/${currentSessionId}`);
+      navigate(`/album/${targetId}`);
     } catch (err) {
       console.warn('Error finishing session:', err);
-      navigate(`/album/${currentSessionId}`);
+      navigate(`/album/${targetId}`);
     } finally {
       setIsFinishingSession(false);
     }
