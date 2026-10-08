@@ -133,7 +133,31 @@ export default function PublicAlbum() {
         }
       }
 
-      // 3. Try loading directly from IndexedDB on this browser
+      // 3. Ultra-fast Server API: public link access for ANYONE without login across devices
+      const idsToFetch = [cleanId, targetId, altId].filter(id => Boolean(id) && id !== 'latest');
+      if (idsToFetch.length === 0 || targetId === 'latest') idsToFetch.push('latest');
+
+      for (const tid of idsToFetch) {
+        try {
+          const res = await fetch(`/api/albums/${tid}`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.success && Array.isArray(data.album?.photos) && data.album.photos.length > 0) {
+              const valid = data.album.photos.map(normalizePhoto).filter(Boolean);
+              if (valid.length > 0) {
+                setPhotos(valid);
+                persistAlbum(tid, valid);
+                setLoading(false);
+                return;
+              }
+            }
+          }
+        } catch (_apiErr) {
+          // ignore API error
+        }
+      }
+
+      // 4. Try loading directly from IndexedDB on this browser
       if (targetId && targetId !== 'latest') {
         const idbAlbum = await getPersistedAlbum(targetId);
         if (Array.isArray(idbAlbum) && idbAlbum.length > 0) {
@@ -206,6 +230,18 @@ export default function PublicAlbum() {
         'snape_session_album',
         'snape_captured_photos'
       ];
+
+      // Also scan all localStorage keys for any session match
+      try {
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k && targetId && (k.includes(targetId) || (cleanId && k.includes(cleanId)))) {
+            if (!lsKeys.includes(k)) lsKeys.push(k);
+          }
+        }
+      } catch (_e) {
+        // ignore storage scan error
+      }
 
       for (const k of lsKeys) {
         try {
@@ -477,7 +513,7 @@ export default function PublicAlbum() {
             <div className="space-y-2">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-red-50 text-red-700 border border-red-200/60 font-mono">
-                  Sesi #{albumId}
+                  Sesi #{effectiveAlbumId || 'Terbaru'}
                 </span>
                 <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200/60">
                   <Clock size={11} className="text-amber-600" />
