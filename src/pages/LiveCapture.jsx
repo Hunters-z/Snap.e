@@ -318,25 +318,19 @@ export default function LiveCapture() {
     let hasRemoteDesc = false;
     const queuedCandidates = [];
 
-    const RTC_CONFIG = {
+    // ICE config: TURN is REQUIRED for cross-network connections.
+    // OpenRelay is dead (DNS -> 192.0.2.1) — removed. Configure a working
+    // TURN via studio_config.iceServers (Firestore) or env at build time.
+    const DEFAULT_ICE = {
       iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
         { urls: 'stun:stun1.l.google.com:19302' },
-        { urls: 'stun:stun2.l.google.com:19302' },
         { urls: 'stun:stun3.l.google.com:19302' },
-        { urls: 'stun:stun4.l.google.com:19302' },
-        { urls: 'stun:stun.services.mozilla.com' },
-        {
-          urls: [
-            'turn:openrelay.metered.ca:80',
-            'turn:openrelay.metered.ca:443',
-            'turn:openrelay.metered.ca:443?transport=tcp'
-          ],
-          username: 'openrelay',
-          credential: 'openrelay'
-        }
-      ]
+        { urls: 'stun:stun4.l.google.com:19302' }
+      ],
+      iceCandidatePoolSize: 4
     };
+    const RTC_CONFIG = window.__SNAP_ICE_CONFIG || DEFAULT_ICE;
 
     try {
       pc = new RTCPeerConnection(RTC_CONFIG);
