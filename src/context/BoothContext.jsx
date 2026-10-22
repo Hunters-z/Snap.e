@@ -812,16 +812,9 @@ export function BoothProvider({ children }) {
 
   // Admin authentication state
   const [isAdminAuth, setIsAdminAuth] = useState(() => {
-    try {
-      const savedUser = localStorage.getItem('snape_current_user');
-      if (savedUser) {
-        const parsed = JSON.parse(savedUser);
-        if (isUserAdmin(parsed)) return true;
-      }
-    } catch {
-      // ignore
-    }
-    return localStorage.getItem('snape_admin_authenticated') === 'true';
+    // SECURITY: do NOT trust localStorage flags — they are trivially forgeable
+    // via DevTools. Admin status must always derive from Firebase Auth identity.
+    return false;
   });
 
   // Synchronize Firebase Auth changes & catch redirect sign-in
@@ -843,7 +836,6 @@ export function BoothProvider({ children }) {
           localStorage.setItem('snape_current_user', JSON.stringify(userData));
           if (admin) {
             setIsAdminAuth(true);
-            localStorage.setItem('snape_admin_authenticated', 'true');
           }
         }
       })
@@ -866,7 +858,6 @@ export function BoothProvider({ children }) {
         localStorage.setItem('snape_current_user', JSON.stringify(userData));
         if (admin) {
           setIsAdminAuth(true);
-          localStorage.setItem('snape_admin_authenticated', 'true');
         }
       } else {
         // Authentic Firebase user is signed out
@@ -1336,7 +1327,6 @@ export function BoothProvider({ children }) {
 
       if (admin) {
         setIsAdminAuth(true);
-        localStorage.setItem('snape_admin_authenticated', 'true');
       }
       return { success: true, user: userData, isAdmin: admin };
     } catch (error) {
@@ -1383,7 +1373,6 @@ export function BoothProvider({ children }) {
 
       if (admin) {
         setIsAdminAuth(true);
-        localStorage.setItem('snape_admin_authenticated', 'true');
       }
       return { success: true, user: userData, isAdmin: admin };
     } catch (error) {
@@ -1424,7 +1413,6 @@ export function BoothProvider({ children }) {
 
       if (admin) {
         setIsAdminAuth(true);
-        localStorage.setItem('snape_admin_authenticated', 'true');
       }
       return { success: true, user: userData, isAdmin: admin };
     } catch (error) {
@@ -1467,7 +1455,6 @@ export function BoothProvider({ children }) {
 
     if (admin) {
       setIsAdminAuth(true);
-      localStorage.setItem('snape_admin_authenticated', 'true');
     }
 
     return { success: true, user: userData, isAdmin: admin };
@@ -1656,12 +1643,10 @@ export function BoothProvider({ children }) {
   };
 
   // Admin PIN Login / Logout (legacy / fallback support)
-  const adminLogin = (password) => {
-    if (password === 'admin123' || password === 'snape2024' || password === 'admin') {
-      setIsAdminAuth(true);
-      localStorage.setItem('snape_admin_authenticated', 'true');
-      return true;
-    }
+  // SECURITY: hard-coded PINs removed. Admin gate must come from Firebase Auth
+  // (isUserAdmin / Firestore rules), not a client-side shared secret.
+  const adminLogin = () => {
+    console.warn('adminLogin(PIN) is disabled — use Google sign-in with an authorized admin email.');
     return false;
   };
 

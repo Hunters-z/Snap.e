@@ -480,6 +480,7 @@ export default function LiveCapture() {
       if (roleParam === 'host') {
         if (data.guestName) setRemotePeerName(data.guestName);
         if (data.guestOnline) setPartnerOnline(true);
+        else setPartnerOnline(false); // BUGFIX: reflect peer going offline
 
         // Host receives Answer from Guest
         if (pc && data.guestAnswer && !pc.currentRemoteDescription && pc.signalingState === 'have-local-offer') {
@@ -514,6 +515,7 @@ export default function LiveCapture() {
         // Guest handles Host
         if (data.hostName) setRemotePeerName(data.hostName);
         if (data.hostOnline) setPartnerOnline(true);
+        else setPartnerOnline(false); // BUGFIX: reflect peer going offline
 
         // Guest receives Offer and creates Answer
         if (pc && data.hostOffer && !pc.currentRemoteDescription) {
@@ -576,6 +578,13 @@ export default function LiveCapture() {
       }
       pcRef.current = null;
       dataChannelRef.current = null;
+      // BUGFIX: presence was never cleared on leave — the partner showed
+      // "online" forever after a peer closed the tab. Mark ourselves offline.
+      const roomRefLeave = doc(db, 'ldr_rooms', sanitizedRoom);
+      const leaveField = roleParam === 'host'
+        ? { hostOnline: false }
+        : { guestOnline: false };
+      setDoc(roomRefLeave, leaveField, { merge: true }).catch(() => {});
     };
   }, [mode, roomParam, roleParam, userName]);
 
@@ -1333,7 +1342,7 @@ export default function LiveCapture() {
 
       {/* Preset Category Bar */}
       <div className="px-3 sm:px-6 pt-1 shrink-0">
-        <div className="flex items-center gap-1.5 overflow-x-auto hide-scrollbar max-w-xl mx-auto justify-start sm:justify-center border-b border-white/10 pb-1.5">
+        <div className="flex items-center gap-1.5 overflow-x-auto hide-scrollbar max-w-xl mx-auto px-3 justify-start sm:justify-center border-b border-white/10 pb-1.5">
           {FILTER_CATEGORIES.map((cat) => (
             <button
               key={cat.id}

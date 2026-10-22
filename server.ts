@@ -41,7 +41,12 @@ try {
   console.warn('Error reading album cache from disk:', err);
 }
 
-app.use(cors());
+// SECURITY: CORS was open to all origins (`cors()`) — fine for a public SPA,
+// but restrict in production via ALLOWED_ORIGIN env when behind a known domain.
+const corsOptions = process.env.ALLOWED_ORIGIN
+  ? { origin: process.env.ALLOWED_ORIGIN.split(',') }
+  : {};
+app.use(cors(corsOptions));
 // Support base64 image uploads from photo sessions up to 50MB
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
@@ -49,6 +54,14 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 // Helper to normalize album ID
 function getCleanId(id: string): string {
   return String(id || '').replace(/[^a-zA-Z0-9_-]/g, '_');
+}
+
+// BUGFIX: expiresAt was written but never enforced — expired albums were
+// still served forever. Reject anything past its expiry (with 1-day grace).
+function isExpired(album: any): boolean {
+  if (!album?.expiresAt) return false;
+  const t = Date.parse(album.expiresAt);
+  return Number.isFinite(t) && t < Date.now() - 24 * 60 * 60 * 1000;
 }
 
 // API: Save or update public album (Instant save, no timeout, accessible by anyone with the link)
@@ -124,10 +137,12 @@ app.get('/api/albums/:id', (req, res) => {
       }
     }
 
-    if (!album) {
-      // If latest requested, return newest album
+    if (!album || isExpired(album)) {
+      // If latest requested, return newest non-expired album
       if (cleanId === 'latest' && albumsCache.size > 0) {
-        const all = Array.from(albumsCache.values()).sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
+        const all = Array.from(albumsCache.values())
+          .filter(a => !isExpired(a))
+          .sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
         if (all[0]) {
           return res.status(200).json({ success: true, album: all[0] });
         }
@@ -142,10 +157,11 @@ app.get('/api/albums/:id', (req, res) => {
   }
 });
 
-// API: List recent public albums
+// List endpoint also never expires albums — filter expired ones and cap payload size
 app.get('/api/albums', (_req, res) => {
   try {
     const list = Array.from(albumsCache.values())
+      .filter(a => !isExpired(a))
       .map(a => ({
         id: a.id,
         sessionId: a.sessionId,
