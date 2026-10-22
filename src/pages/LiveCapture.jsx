@@ -424,9 +424,26 @@ export default function LiveCapture() {
     }
 
     // Initialize Room & SDP exchange
+    // BUGFIX: reset stale SDP/candidates from previous sessions — old
+    // guestAnswer/hostCandidates left in the room doc made a fresh host
+    // accept a dead answer (signaling stuck at have-local-offer, UI stuck
+    // at "Menghubungkan...").
+    const resetStaleRoom = async () => {
+      try {
+        await setDoc(roomRef, {
+          hostOffer: null,
+          guestAnswer: null,
+          hostCandidates: [],
+          guestCandidates: [],
+          syncShutter: null
+        }, { merge: true });
+      } catch (_e) { /* best effort */ }
+    };
+
     const initSignaling = async () => {
       try {
         if (roleParam === 'host') {
+          await resetStaleRoom();
           if (pc) {
             const offer = await pc.createOffer({ offerToReceiveVideo: true, offerToReceiveAudio: false });
             await pc.setLocalDescription(offer);
@@ -480,6 +497,8 @@ export default function LiveCapture() {
         if (pc && data.guestAnswer && !pc.currentRemoteDescription && pc.signalingState === 'have-local-offer') {
           try {
             await pc.setRemoteDescription(new RTCSessionDescription(data.guestAnswer));
+            // Consume the answer so a restarted host doesn't re-apply it
+            setDoc(roomRef, { guestAnswer: null }, { merge: true }).catch(() => {});
             hasRemoteDesc = true;
             // Drain any queued candidates
             while (queuedCandidates.length > 0) {
@@ -528,7 +547,9 @@ export default function LiveCapture() {
             await setDoc(roomRef, {
               guestAnswer: { type: answer.type, sdp: answer.sdp },
               guestOnline: true,
-              lastPing: Date.now()
+              lastPing: Date.now(),
+              // Consume the offer so a restarted guest doesn't re-answer it
+              hostOffer: null
             }, { merge: true });
           } catch (e) {
             console.warn('Guest answer error:', e);
