@@ -21,7 +21,6 @@ const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 // the SDK's default gRPC/WebSocket watch channel ("client is offline" while
 // the rest of the internet works). Long polling survives those networks.
 export const db = initializeFirestore(app, {
-  experimentalAutoDetectLongPolling: true,
   experimentalForceLongPolling: true
 });
 export const auth = getAuth(app);
