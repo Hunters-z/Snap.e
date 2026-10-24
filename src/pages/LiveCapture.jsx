@@ -21,6 +21,7 @@ import {
   CheckCircle2,
   Heart,
   Grid,
+  FlipHorizontal2,
   Download,
   Cloud,
   CreditCard,
@@ -35,7 +36,7 @@ import {
   recordLiveVideoClip 
 } from '../utils/photoCaptureHelper';
 import { db } from '../firebase';
-import { doc, setDoc, onSnapshot, arrayUnion } from 'firebase/firestore';
+import { doc, setDoc, onSnapshot, arrayUnion, getDoc } from 'firebase/firestore';
 import PaymentModal from '../components/PaymentModal';
 
 export default function LiveCapture() {
@@ -95,6 +96,8 @@ export default function LiveCapture() {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [enableDateStamp, setEnableDateStamp] = useState(true);
   const [enableFilmGrain, setEnableFilmGrain] = useState(true);
+  // Mirror front camera preview (like most camera apps); user-toggleable
+  const [mirrorCam, setMirrorCam] = useState(true);
 
   // Camera & Device states
   const [flashActive, setFlashActive] = useState(false);
@@ -153,13 +156,29 @@ export default function LiveCapture() {
   const handleTriggerCaptureRef = useRef(null);
   const pcRef = useRef(null);
   const dataChannelRef = useRef(null);
+  // Mirror of partnerOnline state for use inside intervals (rejoin republish)
+  const partnerOnlineRef = useRef(false);
+  // Invite banner auto-hides after the link is shared; can be reopened
+  const [inviteDismissed, setInviteDismissed] = useState(false);
+  useEffect(() => { partnerOnlineRef.current = partnerOnline; }, [partnerOnline]);
 
   const handleCopyLdrLink = () => {
     if (!roomParam) return;
     const shareUrl = `${window.location.origin}/capture?room=${encodeURIComponent(roomParam)}&role=guest`;
     navigator.clipboard.writeText(shareUrl);
     setCopiedLink(true);
-    setTimeout(() => setCopiedLink(false), 2500);
+    // Auto-hide the invite banner once the link has been shared — it did
+    // its job and was covering the viewfinder.
+    setTimeout(() => {
+      setCopiedLink(false);
+      setInviteDismissed(true);
+    }, 1600);
+  };
+  const handleShareViaWa = () => {
+    if (!roomParam) return;
+    const shareUrl = `${window.location.origin}/capture?room=${encodeURIComponent(roomParam)}&role=guest`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(`Yuk foto bareng di snap.e photo booth! Buka tautan ini untuk masuk ke ruang foto kita: ${shareUrl}`)}`, '_blank');
+    setInviteDismissed(true);
   };
 
   // Video and stream refs
@@ -719,7 +738,31 @@ export default function LiveCapture() {
       }
     });
 
+    // REJOIN FIX: when the host returns to the capture page, the previous
+    // hostOffer was already consumed (null) and the guest (new or returning)
+    // waits forever at "Menyambungkan...". Re-publish the offer whenever the
+    // peer is online but we are not yet connected and the SDP doc is empty.
+    const republishIv = setInterval(async () => {
+      try {
+        if (roleParam !== 'host' || !pcRef.current) return;
+        if (pcRef.current.connectionState === 'connected') return;
+        if (pcRef.current.signalingState !== 'stable') return;
+        if (!partnerOnlineRef.current) return;
+        const snap = await getDoc(roomRef);
+        if (snap.exists() && !snap.data().hostOffer) {
+          const offer = await pcRef.current.createOffer();
+          await pcRef.current.setLocalDescription(offer);
+          await setDoc(roomRef, {
+            hostOffer: { type: offer.type, sdp: offer.sdp },
+            guestAnswer: null,
+            lastPing: Date.now()
+          }, { merge: true });
+        }
+      } catch (_e) { /* best effort */ }
+    }, 4000);
+
     return () => {
+      clearInterval(republishIv);
       if (unsubSnapshot) unsubSnapshot();
       if (pc) {
         pc.close();
@@ -1107,11 +1150,22 @@ export default function LiveCapture() {
             <Grid size={15} />
           </button>
 
+          {/* Mirror Camera Toggle (flip preview horizontally) */}
+          <button
+            onClick={() => setMirrorCam(!mirrorCam)}
+            className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
+              mirrorCam ? 'bg-white text-black font-bold shadow-xs' : 'bg-white/10 hover:bg-white/20 text-gray-400'
+            }`}
+            title={mirrorCam ? 'Matikan Mirror (balik horizontal)' : 'Nyalakan Mirror (seperti cermin)'}
+          >
+            <FlipHorizontal2 size={15} />
+          </button>
+
           {/* Switch Camera */}
           <button
             onClick={toggleCameraFacing}
             className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
-            title="Putar Kamera"
+            title="Putar Kamera (Depan / Belakang)"
           >
             <SwitchCamera size={15} />
           </button>
@@ -1215,8 +1269,8 @@ export default function LiveCapture() {
       </div>
 
       {/* LDR Partner Waiting / Invitation Banner */}
-      {mode === 'ldr' && !peerConnected && (
-        <div className="bg-rose-950/70 border-b border-rose-500/30 px-3 sm:px-6 py-2 flex flex-col sm:flex-row items-center justify-between gap-2.5 text-xs text-rose-200 shrink-0">
+      {mode === 'ldr' && !peerConnected && !inviteDismissed && (
+        <div className="bg-rose-950/70 border-b border-rose-500/30 px-3 sm:px-6 py-2 flex flex-col sm:flex-row items-center justify-between gap-2.5 text-xs text-rose-200 shrink-0 animate-fadeIn">
           <div className="flex items-center gap-2">
             <Heart size={16} className="text-rose-400 fill-rose-400 shrink-0" />
             <span>
@@ -1232,15 +1286,32 @@ export default function LiveCapture() {
               <Copy size={13} />
               <span>{copiedLink ? 'Tersalin!' : 'Salin Tautan'}</span>
             </button>
-            <a
-              href={`https://wa.me/?text=${encodeURIComponent(`Yuk foto bareng di snap.e photo booth! Buka tautan ini untuk masuk ke ruang foto kita: ${window.location.origin}/capture?room=${encodeURIComponent(roomParam)}&role=guest`)}`}
-              target="_blank"
-              rel="noopener noreferrer"
+            <button
+              onClick={handleShareViaWa}
               className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold flex items-center gap-1.5 text-xs shadow-xs transition-colors"
             >
               <span>Kirim via WA</span>
-            </a>
+            </button>
+            <button
+              onClick={() => setInviteDismissed(true)}
+              className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 text-rose-200 flex items-center justify-center transition-colors"
+              title="Tutup banner ini"
+            >
+              ✕
+            </button>
           </div>
+        </div>
+      )}
+      {/* Reopen invite banner chip (shown after dismissal, until connected) */}
+      {mode === 'ldr' && !peerConnected && inviteDismissed && (
+        <div className="px-3 sm:px-6 py-1 shrink-0 bg-black/40 flex justify-center">
+          <button
+            onClick={() => setInviteDismissed(false)}
+            className="px-3 py-1 rounded-full bg-rose-600/20 hover:bg-rose-600/40 text-rose-200 text-[10px] font-bold flex items-center gap-1.5 border border-rose-500/30 transition-colors"
+          >
+            <Heart size={11} className="fill-rose-400 text-rose-400" />
+            <span>Undang Pasangan ({roomParam})</span>
+          </button>
         </div>
       )}
 
@@ -1323,7 +1394,7 @@ export default function LiveCapture() {
                       playsInline
                       muted
                       style={{ filter: activeFilter.css }}
-                      className={`w-full h-full object-cover transform transition-transform ${facingMode === 'user' ? 'scale-x-[-1]' : 'scale-x-100'}`}
+                      className={`w-full h-full object-cover transform transition-transform ${facingMode === 'user' && mirrorCam ? 'scale-x-[-1]' : 'scale-x-100'}`}
                     />
                     <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-full text-[11px] font-semibold flex items-center gap-1.5 z-10">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
@@ -1341,7 +1412,7 @@ export default function LiveCapture() {
                       playsInline
                       muted
                       style={{ filter: activeFilter.css }}
-                      className={`w-full h-full object-cover transform transition-transform ${facingMode === 'user' ? 'scale-x-[-1]' : 'scale-x-100'}`}
+                      className={`w-full h-full object-cover transform transition-transform ${facingMode === 'user' && mirrorCam ? 'scale-x-[-1]' : 'scale-x-100'}`}
                     />
                     <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-full text-[11px] font-semibold flex items-center gap-1.5 z-10">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
@@ -1407,7 +1478,7 @@ export default function LiveCapture() {
                   playsInline
                   muted
                   style={{ filter: activeFilter.css }}
-                  className={`w-full h-full object-cover transform transition-transform ${facingMode === 'user' ? 'scale-x-[-1]' : 'scale-x-100'}`}
+                  className={`w-full h-full object-cover transform transition-transform ${facingMode === 'user' && mirrorCam ? 'scale-x-[-1]' : 'scale-x-100'}`}
                 />
                 <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-full text-[11px] font-semibold flex items-center gap-1.5 z-10">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
@@ -1446,7 +1517,7 @@ export default function LiveCapture() {
 
           {/* Viewfinder Grid (Rule of Thirds + Corner Brackets + Center Target) */}
           {showGrid && mode === 'solo' && (
-            <div className="absolute inset-0 pointer-events-none z-15">
+            <div className="absolute inset-0 pointer-events-none z-30">
               {/* Horizontal rule-of-thirds lines */}
               <div className="absolute left-0 right-0 top-1/3 border-b border-white/25" />
               <div className="absolute left-0 right-0 top-2/3 border-b border-white/25" />
@@ -1467,7 +1538,7 @@ export default function LiveCapture() {
 
           {/* Viewfinder Grid for LDR Mode: Each camera has its own centered framing */}
           {showGrid && mode === 'ldr' && (
-            <div className="absolute inset-0 pointer-events-none z-15 flex flex-col sm:flex-row">
+            <div className="absolute inset-0 pointer-events-none z-30 flex flex-col sm:flex-row">
               {/* Left feed guides */}
               <div className="flex-1 relative h-full">
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-7 h-7 rounded-full border border-white/35 flex items-center justify-center">
@@ -1695,11 +1766,12 @@ export default function LiveCapture() {
         )}
       </div>
 
-      {/* Filmstrip Bottom Thumbnails & Active Slot Selectors */}
-      <div className="bg-[#0A0A0C] px-4 py-2 pb-3 shrink-0 border-t border-white/5">
-        <div className="max-w-xl mx-auto flex items-center justify-between gap-3">
+      {/* Filmstrip Bottom Thumbnails — PIXEL rework: single clean row,
+          action buttons compacted into icon pills */}
+      <div className="bg-[#0A0A0C] px-3 py-2 pb-3 shrink-0 border-t border-white/5">
+        <div className="max-w-xl mx-auto flex items-center gap-3">
           
-          <div className="flex items-center gap-2 overflow-x-auto">
+          <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar flex-1 min-w-0">
             {Array.from({ length: totalShots }).map((_, idx) => {
               const photo = capturedPhotos[idx];
               const isCurrent = activeSlotIndex === idx;
@@ -1744,30 +1816,30 @@ export default function LiveCapture() {
             })}
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-1.5 shrink-0">
             <button
               onClick={() => setShowAlbumModal(true)}
-              className="px-3 py-2 bg-white/10 hover:bg-white/20 text-gray-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors"
+              className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 text-gray-200 flex items-center justify-center transition-colors"
+              title="Album"
             >
-              <Image size={14} />
-              <span className="hidden sm:inline">Pilih dari</span> Album
+              <Image size={15} />
             </button>
 
             <button
               onClick={handleFinishSession}
               disabled={isFinishingSession}
-              className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors shadow-md shadow-emerald-600/20 cursor-pointer disabled:opacity-50"
+              className="w-9 h-9 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white flex items-center justify-center transition-colors shadow-md shadow-emerald-600/20 cursor-pointer disabled:opacity-50"
               title="Selesai sesi dan buka album publik"
             >
-              <CheckCircle2 size={13} />
-              <span>{isFinishingSession ? 'Menyimpan...' : 'Selesai'}</span>
+              <CheckCircle2 size={15} />
             </button>
 
             <button
               onClick={() => navigate('/editor')}
-              className="px-3.5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 transition-colors shadow-md shadow-red-600/20"
+              className="h-9 px-3 bg-red-600 hover:bg-red-700 text-white rounded-full text-xs font-bold flex items-center gap-1.5 transition-colors shadow-md shadow-red-600/20"
+              title="Lanjut ke Editor"
             >
-              <span>Lanjut Editor</span>
+              <span>Editor</span>
               <ArrowRight size={14} />
             </button>
           </div>
