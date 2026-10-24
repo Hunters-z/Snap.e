@@ -494,6 +494,9 @@ export default function LiveCapture() {
               if (msg.slot !== undefined) {
                 setActiveSlotIndex(msg.slot);
               }
+              if (msg.targetShotTime) {
+                remoteTargetShotTimeRef.current = msg.targetShotTime;
+              }
               if (handleTriggerCaptureRef.current) {
                 handleTriggerCaptureRef.current(true);
               }
@@ -1010,33 +1013,45 @@ export default function LiveCapture() {
 
     const burstFrames = [];
 
-    // SYNC: countdown to the shared target instant (local user computed it;
-    // remote trigger passes its own targetShotTime via ref). Falls back to
-    // the plain local timer when no target exists (solo mode).
-    const targetAt = (isRemoteInitiated && remoteTargetShotTimeRef.current)
-      || (mode === 'ldr' && roomParam && lastLocalTargetRef.current)
-      || 0;
-    let remainingMs = targetAt ? targetAt - Date.now() : timerDuration * 1000;
+    // SYNC: countdown to the shared target instant. The initiator computed
+    // targetShotTime = its-now + timer; the receiver uses the same instant
+    // (small clock skew between devices is absorbed by the burst loop which
+    // always re-reads Date.now()). Consume the remote target so a stale one
+    // from a previous shot can never be reused.
+    let targetAt = null;
+    if (isRemoteInitiated && remoteTargetShotTimeRef.current) {
+      targetAt = remoteTargetShotTimeRef.current;
+      remoteTargetShotTimeRef.current = null;
+    } else if (mode === 'ldr' && roomParam && lastLocalTargetRef.current) {
+      targetAt = lastLocalTargetRef.current;
+      lastLocalTargetRef.current = null;
+    }
+    // Never shoot in the past: if the target already passed (late signaling
+    // delivery / clock skew), push it to a full fresh countdown from now.
+    const nowMs = Date.now();
+    if (!targetAt || targetAt - nowMs < 700) {
+      targetAt = nowMs + timerDuration * 1000;
+    }
+    let remainingMs = targetAt - Date.now();
 
+    let lastShown = null;
     while (remainingMs > 0) {
       const c = Math.max(1, Math.ceil(remainingMs / 1000));
-      setCountdown(c);
-      playSound('beep');
+      if (c !== lastShown) {
+        setCountdown(c);
+        lastShown = c;
+        playSound('beep');
+      }
 
       // Start capturing burst frames and live video in the last 1.5 seconds
-      if (remainingMs <= 2000) {
+      if (remainingMs <= 1500) {
         setIsLiveRecording(true);
-        // Sub-second loop: capture burst frames until the target moment
-        for (let sub = 0; sub < 4 && remainingMs > 250; sub++) {
-          burstFrames.push(captureRawFrame(360, 270, false));
-          await new Promise(r => setTimeout(r, 220));
-          remainingMs = targetAt ? targetAt - Date.now() : remainingMs - 220;
-        }
+        burstFrames.push(captureRawFrame(360, 270, false));
+        await new Promise(r => setTimeout(r, Math.min(220, remainingMs)));
       } else {
-        await new Promise(r => setTimeout(r, Math.min(1000, remainingMs - (remainingMs % 1000) || 1000)));
-        remainingMs = targetAt ? targetAt - Date.now() : remainingMs - 1000;
+        await new Promise(r => setTimeout(r, Math.min(500, remainingMs - 1500)));
       }
-      if (!targetAt) remainingMs -= 0; // local timer path already decremented
+      remainingMs = targetAt - Date.now();
     }
 
     // Capture the final high-res frame at moment of flash
