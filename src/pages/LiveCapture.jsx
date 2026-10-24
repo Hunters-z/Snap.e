@@ -1153,7 +1153,7 @@ export default function LiveCapture() {
           <button
             onClick={handleFinishSession}
             disabled={isFinishingSession}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all shadow-xs cursor-pointer disabled:opacity-50"
+            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all shadow-xs cursor-pointer disabled:opacity-50"
             title="Selesaikan sesi dan simpan semua foto ke Cloud Album publik"
           >
             <CheckCircle2 size={13} />
@@ -1163,7 +1163,7 @@ export default function LiveCapture() {
           {/* Temporary Album Button with Counter */}
           <button
             onClick={() => setShowAlbumModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-red-600/90 hover:bg-red-600 text-white text-xs font-bold transition-all shadow-xs"
+            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-red-600/90 hover:bg-red-600 text-white text-xs font-bold transition-all shadow-xs"
             title="Buka Album Sementara"
           >
             <Image size={14} />
