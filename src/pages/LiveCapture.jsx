@@ -1144,7 +1144,7 @@ export default function LiveCapture() {
             title="Sisa waktu sesi photobooth (15 menit)"
           >
             <Clock size={13} className={sessionTimeRemaining < 120 ? 'text-red-400' : 'text-gray-400'} />
-            <span>Sisa Sesi: {formatSessionTime(sessionTimeRemaining)}</span>
+            <span className="hidden sm:inline">Sisa Sesi: </span>{formatSessionTime(sessionTimeRemaining)}
           </div>
         </div>
 
@@ -1173,7 +1173,7 @@ export default function LiveCapture() {
           {/* Sound toggle */}
           <button
             onClick={() => setSoundEnabled(!soundEnabled)}
-            className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
+            className="hidden sm:flex w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 items-center justify-center transition-colors"
             title={soundEnabled ? 'Matikan Suara' : 'Nyalakan Suara'}
           >
             {soundEnabled ? <Volume2 size={15} /> : <VolumeX size={15} className="text-gray-400" />}
