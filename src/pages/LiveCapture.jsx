@@ -309,29 +309,13 @@ export default function LiveCapture() {
           } else {
             try {
               pcActive.addTrack(track, stream);
+              // onnegotiationneeded (added below) now handles renegotiation
+              // automatically for both roles' track additions.
             } catch (_e) {
               console.warn('Track add error:', _e);
             }
           }
         });
-        // BUGFIX: if camera became ready AFTER the initial offer (recvonly),
-        // the remote side never gets media. Renegotiate: host publishes a
-        // fresh offer so the guest re-answers with the video track included.
-        if (mode === 'ldr' && roomParam && roleParam === 'host' &&
-            pcActive.signalingState === 'stable') {
-          try {
-            const offer = await pcActive.createOffer();
-            await pcActive.setLocalDescription(offer);
-            const sanitized = roomParam.trim().replace(/[^a-zA-Z0-9_-]/g, '_');
-            await setDoc(doc(db, 'ldr_rooms', sanitized), {
-              hostOffer: { type: offer.type, sdp: offer.sdp },
-              guestAnswer: null,
-              lastPing: Date.now()
-            }, { merge: true });
-          } catch (_re) {
-            console.warn('Renegotiation warning:', _re);
-          }
-        }
       }
 
       if (localVideoRef.current) {
@@ -428,6 +412,44 @@ export default function LiveCapture() {
         }
       };
 
+      // PERFECT NEGOTIATION: whenever a track is added/removed after the
+      // initial SDP exchange, publish a fresh offer (host) so the guest
+      // re-answers, or write a fresh answer document (guest — polite side
+      // uses rollback-free pattern since only one side offers at a time).
+      // Without this, a camera that becomes ready AFTER the first offer
+      // (recvonly SDP) never reaches the other device — the exact
+      // "kamera tidak muncul" bug.
+      let negotiating = false;
+      pc.onnegotiationneeded = async () => {
+        if (negotiating) return;
+        negotiating = true;
+        try {
+          if (roleParam === 'host') {
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            await setDoc(roomRef, {
+              hostOffer: { type: offer.type, sdp: offer.sdp },
+              guestAnswer: null,
+              lastPing: Date.now()
+            }, { merge: true });
+          } else {
+            // Guest-initiated renegotiation: write an offer document the
+            // host listens for and answers.
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            await setDoc(roomRef, {
+              guestOffer: { type: offer.type, sdp: offer.sdp },
+              hostAnswer2: null,
+              lastPing: Date.now()
+            }, { merge: true });
+          }
+        } catch (e) {
+          console.warn('Negotiation error:', e);
+        } finally {
+          negotiating = false;
+        }
+      };
+
       // Gather ICE candidates and push to Firestore array
       pc.onicecandidate = (event) => {
         if (event.candidate) {
@@ -494,6 +516,8 @@ export default function LiveCapture() {
         await setDoc(roomRef, {
           hostOffer: null,
           guestAnswer: null,
+          guestOffer: null,
+          hostAnswer2: null,
           hostCandidates: [],
           guestCandidates: [],
           syncShutter: null
@@ -554,8 +578,10 @@ export default function LiveCapture() {
         if (data.guestOnline) setPartnerOnline(true);
         else setPartnerOnline(false); // BUGFIX: reflect peer going offline
 
-        // Host receives Answer from Guest
-        if (pc && data.guestAnswer && !pc.currentRemoteDescription && pc.signalingState === 'have-local-offer') {
+        // Host receives Answer from Guest (initial OR renegotiation — a new
+        // answer must also be applied, previously renegotiation answers were
+        // silently dropped which killed the media flow)
+        if (pc && data.guestAnswer && pc.signalingState === 'have-local-offer') {
           try {
             await pc.setRemoteDescription(new RTCSessionDescription(data.guestAnswer));
             // Consume the answer so a restarted host doesn't re-apply it
@@ -568,6 +594,33 @@ export default function LiveCapture() {
             }
           } catch (e) {
             console.warn('Host setRemoteDescription error:', e);
+          }
+        }
+
+        // Host answers a guest-initiated renegotiation offer
+        if (pc && data.guestOffer && pc.signalingState === 'stable' &&
+            (!pc.currentRemoteDescription || pc.currentRemoteDescription.sdp !== data.guestOffer.sdp)) {
+          try {
+            await pc.setRemoteDescription(new RTCSessionDescription(data.guestOffer));
+            hasRemoteDesc = true;
+            const ans = await pc.createAnswer();
+            await pc.setLocalDescription(ans);
+            await setDoc(roomRef, {
+              hostAnswer2: { type: ans.type, sdp: ans.sdp },
+              guestOffer: null
+            }, { merge: true });
+          } catch (e) {
+            console.warn('Host answer-to-guest-offer error:', e);
+          }
+        }
+        // Host applies its own answer to the guest's renegotiation
+        if (pc && data.hostAnswer2 && pc.signalingState === 'have-local-offer') {
+          try {
+            await pc.setRemoteDescription(new RTCSessionDescription(data.hostAnswer2));
+            setDoc(roomRef, { hostAnswer2: null }, { merge: true }).catch(() => {});
+            hasRemoteDesc = true;
+          } catch (e) {
+            console.warn('Host apply hostAnswer2 error:', e);
           }
         }
 
@@ -622,6 +675,17 @@ export default function LiveCapture() {
             }, { merge: true });
           } catch (e) {
             console.warn('Guest answer error:', e);
+          }
+        }
+
+        // Guest applies host's answer to its own renegotiation offer
+        if (pc && data.hostAnswer2 && pc.signalingState === 'have-local-offer') {
+          try {
+            await pc.setRemoteDescription(new RTCSessionDescription(data.hostAnswer2));
+            setDoc(roomRef, { hostAnswer2: null }, { merge: true }).catch(() => {});
+            hasRemoteDesc = true;
+          } catch (e) {
+            console.warn('Guest apply hostAnswer2 error:', e);
           }
         }
 
@@ -973,7 +1037,7 @@ export default function LiveCapture() {
             className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
           >
             <ChevronLeft size={16} />
-            <span className="hidden sm:inline">Kembali</span>
+            <span className="text-[11px] sm:inline">Kembali</span>
           </button>
 
           <div className="hidden sm:flex items-center gap-1.5 pl-2 border-l border-white/10">

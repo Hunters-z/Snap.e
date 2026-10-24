@@ -9,6 +9,18 @@ export default {
       fontFamily: {
         sans: ['Inter', 'sans-serif'],
       },
+      spacing: {
+        18: '4.5rem',
+      },
+      scale: {
+        102: '1.02',
+      },
+      zIndex: {
+        15: '15',
+      },
+      borderRadius: {
+        xs: '0.125rem',
+      },
     },
   },
   plugins: [],
