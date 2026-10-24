@@ -1109,9 +1109,12 @@ export default function LiveCapture() {
   return (
     <div className="min-h-screen bg-[#0F0F11] text-white flex flex-col h-[100dvh] overflow-hidden select-none">
       
-      {/* Top Bar with 15-Minute Countdown Timer */}
-      <header className="flex items-center justify-between px-3 sm:px-6 py-2.5 shrink-0 border-b border-white/10 z-20 bg-[#141417]">
-        <div className="flex items-center gap-2">
+      {/* Top Bar with 15-Minute Countdown Timer — PIXEL: on narrow screens
+          the right-side controls (sound/grid/mirror/flip) were pushed OUT of
+          the viewport by justify-between and the overflow-hidden root, so
+          they "did not exist". Make the whole header one scrollable row. */}
+      <header className="flex items-center gap-2 px-3 sm:px-6 py-2.5 shrink-0 border-b border-white/10 z-20 bg-[#141417] overflow-x-auto hide-scrollbar">
+        <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={() => navigate('/')}
             className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
@@ -1129,7 +1132,7 @@ export default function LiveCapture() {
         </div>
 
         {/* 15-Minute Overall Session Timer Badge */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <div 
             className={`flex items-center gap-2 px-3 py-1 rounded-full text-xs font-mono font-bold border transition-colors ${
               sessionTimeRemaining < 120 
@@ -1145,7 +1148,7 @@ export default function LiveCapture() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 shrink-0">
           {/* Selesai Sesi Button */}
           <button
             onClick={handleFinishSession}
