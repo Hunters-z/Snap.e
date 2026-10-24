@@ -158,6 +158,9 @@ export default function LiveCapture() {
   const dataChannelRef = useRef(null);
   // Mirror of partnerOnline state for use inside intervals (rejoin republish)
   const partnerOnlineRef = useRef(false);
+  // Target shot instant (epoch ms) shared between devices for sync shutter
+  const remoteTargetShotTimeRef = useRef(null);
+  const lastLocalTargetRef = useRef(null);
   // Invite banner auto-hides after the link is shared; can be reopened
   const [inviteDismissed, setInviteDismissed] = useState(false);
   useEffect(() => { partnerOnlineRef.current = partnerOnline; }, [partnerOnline]);
@@ -511,6 +514,9 @@ export default function LiveCapture() {
                 if (msg.slot !== undefined) {
                   setActiveSlotIndex(msg.slot);
                 }
+                if (msg.targetShotTime) {
+                  remoteTargetShotTimeRef.current = msg.targetShotTime;
+                }
                 if (handleTriggerCaptureRef.current) {
                   handleTriggerCaptureRef.current(true);
                 }
@@ -731,6 +737,9 @@ export default function LiveCapture() {
           if (data.syncShutter.slot !== undefined) {
             setActiveSlotIndex(data.syncShutter.slot);
           }
+          if (data.syncShutter.targetShotTime) {
+            remoteTargetShotTimeRef.current = data.syncShutter.targetShotTime;
+          }
           if (handleTriggerCaptureRef.current) {
             handleTriggerCaptureRef.current(true);
           }
@@ -745,7 +754,11 @@ export default function LiveCapture() {
     const republishIv = setInterval(async () => {
       try {
         if (roleParam !== 'host' || !pcRef.current) return;
-        if (pcRef.current.connectionState === 'connected') return;
+        const cs = pcRef.current.connectionState;
+        // Republish while not connected — INCLUDING disconnected/failed
+        // (returning from the Editor kills the old PC; without this the
+        // guest waits at 'Menyambungkan...' forever).
+        if (cs === 'connected' || cs === 'connecting') return;
         if (pcRef.current.signalingState !== 'stable') return;
         if (!partnerOnlineRef.current) return;
         const snap = await getDoc(roomRef);
@@ -851,6 +864,8 @@ export default function LiveCapture() {
 
     const videoEl = localVideoRef.current;
     const remoteEl = remoteVideoRef.current;
+    // Half-width helper used by the per-camera grain overlay in LDR mode
+    const halfWSafe = canvas.width / 2;
 
     // Apply color simulation filter
     ctx.filter = activeFilter.css || 'none';
@@ -899,10 +914,16 @@ export default function LiveCapture() {
     ctx.filter = 'none';
 
     if (withOverlays) {
-      // 1. Organic Film Grain
+      // 1. Organic Film Grain — PER-CAMERA: in LDR mode grain is applied
+      // only to this device's own half of the frame; each side adds its own
+      // grain so the combined photo isn't double-noised.
       if (enableFilmGrain) {
         try {
-          const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const grainX = (mode === 'ldr' && peerConnected && remoteEl && remoteEl.videoWidth > 0)
+            ? (roleParam === 'guest' ? halfWSafe : 0) : 0;
+          const grainW = (mode === 'ldr' && peerConnected && remoteEl && remoteEl.videoWidth > 0)
+            ? canvas.width / 2 : canvas.width;
+          const imgData = ctx.getImageData(grainX, 0, grainW, canvas.height);
           const data = imgData.data;
           for (let i = 0; i < data.length; i += 8) {
             const noise = (Math.random() - 0.5) * 14;
@@ -910,7 +931,7 @@ export default function LiveCapture() {
             data[i + 1] = Math.min(255, Math.max(0, data[i + 1] + noise));
             data[i + 2] = Math.min(255, Math.max(0, data[i + 2] + noise));
           }
-          ctx.putImageData(imgData, 0, 0);
+          ctx.putImageData(imgData, grainX, 0);
         } catch {
           // ignore if tainted
         }
@@ -957,11 +978,18 @@ export default function LiveCapture() {
 
     // If local user tapped capture and in LDR mode, sync to partner via WebRTC DataChannel + Firestore
     if (!isRemoteInitiated && mode === 'ldr' && roomParam) {
+      // SYNC FIX: both devices must shoot at the SAME absolute moment.
+      // Broadcast the TARGET shot time (now + countdown), each side counts
+      // down to that instant instead of running its own local timer which
+      // drifts by the signaling delay.
+      const targetShotTime = Date.now() + timerDuration * 1000;
+      lastLocalTargetRef.current = targetShotTime;
       if (dataChannelRef.current && dataChannelRef.current.readyState === 'open') {
         try {
           dataChannelRef.current.send(JSON.stringify({
             type: 'SYNC_SHUTTER',
             timestamp: Date.now(),
+            targetShotTime,
             slot: activeSlotIndex,
             sender: roleParam
           }));
@@ -973,6 +1001,7 @@ export default function LiveCapture() {
       setDoc(doc(db, 'ldr_rooms', sanitizedRoom), {
         syncShutter: {
           timestamp: Date.now(),
+          targetShotTime,
           slot: activeSlotIndex,
           sender: roleParam
         }
@@ -981,25 +1010,33 @@ export default function LiveCapture() {
 
     const burstFrames = [];
 
-    // Countdown loop (3, 2, 1)
-    for (let c = timerDuration; c > 0; c--) {
+    // SYNC: countdown to the shared target instant (local user computed it;
+    // remote trigger passes its own targetShotTime via ref). Falls back to
+    // the plain local timer when no target exists (solo mode).
+    const targetAt = (isRemoteInitiated && remoteTargetShotTimeRef.current)
+      || (mode === 'ldr' && roomParam && lastLocalTargetRef.current)
+      || 0;
+    let remainingMs = targetAt ? targetAt - Date.now() : timerDuration * 1000;
+
+    while (remainingMs > 0) {
+      const c = Math.max(1, Math.ceil(remainingMs / 1000));
       setCountdown(c);
       playSound('beep');
 
       // Start capturing burst frames and live video in the last 1.5 seconds
-      if (c <= 2) {
+      if (remainingMs <= 2000) {
         setIsLiveRecording(true);
-      }
-
-      // Capture burst frames during countdown for GIF
-      if (c <= 2) {
-        for (let sub = 0; sub < 4; sub++) {
+        // Sub-second loop: capture burst frames until the target moment
+        for (let sub = 0; sub < 4 && remainingMs > 250; sub++) {
           burstFrames.push(captureRawFrame(360, 270, false));
           await new Promise(r => setTimeout(r, 220));
+          remainingMs = targetAt ? targetAt - Date.now() : remainingMs - 220;
         }
       } else {
-        await new Promise(r => setTimeout(r, 1000));
+        await new Promise(r => setTimeout(r, Math.min(1000, remainingMs - (remainingMs % 1000) || 1000)));
+        remainingMs = targetAt ? targetAt - Date.now() : remainingMs - 1000;
       }
+      if (!targetAt) remainingMs -= 0; // local timer path already decremented
     }
 
     // Capture the final high-res frame at moment of flash
@@ -1496,9 +1533,15 @@ export default function LiveCapture() {
             </div>
           )}
 
-          {/* Analog Film Grain Overlay */}
+          {/* Analog Film Grain Overlay — PIXEL: per-camera (own feed only),
+              not across the whole combined frame */}
           {enableFilmGrain && (
-            <div className="absolute inset-0 pointer-events-none mix-blend-screen opacity-25 bg-[radial-gradient(#fff_1.2px,transparent_1.2px)] [background-size:6px_6px] z-10" />
+            <div className="absolute inset-0 pointer-events-none z-10 flex flex-col sm:flex-row">
+              <div className="flex-1 relative h-full mix-blend-screen opacity-25 bg-[radial-gradient(#fff_1.2px,transparent_1.2px)] [background-size:6px_6px]" />
+              {mode === 'ldr' ? (
+                <div className="flex-1 relative h-full mix-blend-screen opacity-25 bg-[radial-gradient(#fff_1.2px,transparent_1.2px)] [background-size:6px_6px] hidden sm:block" />
+              ) : null}
+            </div>
           )}
 
           {/* Retro Orange Digital Date Stamp */}
