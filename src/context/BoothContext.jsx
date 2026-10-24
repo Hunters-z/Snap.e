@@ -668,6 +668,17 @@ export function BoothProvider({ children }) {
     setSessionTimeRemaining(SESSION_MAX_SECONDS);
   }, []);
 
+  // Adopt a remote (host) session end time — used by LDR guests so both
+  // devices show the same remaining session time.
+  const adoptRemoteSession = useCallback((endsAt) => {
+    if (!endsAt || typeof endsAt !== 'number') return;
+    const elapsed = Math.max(0, Math.floor((Date.now() - (endsAt - SESSION_MAX_SECONDS * 1000)) / 1000));
+    const startTime = endsAt - SESSION_MAX_SECONDS * 1000;
+    localStorage.setItem('snape_session_start_time', String(startTime));
+    setSessionStartTime(startTime);
+    setSessionTimeRemaining(Math.max(0, SESSION_MAX_SECONDS - elapsed));
+  }, []);
+
   // Start an entirely new session with payment
   const startNewSession = useCallback(() => {
     const now = Date.now();
@@ -1690,6 +1701,7 @@ export function BoothProvider({ children }) {
         currentSessionId,
         startNewSession,
         startOrResumeSession,
+        adoptRemoteSession,
         resetSession,
         sessionAlbum,
         addPhotoToAlbum,

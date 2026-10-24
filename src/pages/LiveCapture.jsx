@@ -51,6 +51,7 @@ export default function LiveCapture() {
     capturedPhotos,
     sessionTimeRemaining,
     startOrResumeSession,
+    adoptRemoteSession,
     startNewSession,
     currentSessionId,
     sessionAlbum,
@@ -164,6 +165,9 @@ export default function LiveCapture() {
   // Video and stream refs
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
+  // Mirror of sessionTimeRemaining for use inside intervals (LDR broadcast)
+  const sessionTimeRemainingRef = useRef(sessionTimeRemaining);
+  useEffect(() => { sessionTimeRemainingRef.current = sessionTimeRemaining; }, [sessionTimeRemaining]);
   const localStreamRef = useRef(null);
   const animCanvasRef = useRef(null);
 
@@ -171,6 +175,39 @@ export default function LiveCapture() {
   useEffect(() => {
     startOrResumeSession();
   }, [startOrResumeSession]);
+
+  // LDR session sync: guest follows the host's remaining session time.
+  // The host broadcasts sessionEndsAt into the room doc; the guest adopts it
+  // so both sides show the same timer (per-user localStorage timers were
+  // independent and confusing).
+  useEffect(() => {
+    if (mode !== 'ldr' || !roomParam) return;
+    const sanitized = roomParam.trim().replace(/[^a-zA-Z0-9_-]/g, '_');
+    const roomRef = doc(db, 'ldr_rooms', sanitized);
+
+    if (roleParam === 'host') {
+      // Broadcast remaining time every 15s
+      const broadcast = () => {
+        if (sessionTimeRemainingRef.current > 0) {
+          setDoc(roomRef, {
+            sessionEndsAt: Date.now() + sessionTimeRemainingRef.current * 1000
+          }, { merge: true }).catch(() => {});
+        }
+      };
+      broadcast();
+      const iv = setInterval(broadcast, 15000);
+      return () => clearInterval(iv);
+    } else {
+      // Guest adopts host's sessionEndsAt
+      const unsub = onSnapshot(roomRef, (snap) => {
+        const endsAt = snap.data()?.sessionEndsAt;
+        if (endsAt && typeof adoptRemoteSession === 'function') {
+          adoptRemoteSession(endsAt);
+        }
+      }, () => {});
+      return () => unsub();
+    }
+  }, [mode, roomParam, roleParam, adoptRemoteSession]);
 
   // Retro date stamp string (e.g. '26 09 25)
   const getAnalogDateStamp = () => {
@@ -263,19 +300,38 @@ export default function LiveCapture() {
 
       // Attach track to WebRTC peer connection immediately if active
       if (pcRef.current) {
-        const senders = pcRef.current.getSenders();
+        const pcActive = pcRef.current;
+        const senders = pcActive.getSenders();
         stream.getTracks().forEach(track => {
           const sender = senders.find(s => s.track && s.track.kind === track.kind);
           if (sender) {
             sender.replaceTrack(track).catch(() => {});
           } else {
             try {
-              pcRef.current.addTrack(track, stream);
+              pcActive.addTrack(track, stream);
             } catch (_e) {
               console.warn('Track add error:', _e);
             }
           }
         });
+        // BUGFIX: if camera became ready AFTER the initial offer (recvonly),
+        // the remote side never gets media. Renegotiate: host publishes a
+        // fresh offer so the guest re-answers with the video track included.
+        if (mode === 'ldr' && roomParam && roleParam === 'host' &&
+            pcActive.signalingState === 'stable') {
+          try {
+            const offer = await pcActive.createOffer();
+            await pcActive.setLocalDescription(offer);
+            const sanitized = roomParam.trim().replace(/[^a-zA-Z0-9_-]/g, '_');
+            await setDoc(doc(db, 'ldr_rooms', sanitized), {
+              hostOffer: { type: offer.type, sdp: offer.sdp },
+              guestAnswer: null,
+              lastPing: Date.now()
+            }, { merge: true });
+          } catch (_re) {
+            console.warn('Renegotiation warning:', _re);
+          }
+        }
       }
 
       if (localVideoRef.current) {
@@ -350,12 +406,17 @@ export default function LiveCapture() {
 
       // Handle incoming remote media track in real time
       pc.ontrack = (event) => {
-        if (event.streams && event.streams[0]) {
-          setPeerConnected(true);
-          if (remoteVideoRef.current) {
-            remoteVideoRef.current.srcObject = event.streams[0];
-            remoteVideoRef.current.play().catch(() => {});
-          }
+        // Some browsers deliver track without streams[] — build a MediaStream
+        // from event.track so the remote video always has a source.
+        let stream = event.streams && event.streams[0];
+        if (!stream) {
+          stream = new MediaStream([event.track]);
+          if (!pc._synthStream) pc._synthStream = stream;
+        }
+        setPeerConnected(true);
+        if (remoteVideoRef.current) {
+          remoteVideoRef.current.srcObject = stream;
+          remoteVideoRef.current.play().catch(() => {});
         }
       };
 
@@ -530,8 +591,16 @@ export default function LiveCapture() {
         if (data.hostOnline) setPartnerOnline(true);
         else setPartnerOnline(false); // BUGFIX: reflect peer going offline
 
-        // Guest receives Offer and creates Answer
-        if (pc && data.hostOffer && !pc.currentRemoteDescription) {
+        // Guest receives Offer and creates Answer.
+        // Handles renegotiation too: a NEW hostOffer (different SDP) while
+        // already connected must be re-answered, otherwise the guest never
+        // receives the host's camera track added after the first offer.
+        const needsAnswer = pc && data.hostOffer && (
+          !pc.currentRemoteDescription ||
+          (pc.signalingState === 'stable' &&
+           pc.currentRemoteDescription.sdp !== data.hostOffer.sdp)
+        );
+        if (needsAnswer) {
           try {
             await pc.setRemoteDescription(new RTCSessionDescription(data.hostOffer));
             hasRemoteDesc = true;
@@ -1003,31 +1072,32 @@ export default function LiveCapture() {
         </div>
       )}
 
-      {/* Sub Header / Active Slot Selector */}
-      <div className="px-3 sm:px-6 py-1.5 flex items-center justify-between shrink-0 bg-black/60 text-xs border-b border-white/5">
-        <div className="flex items-center gap-2">
+      {/* Sub Header / Active Slot Selector — PIXEL: compacted, one row */}
+      <div className="px-3 sm:px-6 py-1 flex items-center gap-2 overflow-x-auto hide-scrollbar shrink-0 bg-black/60 text-xs border-b border-white/5">
+        <div className="flex items-center gap-1.5 shrink-0">
           <span className={`w-2 h-2 rounded-full ${peerConnected ? 'bg-emerald-500' : 'bg-amber-400 animate-pulse'}`}></span>
-          <span className="text-gray-300 font-medium text-[11px] sm:text-xs">
+          <span className="text-gray-300 font-medium text-[11px] sm:text-xs whitespace-nowrap max-w-[38vw] truncate">
             {mode === 'ldr' 
-              ? (peerConnected ? `Tersambung (HD WebRTC) · ${remotePeerName}` : 'Menunggu pasangan LDR via WebRTC...') 
+              ? (peerConnected ? `Tersambung · ${remotePeerName}` : 'Menunggu pasangan...') 
               : `Bilik Foto: ${userName}`}
           </span>
-          {mode === 'ldr' && roomParam && (
-            <button
-              onClick={handleCopyLdrLink}
-              className="ml-1 px-2.5 py-0.5 rounded-full bg-rose-600/30 hover:bg-rose-600/50 text-rose-200 font-mono text-[10px] flex items-center gap-1 border border-rose-500/30 transition-all"
-              title="Salin tautan ruangan untuk dikirim ke pasangan"
-            >
-              {copiedLink ? <Check size={10} className="text-emerald-400" /> : <Copy size={10} />}
-              <span>{copiedLink ? 'Tersalin!' : `Room: ${roomParam}`}</span>
-            </button>
-          )}
         </div>
+        {mode === 'ldr' && roomParam && (
+          <button
+            onClick={handleCopyLdrLink}
+            className="shrink-0 px-2.5 py-0.5 rounded-full bg-rose-600/30 hover:bg-rose-600/50 text-rose-200 font-mono text-[10px] flex items-center gap-1 border border-rose-500/30 transition-all"
+            title="Salin tautan ruangan untuk dikirim ke pasangan"
+          >
+            {copiedLink ? <Check size={10} className="text-emerald-400" /> : <Copy size={10} />}
+            <span className="whitespace-nowrap">{copiedLink ? 'Tersalin!' : `Room: ${roomParam}`}</span>
+          </button>
+        )}
 
-        {/* Layout Format & Slot selector chips */}
-        <div className="flex items-center gap-2 flex-wrap">
+        {/* Layout Format & Slot selector chips — PIXEL: collapsed into one
+            scrollable, compact row on mobile (was wrapping into 3 dense rows) */}
+        <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar">
           {/* Grid 4 / Grid 6 Toggle */}
-          <div className="flex items-center bg-white/10 rounded-full p-0.5 text-[10px] font-bold">
+          <div className="flex items-center bg-white/10 rounded-full p-0.5 text-[10px] font-bold shrink-0">
             <button
               type="button"
               onClick={() => {
@@ -1059,14 +1129,14 @@ export default function LiveCapture() {
             </button>
           </div>
 
-          <span className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider hidden sm:inline">
+          <span className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider hidden sm:inline shrink-0">
             Ambil Slot:
           </span>
           {Array.from({ length: totalShots }).map((_, idx) => (
             <button
               key={idx}
               onClick={() => setActiveSlotIndex(idx)}
-              className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold transition-colors ${
+              className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold transition-colors shrink-0 ${
                 activeSlotIndex === idx
                   ? 'bg-red-600 text-white shadow-xs'
                   : capturedPhotos[idx]
@@ -1074,7 +1144,7 @@ export default function LiveCapture() {
                   : 'bg-white/5 text-gray-400 hover:text-white'
               }`}
             >
-              Pose #{idx + 1} {capturedPhotos[idx] ? '✓' : ''}
+              {idx + 1}{capturedPhotos[idx] ? ' ✓' : ''}
             </button>
           ))}
         </div>
