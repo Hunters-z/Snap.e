@@ -1344,7 +1344,6 @@ export function BoothProvider({ children }) {
       console.error('Google sign-in error:', error);
       // Auto-fallback to redirect if popup is blocked
       if (error?.code === 'auth/popup-blocked') {
-        console.log('Popup was blocked by browser, attempting redirect flow...');
         await signInWithRedirect(auth, provider);
         return { redirected: true };
       }

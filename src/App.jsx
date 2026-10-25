@@ -5,7 +5,6 @@ import LiveCapture from './pages/LiveCapture';
 import EditorPhotostrip from './pages/EditorPhotostrip';
 import AdminDashboard from './pages/AdminDashboard';
 import PublicAlbum from './pages/PublicAlbum';
-import DebugDiag from './pages/DebugDiag';
 import ProtectedRoute from './components/ProtectedRoute';
 import AuthModal from './components/AuthModal';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -35,7 +34,6 @@ function App() {
             } 
           />
           <Route path="/album" element={<PublicAlbum />} />
-          <Route path="/debug" element={<DebugDiag />} />
           <Route path="/album/:albumId" element={<PublicAlbum />} />
           <Route path="/shared-album/:albumId" element={<PublicAlbum />} />
           <Route 
