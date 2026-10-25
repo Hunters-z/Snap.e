@@ -33,10 +33,12 @@ import {
 } from '../utils/persistentStorage';
 import { compressImageForCloud } from '../utils/photoCaptureHelper';
 
-export const ADMIN_EMAILS = [
-  '0601randikurnia.s@gmail.com',
-  'admin@snape.studio'
-];
+// Admin emails — configured via VITE_ADMIN_EMAILS (comma-separated).
+// Never hardcode real emails here; new installs set their own admins in .env.
+export const ADMIN_EMAILS = (import.meta.env.VITE_ADMIN_EMAILS || '')
+  .split(',')
+  .map(e => e.trim().toLowerCase())
+  .filter(Boolean);
 
 export function isUserAdmin(user) {
   if (!user) return false;
@@ -1054,8 +1056,8 @@ const syncAlbumToCloud = useCallback(async (sessionId, photosList) => {
           const starterUsers = [
             {
               uid: 'usr_admin',
-              displayName: 'Randi Kurnia',
-              email: '0601randikurnia.s@gmail.com',
+              displayName: 'Demo User',
+              email: 'demo@snap-e.app',
               role: 'admin',
               createdAt: new Date(Date.now() - 86400000 * 14).toISOString(),
               lastLoginAt: new Date().toISOString()
@@ -1464,8 +1466,8 @@ const syncAlbumToCloud = useCallback(async (sessionId, photosList) => {
   };
 
   // Direct login fallback (works in iframe / when popup is blocked)
-  const loginDirectly = async (customEmail = '0601randikurnia.s@gmail.com', customName = 'Randi Kurnia') => {
-    const email = (customEmail || '0601randikurnia.s@gmail.com').trim().toLowerCase();
+  const loginDirectly = async (customEmail = 'demo@snap-e.app', customName = 'Demo User') => {
+    const email = (customEmail || 'demo@snap-e.app').trim().toLowerCase();
     const displayName = (customName || '').trim() || email.split('@')[0];
     const admin = isUserAdmin({ email });
     const uid = `usr_${email.replace(/[^a-zA-Z0-9]/g, '_')}`;
@@ -1503,7 +1505,7 @@ const syncAlbumToCloud = useCallback(async (sessionId, photosList) => {
   };
 
   const loginWithDemo = () => {
-    return loginDirectly('0601randikurnia.s@gmail.com', 'Randi Kurnia (Admin)');
+    return loginDirectly('demo@snap-e.app', 'Demo Admin');
   };
 
   const logout = async () => {

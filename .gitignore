@@ -29,3 +29,6 @@ dist-ssr
 .env.production
 .env.development
 firebase-applet-config.json
+.superpowers/
+data/
+docs/

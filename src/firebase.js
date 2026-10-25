@@ -2,16 +2,16 @@ import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { initializeFirestore } from 'firebase/firestore';
 
-// Locked directly to user's Firebase project: snap-e-55144
+// Firebase config — from environment variables (see .env.example).
 export const firebaseConfig = {
-  apiKey: "AIzaSyClayvri2RwofR_wpJVP0g8ZMlpAFV48RE",
-  authDomain: "snap-e-55144.firebaseapp.com",
-  projectId: "snap-e-55144",
-  storageBucket: "snap-e-55144.firebasestorage.app",
-  messagingSenderId: "618885882194",
-  appId: "1:618885882194:web:d971e380ded9f6559e5a8b",
-  measurementId: "G-T2PZ1X4XB7",
-  firestoreDatabaseId: "(default)"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
+  firestoreDatabaseId: import.meta.env.VITE_FIREBASE_DATABASE_ID || '(default)'
 };
 
 // Initialize single Firebase App instance

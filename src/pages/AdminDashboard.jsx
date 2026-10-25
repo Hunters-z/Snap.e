@@ -806,7 +806,7 @@ export default function AdminDashboard() {
               <span>Admin Terotorisasi</span>
             </div>
             <p className="font-mono text-[10px] text-gray-600 truncate">
-              {currentUser?.email || '0601randikurnia.s@gmail.com'}
+              {currentUser?.email || 'demo@snap-e.app'}
             </p>
           </div>
 
@@ -966,7 +966,7 @@ export default function AdminDashboard() {
                       </thead>
                       <tbody className="divide-y divide-gray-100">
                         {(registeredUsers && registeredUsers.length > 0 ? registeredUsers : [
-                          { uid: '1', displayName: 'Randi Kurnia', email: '0601randikurnia.s@gmail.com', role: 'admin', createdAt: '2026-09-20', lastLoginAt: 'Baru saja' },
+                          { uid: '1', displayName: 'Demo User', email: 'demo@snap-e.app', role: 'admin', createdAt: '2026-09-20', lastLoginAt: 'Baru saja' },
                           { uid: '2', displayName: 'Nabila Azzahra', email: 'nabila.azzahra@gmail.com', role: 'customer', createdAt: '2026-09-22', lastLoginAt: '2 jam yang lalu' },
                           { uid: '3', displayName: 'Dimas Prasetya', email: 'dimas.prasetya@gmail.com', role: 'customer', createdAt: '2026-09-23', lastLoginAt: '6 jam yang lalu' },
                           { uid: '4', displayName: 'Alisya Putri', email: 'alisya.putri@gmail.com', role: 'customer', createdAt: '2026-09-24', lastLoginAt: 'Kemarin' },
@@ -2355,7 +2355,7 @@ export default function AdminDashboard() {
                 {/* 4 Summary Stats Cards */}
                 {(() => {
                   const sampleFallback = [
-                    { uid: 'u_1', displayName: 'Randi Kurnia', email: '0601randikurnia.s@gmail.com', role: 'admin', status: 'active', createdAt: '2026-09-20', lastLoginAt: 'Baru saja', notes: 'Master Admin' },
+                    { uid: 'u_1', displayName: 'Demo User', email: 'demo@snap-e.app', role: 'admin', status: 'active', createdAt: '2026-09-20', lastLoginAt: 'Baru saja', notes: 'Master Admin' },
                     { uid: 'u_2', displayName: 'Nabila Azzahra', email: 'nabila.azzahra@gmail.com', role: 'customer', status: 'active', createdAt: '2026-09-22', lastLoginAt: '2 jam lalu', notes: 'Pelanggan reguler' },
                     { uid: 'u_3', displayName: 'Dimas Prasetya', email: 'dimas.prasetya@gmail.com', role: 'customer', status: 'active', createdAt: '2026-09-23', lastLoginAt: '6 jam lalu', notes: '' },
                     { uid: 'u_4', displayName: 'Alisya Putri', email: 'alisya.putri@gmail.com', role: 'customer', status: 'active', createdAt: '2026-09-24', lastLoginAt: 'Kemarin', notes: '' },
