@@ -175,17 +175,15 @@ export default function BoothHome() {
         {/* Header Hero */}
         {appConfig.website?.showHero !== false && (
           <div className="text-center max-w-2xl mx-auto mb-8 sm:mb-10 space-y-3">
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-50 border border-red-100 text-red-600 text-xs font-semibold tracking-wide">
-              <Sparkles size={14} className="animate-spin text-red-500" />
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-rose-film/10 border border-rose-film/20 text-rose-film text-xs font-semibold tracking-wide">
+              <Sparkles size={14} />
               <span>{appConfig.website?.promoBadge || 'PHOTO BOOTH ONLINE & LDR DUAL-STREAM'}</span>
             </div>
-            <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight leading-tight">
-              <span className={`text-transparent bg-clip-text bg-gradient-to-r ${appConfig.website?.taglineGradient || 'from-rose-600 via-purple-600 to-indigo-600'}`}>
-                {appConfig.website?.heroTagline || 'Momen Berharga, Synchronized Distances'}
-              </span>
+            <h1 className="text-3xl sm:text-4xl md:text-5xl font-display tracking-tight leading-tight text-ink">
+              {appConfig.website?.heroTagline || 'Momen Berharga, Synchronized Distances'}
             </h1>
-            <p className="text-sm sm:text-base text-gray-600 max-w-lg mx-auto leading-relaxed">
-              {appConfig.website?.heroDescription || 'Foto bersama pasangan atau sahabat dari jarak jauh secara real-time, atau nikmati sesi solo dengan photostrip estetik gaya Korea.'}
+            <p className="text-sm sm:text-base text-ink/70 max-w-lg mx-auto leading-relaxed">
+              {appConfig.website?.heroDescription || 'Dua kamera, satu jepretan bersamaan — foto bareng walau 1.000 km terpisah, atau sesi solo gaya photostrip Korea.'}
             </p>
           </div>
         )}
@@ -409,7 +407,7 @@ export default function BoothHome() {
             {currentUser ? (
               <button
                 onClick={handleStartBooth}
-                className="w-full sm:w-auto px-8 py-3.5 bg-gray-900 hover:bg-black text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-md shadow-gray-900/10 group"
+                className="w-full sm:w-auto px-8 py-3.5 bg-rose-film hover:bg-rose-film-600 text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-md shadow-rose-film/25 group"
               >
                 <span>{appConfig.website?.primaryCtaText || 'Mulai Sesi Booth Sekarang'}</span>
                 <ArrowRight size={16} className="group-hover:translate-x-0.5 transition-transform" />
@@ -417,7 +415,7 @@ export default function BoothHome() {
             ) : (
               <button
                 onClick={() => openAuthModal('/setup')}
-                className="w-full sm:w-auto px-8 py-3.5 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-md shadow-red-600/20 group"
+                className="w-full sm:w-auto px-8 py-3.5 bg-rose-film hover:bg-rose-film-600 text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-md shadow-rose-film/25 group"
               >
                 <LogIn size={16} />
                 <span>Masuk untuk Mulai Booth</span>
