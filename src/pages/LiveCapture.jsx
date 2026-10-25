@@ -1069,7 +1069,7 @@ export default function LiveCapture() {
     setCountdown(null);
     setFlashActive(true);
     playSound('shutter');
-    setTimeout(() => setFlashActive(false), 200);
+    setTimeout(() => setFlashActive(false), 500);
 
     // Final high-res photo with grain & date stamp
     const stillDataUrl = captureRawFrame(960, 720, true);
@@ -1400,18 +1400,24 @@ export default function LiveCapture() {
       {/* Main Viewport Container */}
       <div className="flex-1 relative p-2 sm:p-4 flex items-center justify-center min-h-0">
         
-        {/* Flash Overlay */}
-        <div 
-          className={`absolute inset-0 bg-white z-50 pointer-events-none transition-opacity duration-150 ${
-            flashActive ? 'opacity-100' : 'opacity-0'
-          }`}
+        {/* Flash Overlay — burst + exposure dim */}
+        <div
+          className={`absolute inset-0 bg-white z-50 pointer-events-none ${flashActive ? 'animate-flash-burst' : 'opacity-0'}`}
+        />
+        <div
+          className={`absolute inset-0 bg-black z-50 pointer-events-none ${flashActive ? 'animate-dim-burst' : 'opacity-0'}`}
         />
 
-        {/* Big Countdown Overlay (Only appears when Ambil Foto is tapped!) */}
+        {/* Big Countdown Overlay — per-digit pop, ring drains each second */}
         {countdown !== null && (
           <div className="absolute inset-0 z-40 flex items-center justify-center pointer-events-none">
-            <div className="w-28 h-28 sm:w-36 sm:h-36 rounded-full bg-black/70 backdrop-blur-md border-4 border-red-500 flex flex-col items-center justify-center text-6xl sm:text-7xl font-extrabold text-white animate-ping">
-              <span>{countdown}</span>
+            <div
+              key={countdown}
+              className={`w-28 h-28 sm:w-36 sm:h-36 rounded-full bg-black/70 backdrop-blur-md flex flex-col items-center justify-center animate-digit-pop ${
+                countdown <= 1 ? 'border-4 border-amber-400' : 'border-4 border-rose-film'
+              }`}
+            >
+              <span className="text-6xl sm:text-7xl font-display text-white">{countdown}</span>
             </div>
           </div>
         )}
