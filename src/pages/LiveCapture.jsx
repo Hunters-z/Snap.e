@@ -373,11 +373,11 @@ export default function LiveCapture() {
     }
   }, [facingMode]);
 
-  // Toggle Camera (Front / Back)
-  const toggleCameraFacing = async () => {
-    const nextFacing = facingMode === 'user' ? 'environment' : 'user';
-    setFacingMode(nextFacing);
-    await startCamera(nextFacing);
+  // Toggle Camera (Front / Back) — ONLY update state; the [startCamera] effect
+  // below re-runs and starts the camera. Calling startCamera here too caused a
+  // double-start race (two getUserMedia fighting over one stream → black camera).
+  const toggleCameraFacing = () => {
+    setFacingMode(facingMode === 'user' ? 'environment' : 'user');
   };
 
   // Setup Real-Time WebRTC Peer Connection + Firestore Signaling
@@ -806,13 +806,26 @@ export default function LiveCapture() {
     };
   }, [mode, roomParam, roleParam, userName]);
 
-  // Initial camera start
+  // Camera lifecycle — single source of truth: runs on mount AND whenever
+  // facingMode changes. Cleanup fully releases tracks and nulls the ref.
   useEffect(() => {
-    startCamera();
+    let cancelled = false;
+    const videoEl = localVideoRef.current;
+    (async () => {
+      await startCamera();
+      if (cancelled && localStreamRef.current) {
+        // effect re-ran while we were starting: release our stale stream
+        localStreamRef.current.getTracks().forEach(t => t.stop());
+        localStreamRef.current = null;
+      }
+    })();
     return () => {
+      cancelled = true;
       if (localStreamRef.current) {
         localStreamRef.current.getTracks().forEach(t => t.stop());
+        localStreamRef.current = null;
       }
+      if (videoEl) videoEl.srcObject = null;
     };
   }, [startCamera]);
 
