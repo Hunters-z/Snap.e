@@ -645,9 +645,10 @@ export default function PublicAlbum() {
               <ImageIcon size={32} />
             </div>
             <div className="space-y-1">
-              <h3 className="text-lg font-bold text-gray-900">Belum Ada Foto dalam Album Ini</h3>
+              <h3 className="text-lg font-bold text-ink font-display">Album Ini Belum/Tidak Lagi Tersedia</h3>
               <p className="text-xs text-gray-500 max-w-sm mx-auto">
-                Foto pada sesi ini belum tersimpan atau masa simpan 7 hari telah berakhir.
+                Album tersimpan 7 hari sejak sesi dibuat — setelah itu foto dihapus permanen.
+                Kalau ini album kalian, cek kembali link yang dibagikan saat sesi.
               </p>
             </div>
             <div className="pt-2 flex justify-center gap-2">

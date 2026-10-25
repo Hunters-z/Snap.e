@@ -1666,9 +1666,17 @@ export default function EditorPhotostrip() {
                 {/* Simple & Clean Photo Cards Grid */}
                 <div className="max-h-[420px] overflow-y-auto pr-1">
                   {sessionAlbum?.length === 0 ? (
-                    <div className="text-center py-10 text-gray-400 space-y-2.5">
-                      <Camera size={32} className="mx-auto text-gray-300" />
-                      <p className="text-xs font-semibold text-gray-600">Belum ada foto dalam album sesi.</p>
+                    <div className="text-center py-10 space-y-3">
+                      {/* Empty strip illusion — polaroid placeholders */}
+                      <div className="flex justify-center gap-1.5" aria-hidden="true">
+                        {[0, 1, 2, 3].map(i => (
+                          <div key={i} className={`w-9 h-14 bg-white border border-gray-200 rounded-sm shadow-sm flex flex-col items-center justify-end pb-1 ${i % 2 ? 'rotate-2' : '-rotate-2'}`}>
+                            <div className="w-6 h-6 bg-gray-100 rounded-sm" />
+                            <div className="w-5 h-0.5 bg-gray-200 mt-1" />
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-xs font-semibold text-ink/80">Strip masih kosong — jepret 4 pose pertama kalian.</p>
                       {sessionTimeRemaining > 0 ? (
                         <button
                           onClick={() => navigate('/capture')}
