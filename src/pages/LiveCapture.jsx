@@ -246,10 +246,21 @@ export default function LiveCapture() {
     : availableFilters.filter(f => f.category === selectedCategory || (selectedCategory === 'vintage' && f.category === 'vintage'));
 
   // Synthesize Web Audio beeps & camera shutter
+  // One shared AudioContext (creating one per beep leaks contexts & hits browser limits)
+  const audioCtxRef = useRef(null);
+  const getAudioCtx = () => {
+    if (!audioCtxRef.current) {
+      audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioCtxRef.current.state === 'suspended') audioCtxRef.current.resume().catch(() => {});
+    return audioCtxRef.current;
+  };
+  useEffect(() => () => { audioCtxRef.current?.close?.().catch(() => {}); }, []);
+
   const playSound = (type) => {
     if (!soundEnabled) return;
     try {
-      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const audioCtx = getAudioCtx();
       const osc = audioCtx.createOscillator();
       const gain = audioCtx.createGain();
       osc.connect(gain);
@@ -1829,7 +1840,7 @@ export default function LiveCapture() {
 
       {/* Filmstrip Bottom Thumbnails — PIXEL rework: single clean row,
           action buttons compacted into icon pills */}
-      <div className="bg-[#0A0A0C] px-3 py-2 pb-3 shrink-0 border-t border-white/5">
+      <div className="bg-[#0A0A0C] px-3 py-2 pb-safe shrink-0 border-t border-white/5">
         <div className="max-w-xl mx-auto flex items-center gap-3">
           
           <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar flex-1 min-w-0">

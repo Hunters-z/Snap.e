@@ -22,7 +22,7 @@ export default function Topbar() {
     : [];
 
   return (
-    <header className="sticky top-0 z-40 w-full bg-white/95 backdrop-blur-md border-b border-gray-100 transition-all">
+    <header className="sticky top-0 z-40 w-full pt-safe bg-white/95 backdrop-blur-md border-b border-gray-100 transition-all">
       <div className="max-w-7xl mx-auto flex items-center justify-between px-4 sm:px-6 py-3.5">
         {/* Brand Logo */}
         <Link to="/" className="flex items-center gap-2.5 group">

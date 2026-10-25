@@ -134,8 +134,8 @@ export default function PublicAlbum() {
       }
 
       // 3. Ultra-fast Server API: public link access for ANYONE without login across devices
+      // (server no longer serves a 'latest' pseudo-ID — each album has its own link)
       const idsToFetch = [cleanId, targetId, altId].filter(id => Boolean(id) && id !== 'latest');
-      if (idsToFetch.length === 0 || targetId === 'latest') idsToFetch.push('latest');
 
       for (const tid of idsToFetch) {
         try {

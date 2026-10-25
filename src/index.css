@@ -8,6 +8,12 @@
   }
 }
 
+/* Mobile safe-area (iPhone home indicator) */
+@layer utilities {
+  .pb-safe { padding-bottom: calc(env(safe-area-inset-bottom) + 0.75rem); }
+  .pt-safe { padding-top: calc(env(safe-area-inset-top) + 0.5rem); }
+}
+
 /* Custom scrollbar matching design */
 ::-webkit-scrollbar {
   width: 6px;

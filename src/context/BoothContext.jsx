@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { 
   collection, 
   doc, 
@@ -385,7 +385,15 @@ export function BoothProvider({ children }) {
   capturedPhotosRef.current = capturedPhotos;
 
   // Robust sync of photos to server storage & Cloud Firestore
-  const syncAlbumToCloud = useCallback(async (sessionId, photosList) => {
+  // SECURITY: upload tokens — server issues one per album on create; reuse for overwrites.
+const getUploadToken = (albumId) => {
+  try { return localStorage.getItem(`snape_uptoken_${albumId}`) || ''; } catch { return ''; }
+};
+const storeUploadToken = (albumId, token) => {
+  try { if (token) localStorage.setItem(`snape_uptoken_${albumId}`, token); } catch { /* storage unavailable */ }
+};
+
+const syncAlbumToCloud = useCallback(async (sessionId, photosList) => {
     if (!sessionId || !Array.isArray(photosList) || photosList.length === 0) return true;
     try {
       const now = Date.now();
@@ -427,12 +435,14 @@ export function BoothProvider({ children }) {
       try {
         fetch(`/api/albums/${cleanSessionId}`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'x-album-token': getUploadToken(cleanSessionId) },
           body: JSON.stringify({
             sessionId: cleanSessionId,
             photos: processed,
             updatedAt: new Date().toISOString()
           })
+        }).then((res) => res.ok ? res.json() : null).then((data) => {
+          if (data?.uploadToken) storeUploadToken(cleanSessionId, data.uploadToken);
         }).catch((err) => console.warn('Server API save note:', err));
       } catch (_apiErr) {
         // ignore
@@ -550,11 +560,12 @@ export function BoothProvider({ children }) {
     }
 
     // Fast POST to server API with 1.2s safety timeout so saving ALWAYS finishes immediately
+    let serverSaveOk = false;
     try {
-      await Promise.race([
+      const res = await Promise.race([
         fetch(`/api/albums/${sessId}`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'x-album-token': getUploadToken(sessId) },
           body: JSON.stringify({
             sessionId: sessId,
             photos: photosToUpload,
@@ -563,8 +574,15 @@ export function BoothProvider({ children }) {
         }),
         new Promise((resolve) => setTimeout(resolve, 1200))
       ]);
+      serverSaveOk = Boolean(res && res.ok);
+      const data = res && res.ok ? await res.clone().json().catch(() => null) : null;
+      if (data?.uploadToken) storeUploadToken(sessId, data.uploadToken);
     } catch (_postErr) {
-      // ignore
+      // ignore — handled below
+    }
+    if (!serverSaveOk) {
+      // Offline/server unreachable: photos persist locally (IndexedDB) — flag for retry when back online
+      try { localStorage.setItem('snape_pending_upload', sessId); } catch { /* storage unavailable */ }
     }
 
     // Non-blocking background sync to Cloud Firestore
@@ -572,6 +590,20 @@ export function BoothProvider({ children }) {
 
     return true;
   }, [currentSessionId, sessionAlbum, capturedPhotos, syncAlbumToCloud]);
+
+  // AUTO-RETRY pending upload when connection returns
+  useEffect(() => {
+    const retry = () => {
+      const pending = localStorage.getItem('snape_pending_upload');
+      if (pending && navigator.onLine) {
+        uploadFullSessionToCloud(pending).then(() => {
+          localStorage.removeItem('snape_pending_upload');
+        }).catch(() => {});
+      }
+    };
+    window.addEventListener('online', retry);
+    return () => window.removeEventListener('online', retry);
+  }, [uploadFullSessionToCloud]);
 
   // HYDRATE FROM INDEXEDDB & CLOUD FIRESTORE ON MOUNT / RELOAD
   // This guarantees that even after page refresh or browser reload,
@@ -757,7 +789,7 @@ export function BoothProvider({ children }) {
     try {
       fetch(`/api/albums/${currentSessionId}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-album-token': getUploadToken(currentSessionId) },
         body: JSON.stringify({
           sessionId: currentSessionId,
           photos: updated
@@ -1676,7 +1708,7 @@ export function BoothProvider({ children }) {
 
   return (
     <BoothContext.Provider
-      value={{
+      value={useMemo(() => ({
         appConfig,
         updateAppConfig,
         userName,
@@ -1743,7 +1775,7 @@ export function BoothProvider({ children }) {
         adminLogin,
         adminLogout,
         isFirebaseConnected,
-      }}
+      }), [addCustomFilter, addCustomFrame, addCustomSticker, addOrder, addPhotoToAlbum, addUser, adminLogin, adminLogout, adoptRemoteSession, appConfig, authLoading, authRedirectUrl, capturedPhotos, closeAuthModal, closePaymentModal, currentSessionId, currentUser, deleteCustomFilter, deleteCustomFrame, deleteCustomSticker, deleteOrder, deletePhotoFromAlbum, deleteUser, isAdminAuth, isFirebaseConnected, isSessionPaid, layout, loginDirectly, loginWithDemo, loginWithEmailPassword, loginWithGoogle, logout, markSessionPaid, mode, openAuthModal, openPaymentModal, orders, registerWithEmailPassword, registeredUsers, resetSession, selectPhotoForSlot, sessionAlbum, sessionTimeRemaining, setIsSessionPaid, setLayout, setMode, setShowPaymentModal, setUserName, showAuthModal, showPaymentModal, startNewSession, startOrResumeSession, syncAlbumToCloud, toggleUserRole, toggleUserStatus, updateAppConfig, updateCapturedPhotos, updateOrderStatus, updatePaymentGatewayConfig, updateUser, updateWebsiteConfig, uploadFullSessionToCloud, userName])}
     >
       {children}
     </BoothContext.Provider>

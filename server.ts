@@ -47,9 +47,25 @@ const corsOptions = process.env.ALLOWED_ORIGIN
   ? { origin: process.env.ALLOWED_ORIGIN.split(',') }
   : {};
 app.use(cors(corsOptions));
-// Support base64 image uploads from photo sessions up to 50MB
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+// SECURITY: cap request size — base64 photos for a session never need 50MB
+app.use(express.json({ limit: '8mb' }));
+app.use(express.urlencoded({ extended: true, limit: '8mb' }));
+
+// SECURITY: naive per-IP rate limit for writes (no dependency, ponytail-style)
+const WRITE_LIMIT_MS = 60 * 1000;
+const writeHits = new Map<string, number[]>(); // ip -> timestamps
+function writeLimit(req: any, res: any, next: any) {
+  const ip = req.ip || req.socket?.remoteAddress || 'unknown';
+  const now = Date.now();
+  const hits = (writeHits.get(ip) || []).filter((t) => now - t < WRITE_LIMIT_MS);
+  hits.push(now);
+  writeHits.set(ip, hits);
+  if (writeHits.size > 5000) writeHits.clear(); // avoid unbounded growth
+  if (hits.length > 10) {
+    return res.status(429).json({ success: false, error: 'Terlalu banyak permintaan, coba lagi sebentar.' });
+  }
+  next();
+}
 
 // Helper to normalize album ID
 function getCleanId(id: string): string {
@@ -64,16 +80,42 @@ function isExpired(album: any): boolean {
   return Number.isFinite(t) && t < Date.now() - 24 * 60 * 60 * 1000;
 }
 
-// API: Save or update public album (Instant save, no timeout, accessible by anyone with the link)
-app.post('/api/albums/:id', (req, res) => {
+// API: Save or update public album. SECURITY: requires an upload token that
+// was issued when the session started — prevents anyone overwriting others' albums.
+// Tokens are derived with HMAC(secret, albumId) so the server stays stateless.
+import crypto from 'crypto';
+const ALBUM_SECRET = process.env.ALBUM_SECRET || process.env.JWT_SECRET || 'snap-e-dev-secret-change-me';
+function albumToken(id: string): string {
+  return crypto.createHmac('sha256', ALBUM_SECRET).update(id).digest('hex').slice(0, 32);
+}
+
+app.post('/api/albums/:id', writeLimit, (req, res) => {
   try {
     const rawId = req.params.id;
     const cleanId = getCleanId(rawId);
-    if (!cleanId) {
+    if (!cleanId || cleanId === 'latest') {
       return res.status(400).json({ success: false, error: 'Invalid album ID' });
     }
 
+    // SECURITY: create-if-absent is allowed; OVERWRITE requires the token
+    // returned when the album was first created (proof of ownership).
+    const existing = albumsCache.get(cleanId);
+    const token = String(req.query.token || req.headers['x-album-token'] || '');
+    if (existing && token !== albumToken(cleanId)) {
+      return res.status(403).json({ success: false, error: 'Token album tidak valid' });
+    }
+
     const { photos = [], sessionId, userName, layout } = req.body;
+    // SECURITY: validate photos shape and cap count/size (disk & memory DoS)
+    if (!Array.isArray(photos) || photos.length > 12) {
+      return res.status(400).json({ success: false, error: 'photos harus array maks 12 foto' });
+    }
+    for (const p of photos) {
+      if (typeof p !== 'object' || p === null || typeof p.data !== 'string' ||
+          !(p.data.startsWith('data:image/') || p.data.startsWith('http'))) {
+        return res.status(400).json({ success: false, error: 'Format foto tidak valid' });
+      }
+    }
     const now = Date.now();
     const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -107,7 +149,8 @@ app.post('/api/albums/:id', (req, res) => {
       success: true,
       id: cleanId,
       photosCount: albumRecord.photosCount,
-      updatedAt: albumRecord.updatedAt
+      updatedAt: albumRecord.updatedAt,
+      uploadToken: albumToken(cleanId)
     });
   } catch (error: any) {
     console.error('Error saving album to API:', error);
@@ -137,16 +180,9 @@ app.get('/api/albums/:id', (req, res) => {
       }
     }
 
+    // SECURITY: /latest removed — it leaked the newest album of ANY user to
+    // anyone who asked. PublicAlbum now resolves its own ID from localStorage.
     if (!album || isExpired(album)) {
-      // If latest requested, return newest non-expired album
-      if (cleanId === 'latest' && albumsCache.size > 0) {
-        const all = Array.from(albumsCache.values())
-          .filter(a => !isExpired(a))
-          .sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
-        if (all[0]) {
-          return res.status(200).json({ success: true, album: all[0] });
-        }
-      }
       return res.status(404).json({ success: false, error: 'Album tidak ditemukan' });
     }
 
@@ -158,7 +194,11 @@ app.get('/api/albums/:id', (req, res) => {
 });
 
 // List endpoint also never expires albums — filter expired ones and cap payload size
-app.get('/api/albums', (_req, res) => {
+app.get('/api/albums', (req, res) => {
+  // SECURITY: listing every album ID is admin-only (same HMAC token scheme)
+  if (String(req.query.token || '') !== albumToken('admin-list')) {
+    return res.status(403).json({ success: false, error: 'Token tidak valid' });
+  }
   try {
     const list = Array.from(albumsCache.values())
       .filter(a => !isExpired(a))
