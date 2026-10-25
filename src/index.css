@@ -14,6 +14,35 @@
   .pt-safe { padding-top: calc(env(safe-area-inset-top) + 0.5rem); }
 }
 
+/* Polaroid malam — cinematic countdown & flash keyframes */
+@keyframes digit-pop {
+  0% { transform: scale(1.4); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes flash-burst {
+  0% { opacity: 0; }
+  15% { opacity: 1; }
+  55% { opacity: 1; }
+  100% { opacity: 0; }
+}
+@keyframes dim-burst {
+  0% { opacity: 0; }
+  40% { opacity: 0; }
+  70% { opacity: 0.35; }
+  100% { opacity: 0; }
+}
+@keyframes shutter-shake {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(2px); }
+}
+.animate-digit-pop { animation: digit-pop 0.4s cubic-bezier(0.2, 0.8, 0.3, 1) both; }
+.animate-flash-burst { animation: flash-burst 0.45s ease-out both; }
+.animate-dim-burst { animation: dim-burst 0.45s ease-out both; }
+.animate-shutter-shake { animation: shutter-shake 0.08s ease-in-out 2; }
+@media (prefers-reduced-motion: reduce) {
+  .animate-digit-pop, .animate-flash-burst, .animate-dim-burst, .animate-shutter-shake { animation: none; }
+}
+
 /* Custom scrollbar matching design */
 ::-webkit-scrollbar {
   width: 6px;

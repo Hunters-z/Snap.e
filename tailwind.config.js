@@ -6,8 +6,20 @@ export default {
   ],
   theme: {
     extend: {
+      colors: {
+        ivory: '#FAF6F0',
+        ink: '#2B2118',
+        'rose-film': {
+          DEFAULT: '#E4405F',
+          50: '#FDECF0',
+          600: '#C93048',
+          700: '#A82539',
+        },
+        'film-gold': '#C9A227',
+      },
       fontFamily: {
         sans: ['Inter', 'sans-serif'],
+        display: ['"DM Serif Display"', 'Georgia', 'serif'],
       },
       spacing: {
         18: '4.5rem',
