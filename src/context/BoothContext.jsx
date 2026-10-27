@@ -21,6 +21,7 @@ import {
   onAuthStateChanged 
 } from 'firebase/auth';
 import { auth, db, handleFirestoreError } from '../firebase';
+import { doc as fsDoc, setDoc as fsSetDoc } from 'firebase/firestore';
 import { CAMERA_PRESETS } from '../data/cameraPresets';
 import { DEFAULT_FRAMES } from '../data/defaultFrames';
 import {
@@ -701,6 +702,95 @@ const syncAlbumToCloud = useCallback(async (sessionId, photosList) => {
     setSessionStartTime(now);
     setSessionTimeRemaining(SESSION_MAX_SECONDS);
   }, []);
+
+  // LDR presence heartbeat — lives HERE (context level), not in LiveCapture.
+  // LiveCapture unmounts when either user navigates to the Editor, which used
+  // to flip hostOnline/guestOnline to false; the partner then showed
+  // "offline" and the room looked dead while browsing the Editor.
+  // Reads role/room from the URL so it survives route changes.
+  const ldrRoleRef = useRef(null);
+  const ldrRoomPathRef = useRef(null);
+  const ldrPublishedAlbumRef = useRef(null);
+  useEffect(() => {
+    const apply = () => {
+      const params = new URLSearchParams(window.location.search);
+      const room = params.get('room');
+      const role = params.get('role') || 'host';
+      ldrRoleRef.current = room ? role : null;
+      if (room) ldrRoomPathRef.current = room.trim().replace(/[^a-zA-Z0-9_-]/g, '_');
+      return room ? { room: room.trim().replace(/[^a-zA-Z0-9_-]/g, '_'), role } : null;
+    };
+    const target = apply();
+    const onPop = () => apply();
+    window.addEventListener('popstate', onPop);
+    if (!target || !db) {
+      return () => window.removeEventListener('popstate', onPop);
+    }
+    const roomRef = fsDoc(db, 'ldr_rooms', target.room);
+    const onlineField = target.role === 'host' ? { hostOnline: true } : { guestOnline: true };
+    const offlineField = target.role === 'host' ? { hostOnline: false } : { guestOnline: false };
+    const ping = () => {
+      if (!ldrRoleRef.current) return;
+      fsSetDoc(roomRef, { ...onlineField, lastPing: Date.now() }, { merge: true }).catch(() => {});
+    };
+    ping();
+    const iv = setInterval(ping, 8000);
+    return () => {
+      clearInterval(iv);
+      window.removeEventListener('popstate', onPop);
+      fsSetDoc(roomRef, offlineField, { merge: true }).catch(() => {});
+    };
+  }, []);
+
+  // Shared album pointer for LDR rooms. Each device generates its own
+  // session ID, so the guest never sees the host's album. Whoever uploads
+  // first (usually the host, on finish/expire) writes `albumId` into the
+  // room doc; the other side adopts it as its current session so both fetch
+  // the same cloud_albums/<id> document.
+  const [ldrAlbumId, setLdrAlbumId] = useState(null);
+  useEffect(() => {
+    if (!db) return;
+    const params = new URLSearchParams(window.location.search);
+    const room = params.get('room');
+    if (!room) return;
+    const roomRef = fsDoc(db, 'ldr_rooms', room.trim().replace(/[^a-zA-Z0-9_-]/g, '_'));
+    const unsub = fsOnSnapshot(roomRef, (snap) => {
+      const remoteAlbumId = snap.data()?.albumId;
+      if (!remoteAlbumId || snap.data()?.albumId === ldrAlbumId) return;
+      setLdrAlbumId(remoteAlbumId);
+    }, () => {});
+    return () => unsub();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Publish the local album into the room so the partner can find it.
+  // First writer wins — a guest must never overwrite the host's published
+  // album ID (the host's cloud doc has the merged photos).
+  useEffect(() => {
+    if (!db || !ldrRoomPathRef.current || !currentSessionId) return;
+    if (ldrPublishedAlbumRef.current === currentSessionId) return;
+    ldrPublishedAlbumRef.current = currentSessionId;
+    (async () => {
+      try {
+        const { getDoc: fsGetDoc } = await import('firebase/firestore');
+        const snap = await fsGetDoc(fsDoc(db, 'ldr_rooms', ldrRoomPathRef.current));
+        if (snap.exists() && snap.data()?.albumId) return;
+        fsSetDoc(fsDoc(db, 'ldr_rooms', ldrRoomPathRef.current), { albumId: currentSessionId }, { merge: true }).catch(() => {});
+      } catch { /* best effort */ }
+    })();
+  }, [currentSessionId]);
+
+  // Guest adopts the host's published album ID as its own session so
+  // "Lihat Album" fetches the same cloud_albums doc on both devices.
+  useEffect(() => {
+    if (!ldrAlbumId || ldrAlbumId === currentSessionId) return;
+    const localCount = (sessionAlbum || []).length + (capturedPhotos || []).length;
+    // Only adopt when we have nothing of our own — never clobber local shots
+    if (localCount > 0) return;
+    try { localStorage.setItem('snape_current_session_id', ldrAlbumId); } catch { /* ignore */ }
+    setCurrentSessionId(ldrAlbumId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ldrAlbumId]);
 
   // Adopt a remote (host) session end time — used by LDR guests so both
   // devices show the same remaining session time.
@@ -1777,7 +1867,8 @@ const syncAlbumToCloud = useCallback(async (sessionId, photosList) => {
         adminLogin,
         adminLogout,
         isFirebaseConnected,
-      }), [addCustomFilter, addCustomFrame, addCustomSticker, addOrder, addPhotoToAlbum, addUser, adminLogin, adminLogout, adoptRemoteSession, appConfig, authLoading, authRedirectUrl, capturedPhotos, closeAuthModal, closePaymentModal, currentSessionId, currentUser, deleteCustomFilter, deleteCustomFrame, deleteCustomSticker, deleteOrder, deletePhotoFromAlbum, deleteUser, isAdminAuth, isFirebaseConnected, isSessionPaid, layout, loginDirectly, loginWithDemo, loginWithEmailPassword, loginWithGoogle, logout, markSessionPaid, mode, openAuthModal, openPaymentModal, orders, registerWithEmailPassword, registeredUsers, resetSession, selectPhotoForSlot, sessionAlbum, sessionTimeRemaining, setIsSessionPaid, setLayout, setMode, setShowPaymentModal, setUserName, showAuthModal, showPaymentModal, startNewSession, startOrResumeSession, syncAlbumToCloud, toggleUserRole, toggleUserStatus, updateAppConfig, updateCapturedPhotos, updateOrderStatus, updatePaymentGatewayConfig, updateUser, updateWebsiteConfig, uploadFullSessionToCloud, userName])}
+        ldrAlbumId,
+      }), [addCustomFilter, addCustomFrame, addCustomSticker, addOrder, addPhotoToAlbum, addUser, adminLogin, adminLogout, adoptRemoteSession, appConfig, authLoading, authRedirectUrl, capturedPhotos, closeAuthModal, closePaymentModal, currentSessionId, currentUser, deleteCustomFilter, deleteCustomFrame, deleteCustomSticker, deleteOrder, deletePhotoFromAlbum, deleteUser, isAdminAuth, isFirebaseConnected, isSessionPaid, ldrAlbumId, layout, loginDirectly, loginWithDemo, loginWithEmailPassword, loginWithGoogle, logout, markSessionPaid, mode, openAuthModal, openPaymentModal, orders, registerWithEmailPassword, registeredUsers, resetSession, selectPhotoForSlot, sessionAlbum, sessionTimeRemaining, setIsSessionPaid, setLayout, setMode, setShowPaymentModal, setUserName, showAuthModal, showPaymentModal, startNewSession, startOrResumeSession, syncAlbumToCloud, toggleUserRole, toggleUserStatus, updateAppConfig, updateCapturedPhotos, updateOrderStatus, updatePaymentGatewayConfig, updateUser, updateWebsiteConfig, uploadFullSessionToCloud, userName])}
     >
       {children}
     </BoothContext.Provider>

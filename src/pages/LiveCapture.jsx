@@ -64,7 +64,8 @@ export default function LiveCapture() {
     isSessionPaid,
     markSessionPaid,
     openAuthModal,
-    uploadFullSessionToCloud
+    uploadFullSessionToCloud,
+    ldrAlbumId
   } = useBooth();
 
   // Route parameters for LDR
@@ -135,13 +136,17 @@ export default function LiveCapture() {
   const handleFinishSession = async () => {
     setIsFinishingSession(true);
     const targetId = currentSessionId || localStorage.getItem('snape_current_session_id') || `sess_${Date.now()}`;
+    // LDR: when the partner published the shared album, fetch THAT album
+    // (the partner's session) instead of navigating to a local empty one.
+    const sharedAlbumId = mode === 'ldr' && roomParam ? ldrAlbumId : null;
+    const finalId = sharedAlbumId || targetId;
     try {
       if (uploadFullSessionToCloud) {
         await uploadFullSessionToCloud(targetId, sessionAlbum.length > 0 ? sessionAlbum : capturedPhotos);
       }
-      navigate(`/album/${targetId}`);
+      navigate(`/album/${finalId}`);
     } catch (_err) {
-      navigate(`/album/${targetId}`);
+      navigate(`/album/${finalId}`);
     } finally {
       setIsFinishingSession(false);
     }
@@ -796,13 +801,12 @@ export default function LiveCapture() {
       }
       pcRef.current = null;
       dataChannelRef.current = null;
-      // BUGFIX: presence was never cleared on leave — the partner showed
-      // "online" forever after a peer closed the tab. Mark ourselves offline.
-      const roomRefLeave = doc(db, 'ldr_rooms', sanitizedRoom);
-      const leaveField = roleParam === 'host'
-        ? { hostOnline: false }
-        : { guestOnline: false };
-      setDoc(roomRefLeave, leaveField, { merge: true }).catch(() => {});
+      // NOTE: presence (hostOnline/guestOnline) is intentionally NOT cleared
+      // here — navigating to the Editor unmounts this component, but the LDR
+      // heartbeat now lives in BoothContext (context level) and keeps the
+      // room doc updated across navigation. Clearing presence here killed
+      // the room whenever a user opened the Editor (Bug: "koneksi LDR
+      // hilang saat masuk Editor").
     };
   }, [mode, roomParam, roleParam, userName]);
 
@@ -1421,17 +1425,44 @@ export default function LiveCapture() {
           className={`absolute inset-0 bg-black z-50 pointer-events-none ${flashActive ? 'animate-dim-burst' : 'opacity-0'}`}
         />
 
-        {/* Big Countdown Overlay — per-digit pop, ring drains each second */}
+        {/* Big Countdown Overlay — cinematic: serif film-gold digit with
+            per-digit pop + blur-in, circular progress ring draining each
+            second, "JEPRET!" snap at the flash */}
         {countdown !== null && (
           <div className="absolute inset-0 z-40 flex items-center justify-center pointer-events-none">
             <div
               key={countdown}
-              className={`w-28 h-28 sm:w-36 sm:h-36 rounded-full bg-black/70 backdrop-blur-md flex flex-col items-center justify-center animate-digit-pop ${
-                countdown <= 1 ? 'border-4 border-amber-400' : 'border-4 border-rose-film'
-              }`}
+              className="relative w-36 h-36 sm:w-44 sm:h-44 flex items-center justify-center animate-digit-pop"
             >
-              <span className="text-6xl sm:text-7xl font-display text-white">{countdown}</span>
+              <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="46" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="2.5" />
+                <circle
+                  cx="50" cy="50" r="46"
+                  fill="none"
+                  stroke={countdown <= 1 ? '#f59e0b' : '#E5B8C0'}
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                  strokeDasharray="289"
+                  className="animate-ring-drain"
+                />
+              </svg>
+              <span
+                className={`font-display text-7xl sm:text-8xl leading-none ${countdown <= 1 ? 'text-amber-400' : 'text-film-gold'}`}
+                style={{ textShadow: '0 2px 18px rgba(0,0,0,0.85)' }}
+              >
+                {countdown}
+              </span>
             </div>
+          </div>
+        )}
+        {flashActive && (
+          <div className="absolute inset-0 z-50 flex items-end justify-center pb-16 pointer-events-none">
+            <span
+              className="font-display text-4xl sm:text-5xl text-white animate-shutter-shake"
+              style={{ textShadow: '0 2px 16px rgba(0,0,0,0.9)' }}
+            >
+              JEPRET!
+            </span>
           </div>
         )}
 
@@ -1924,6 +1955,19 @@ export default function LiveCapture() {
             >
               <CheckCircle2 size={15} />
             </button>
+
+            {/* LDR: both sides can open the shared album — local shots or the
+                partner's published album (albumId in ldr_rooms doc) */}
+            {mode === 'ldr' && roomParam && (sessionAlbum?.length > 0 || ldrAlbumId) && (
+              <a
+                href={`/album/${ldrAlbumId || currentSessionId}`}
+                className="h-9 px-3 bg-amber-500 hover:bg-amber-400 text-black rounded-full text-xs font-bold flex items-center gap-1.5 transition-colors shadow-md shadow-amber-500/20"
+                title="Lihat album sesi bersama"
+              >
+                <Image size={14} />
+                <span>Lihat Album</span>
+              </a>
+            )}
 
             <button
               onClick={() => navigate('/editor')}
