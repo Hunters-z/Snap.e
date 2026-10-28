@@ -825,23 +825,37 @@ export default function BoothHome() {
               const fAddress = f.footerShowAddress ?? true;
               const fHours = f.footerShowHours ?? true;
               const fContact = f.footerShowContact ?? true;
-              return (fTagline || fAddress || fHours || fContact) && (
+              const fWA = f.footerShowContactWA ?? true;
+              const fIG = f.footerShowContactIG ?? true;
+              const fLogo = f.footerShowLogo ?? true;
+              const fCustomText = f.footerShowCustomText ?? true;
+              const customItems = Array.isArray(f.footerContactItems) ? f.footerContactItems : [];
+              const contactHasContent = (fWA && f.whatsappNumber) || (fIG && f.instagramHandle) || customItems.length > 0;
+              const addressItems = Array.isArray(f.footerAddressItems) ? f.footerAddressItems : [];
+              const addressHasContent = f.studioAddress || addressItems.length > 0;
+              return (fTagline || (fAddress && addressHasContent) || fHours || (fContact && contactHasContent)) && (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 text-xs text-gray-600">
               {/* Brand & Tagline */}
               {fTagline && (
               <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-base text-gray-900 tracking-tight">
-                    {appConfig.website?.brandName || 'Snape.e'}
-                  </span>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                {fLogo && (
+                  <div className="flex items-center gap-2">
+                    {f.footerLogoUrl ? (
+                      <img src={f.footerLogoUrl} alt={appConfig.website?.brandName || 'Snape.e'} className="h-8 w-auto max-w-[120px] object-contain" />
+                    ) : (
+                      <span className="font-bold text-base text-gray-900 tracking-tight">
+                        {appConfig.website?.brandName || 'Snape.e'}
+                      </span>
+                    )}
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
                     appConfig.website?.isOpen !== false 
                       ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
                       : 'bg-red-50 text-red-700 border border-red-200'
                   }`}>
                     {appConfig.website?.isOpen !== false ? '● Buka' : '● Tutup'}
                   </span>
-                </div>
+                  </div>
+                )}
                 <p className="text-gray-500 text-[11px] leading-relaxed">
                   {appConfig.website?.heroTagline || 'Momen berharga tanpa batasan jarak'}
                 </p>
@@ -849,15 +863,23 @@ export default function BoothHome() {
               )}
 
               {/* Studio Address */}
-              {fAddress && (
+              {fAddress && addressHasContent && (
               <div className="space-y-1.5">
                 <span className="font-bold text-gray-900 flex items-center gap-1.5">
                   <MapPin size={13} className="text-red-500" />
                   Alamat Studio
                 </span>
+                {f.studioAddress && (
                 <p className="text-[11px] text-gray-500 leading-relaxed">
                   {appConfig.website?.studioAddress || 'Jl. Senopati No. 88, Kebayoran Baru, Jakarta Selatan'}
                 </p>
+                )}
+                {addressItems.map((item) => (
+                  <p key={item.id} className="text-[11px] text-gray-500 leading-relaxed">
+                    {item.label ? <span className="font-semibold text-gray-700">{item.label}: </span> : null}
+                    {item.value}
+                  </p>
+                ))}
               </div>
               )}
 
@@ -875,11 +897,11 @@ export default function BoothHome() {
               )}
 
               {/* Contact CS / WhatsApp & IG */}
-              {fContact && (
+              {fContact && contactHasContent && (
               <div className="space-y-2">
                 <span className="font-bold text-gray-900 block">Hubungi Admin</span>
                 <div className="flex flex-col gap-1.5 text-[11px]">
-                  {appConfig.website?.whatsappNumber && (
+                  {fWA && appConfig.website?.whatsappNumber && (
                     <a
                       href={`https://wa.me/${appConfig.website.whatsappNumber.replace(/[^0-9]/g, '')}`}
                       target="_blank"
@@ -890,7 +912,7 @@ export default function BoothHome() {
                       <span>WhatsApp CS: {appConfig.website.whatsappNumber}</span>
                     </a>
                   )}
-                  {appConfig.website?.instagramHandle && (
+                  {fIG && appConfig.website?.instagramHandle && (
                     <a
                       href={`https://instagram.com/${appConfig.website.instagramHandle.replace('@', '')}`}
                       target="_blank"
@@ -901,12 +923,30 @@ export default function BoothHome() {
                       <span>{appConfig.website.instagramHandle}</span>
                     </a>
                   )}
+                  {customItems.map((item) => (
+                    <a
+                      key={item.id}
+                      href={item.href || '#'}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-1.5 text-gray-600 hover:text-gray-900 font-semibold"
+                    >
+                      <span>{item.icon || '🔗'}</span>
+                      <span>{item.label ? `${item.label}: ` : ''}{item.value}</span>
+                    </a>
+                  ))}
                 </div>
               </div>
               )}
             </div>
               );
             })()}
+
+            {(appConfig.website?.footerShowCustomText ?? true) && appConfig.website?.footerCustomText && (
+            <p className="text-[11px] text-gray-500 leading-relaxed max-w-2xl">
+              {appConfig.website.footerCustomText}
+            </p>
+            )}
 
             {(appConfig.website?.footerShowCopyright ?? true) && (
             <div className="pt-4 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] text-gray-400">

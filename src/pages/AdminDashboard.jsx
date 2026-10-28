@@ -271,6 +271,20 @@ export default function AdminDashboard() {
   const [webFooterShowHours, setWebFooterShowHours] = useState(appConfig.website?.footerShowHours ?? true);
   const [webFooterShowContact, setWebFooterShowContact] = useState(appConfig.website?.footerShowContact ?? true);
   const [webFooterShowCopyright, setWebFooterShowCopyright] = useState(appConfig.website?.footerShowCopyright ?? true);
+  const [webFooterShowContactWA, setWebFooterShowContactWA] = useState(appConfig.website?.footerShowContactWA ?? true);
+  const [webFooterShowContactIG, setWebFooterShowContactIG] = useState(appConfig.website?.footerShowContactIG ?? true);
+  const [webFooterShowLogo, setWebFooterShowLogo] = useState(appConfig.website?.footerShowLogo ?? true);
+  const [webFooterShowCustomText, setWebFooterShowCustomText] = useState(appConfig.website?.footerShowCustomText ?? true);
+  const [webFooterLogoUrl, setWebFooterLogoUrl] = useState(appConfig.website?.footerLogoUrl || '');
+  const [webFooterCustomText, setWebFooterCustomText] = useState(appConfig.website?.footerCustomText || '');
+  const [webFooterContactItems, setWebFooterContactItems] = useState(appConfig.website?.footerContactItems || []);
+  const [webFooterAddressItems, setWebFooterAddressItems] = useState(appConfig.website?.footerAddressItems || []);
+  const [newContactLabel, setNewContactLabel] = useState('');
+  const [newContactHref, setNewContactHref] = useState('');
+  const [newContactValue, setNewContactValue] = useState('');
+  const [newContactIcon, setNewContactIcon] = useState('');
+  const [newAddressLabel, setNewAddressLabel] = useState('');
+  const [newAddressValue, setNewAddressValue] = useState('');
 
   const [webWhatsapp, setWebWhatsapp] = useState(appConfig.website?.whatsappNumber || '0812-3456-7890');
   const [webInstagram, setWebInstagram] = useState(appConfig.website?.instagramHandle || '@snape.photobooth');
@@ -314,6 +328,14 @@ export default function AdminDashboard() {
       setWebFooterShowHours(appConfig.website.footerShowHours ?? true);
       setWebFooterShowContact(appConfig.website.footerShowContact ?? true);
       setWebFooterShowCopyright(appConfig.website.footerShowCopyright ?? true);
+      setWebFooterShowContactWA(appConfig.website.footerShowContactWA ?? true);
+      setWebFooterShowContactIG(appConfig.website.footerShowContactIG ?? true);
+      setWebFooterShowLogo(appConfig.website.footerShowLogo ?? true);
+      setWebFooterShowCustomText(appConfig.website.footerShowCustomText ?? true);
+      setWebFooterLogoUrl(appConfig.website.footerLogoUrl || '');
+      setWebFooterCustomText(appConfig.website.footerCustomText || '');
+      setWebFooterContactItems(appConfig.website.footerContactItems || []);
+      setWebFooterAddressItems(appConfig.website.footerAddressItems || []);
       setWebShowFloatingWhatsapp(appConfig.website.showFloatingWhatsapp ?? true);
       setWebWhatsapp(appConfig.website.whatsappNumber || '');
       setWebInstagram(appConfig.website.instagramHandle || '');
@@ -484,6 +506,14 @@ export default function AdminDashboard() {
       footerShowHours: webFooterShowHours,
       footerShowContact: webFooterShowContact,
       footerShowCopyright: webFooterShowCopyright,
+      footerShowContactWA: webFooterShowContactWA,
+      footerShowContactIG: webFooterShowContactIG,
+      footerShowLogo: webFooterShowLogo,
+      footerShowCustomText: webFooterShowCustomText,
+      footerLogoUrl: webFooterLogoUrl.trim(),
+      footerCustomText: webFooterCustomText.trim(),
+      footerContactItems: webFooterContactItems,
+      footerAddressItems: webFooterAddressItems,
       showFloatingWhatsapp: webShowFloatingWhatsapp,
       whatsappNumber: webWhatsapp.trim(),
       instagramHandle: webInstagram.trim(),
@@ -1770,6 +1800,10 @@ export default function AdminDashboard() {
                         { label: 'Footer: Alamat Studio', checked: webFooterShowAddress, setter: setWebFooterShowAddress, desc: 'Kolom alamat fisik studio' },
                         { label: 'Footer: Jam Buka', checked: webFooterShowHours, setter: setWebFooterShowHours, desc: 'Kolom jam operasional studio' },
                         { label: 'Footer: Kontak Admin (WA & IG)', checked: webFooterShowContact, setter: setWebFooterShowContact, desc: 'Tautan WhatsApp CS dan Instagram' },
+                        { label: 'Footer: Item WhatsApp', checked: webFooterShowContactWA, setter: setWebFooterShowContactWA, desc: 'Tampilkan tautan WhatsApp CS di footer' },
+                        { label: 'Footer: Item Instagram', checked: webFooterShowContactIG, setter: setWebFooterShowContactIG, desc: 'Tampilkan tautan Instagram di footer' },
+                        { label: 'Footer: Logo / Gambar Brand', checked: webFooterShowLogo, setter: setWebFooterShowLogo, desc: 'Logo kustom atau nama brand di footer' },
+                        { label: 'Footer: Teks Tambahan', checked: webFooterShowCustomText, setter: setWebFooterShowCustomText, desc: 'Paragraf teks kustom di atas copyright' },
                         { label: 'Footer: Baris Hak Cipta', checked: webFooterShowCopyright, setter: setWebFooterShowCopyright, desc: 'Copyright tahun berjalan dan info Cloud Synced' },
                         { label: 'Tombol Chat WhatsApp Melayang (Floating)', checked: webShowFloatingWhatsapp, setter: setWebShowFloatingWhatsapp, desc: 'Akses cepat CS WhatsApp di pojok kanan bawah' },
                       ].map((item, idx) => (
@@ -1937,6 +1971,155 @@ export default function AdminDashboard() {
                         placeholder="Jl. Senopati No. 88, Jakarta Selatan"
                         className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs outline-none focus:border-gray-900"
                       />
+                    </div>
+
+                    {/* Custom Address Items (maks 4) */}
+                    <div className="space-y-2 pt-2 border-t border-gray-100">
+                      <label className="text-xs font-semibold text-gray-700">Baris Alamat Tambahan (maks 4)</label>
+                      {webFooterAddressItems.length > 0 && (
+                        <div className="space-y-1.5">
+                          {webFooterAddressItems.map((item) => (
+                            <div key={item.id} className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                              <span className="text-xs text-gray-800 flex-1 truncate">
+                                {item.label ? <span className="font-bold">{item.label}: </span> : null}{item.value}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setWebFooterAddressItems(webFooterAddressItems.filter((it) => it.id !== item.id))}
+                                className="text-[11px] font-bold text-red-600 hover:text-red-700 shrink-0"
+                              >
+                                Hapus
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {webFooterAddressItems.length < 4 && (
+                        <div className="flex flex-col sm:flex-row gap-2">
+                          <input
+                            type="text"
+                            value={newAddressLabel}
+                            onChange={(e) => setNewAddressLabel(e.target.value)}
+                            placeholder="Label (mis. Cabang 2)"
+                            className="w-full sm:w-44 px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs outline-none focus:border-gray-900"
+                          />
+                          <input
+                            type="text"
+                            value={newAddressValue}
+                            onChange={(e) => setNewAddressValue(e.target.value)}
+                            placeholder="Isi alamat tambahan"
+                            className="w-full flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs outline-none focus:border-gray-900"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!newAddressValue.trim()) return;
+                              setWebFooterAddressItems([...webFooterAddressItems, { id: `addr_${Date.now()}`, label: newAddressLabel.trim(), value: newAddressValue.trim() }]);
+                              setNewAddressLabel('');
+                              setNewAddressValue('');
+                            }}
+                            className="px-4 py-2 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-xs font-bold shrink-0"
+                          >
+                            + Tambah
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Custom Contact Items (maks 6) */}
+                    <div className="space-y-2 pt-2 border-t border-gray-100">
+                      <label className="text-xs font-semibold text-gray-700">Item Kontak Tambahan (maks 6 — Email, TikTok, Telegram, dll.)</label>
+                      {webFooterContactItems.length > 0 && (
+                        <div className="space-y-1.5">
+                          {webFooterContactItems.map((item) => (
+                            <div key={item.id} className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                              <span className="text-sm shrink-0">{item.icon || '🔗'}</span>
+                              <span className="text-xs text-gray-800 flex-1 truncate">
+                                {item.label ? <span className="font-bold">{item.label}: </span> : null}{item.value}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setWebFooterContactItems(webFooterContactItems.filter((it) => it.id !== item.id))}
+                                className="text-[11px] font-bold text-red-600 hover:text-red-700 shrink-0"
+                              >
+                                Hapus
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {webFooterContactItems.length < 6 && (
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                          <input
+                            type="text"
+                            value={newContactIcon}
+                            onChange={(e) => setNewContactIcon(e.target.value)}
+                            placeholder="Ikon emoji"
+                            className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs outline-none focus:border-gray-900"
+                          />
+                          <input
+                            type="text"
+                            value={newContactLabel}
+                            onChange={(e) => setNewContactLabel(e.target.value)}
+                            placeholder="Label (mis. Email)"
+                            className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs outline-none focus:border-gray-900"
+                          />
+                          <input
+                            type="text"
+                            value={newContactValue}
+                            onChange={(e) => setNewContactValue(e.target.value)}
+                            placeholder="Teks tampilan"
+                            className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs outline-none focus:border-gray-900"
+                          />
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={newContactHref}
+                              onChange={(e) => setNewContactHref(e.target.value)}
+                              placeholder="Link (opsional)"
+                              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs outline-none focus:border-gray-900"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!newContactValue.trim()) return;
+                                setWebFooterContactItems([...webFooterContactItems, { id: `ctc_${Date.now()}`, icon: newContactIcon.trim() || '🔗', label: newContactLabel.trim(), value: newContactValue.trim(), href: newContactHref.trim() }]);
+                                setNewContactIcon('');
+                                setNewContactLabel('');
+                                setNewContactValue('');
+                                setNewContactHref('');
+                              }}
+                              className="px-4 py-2 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-xs font-bold shrink-0"
+                            >
+                              + Tambah
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Custom Footer Logo & Text */}
+                    <div className="space-y-3 pt-2 border-t border-gray-100">
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-gray-700">URL Logo Footer (kosongkan untuk nama brand standar)</label>
+                        <input
+                          type="url"
+                          value={webFooterLogoUrl}
+                          onChange={(e) => setWebFooterLogoUrl(e.target.value)}
+                          placeholder="https://contoh.com/logo.png"
+                          className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs outline-none focus:border-gray-900"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-gray-700">Teks Tambahan Footer</label>
+                        <textarea
+                          rows={2}
+                          value={webFooterCustomText}
+                          onChange={(e) => setWebFooterCustomText(e.target.value)}
+                          placeholder="Paragraf kecil yang tampil di atas copyright footer..."
+                          className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs outline-none focus:border-gray-900 resize-none"
+                        />
+                      </div>
                     </div>
                   </div>
 
