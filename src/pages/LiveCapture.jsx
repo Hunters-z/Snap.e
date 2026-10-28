@@ -157,6 +157,23 @@ export default function LiveCapture() {
   const [remotePeerName, setRemotePeerName] = useState('Pasangan LDR');
   const [partnerOnline, setPartnerOnline] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [swapped, setSwapped] = useState(false);
+  // LDR layout mode selector: 'pip' | 'split-v' | 'split-h', persisted per sesi.
+  const [layoutMode, setLayoutMode] = useState(() => {
+    try {
+      const saved = window.localStorage.getItem('snape_ldr_layout');
+      return saved === 'split-v' || saved === 'split-h' || saved === 'pip' ? saved : 'pip';
+    } catch {
+      return 'pip';
+    }
+  });
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('snape_ldr_layout', layoutMode);
+    } catch {
+      /* storage tidak tersedia (private mode) — abaikan */
+    }
+  }, [layoutMode]);
   const lastShutterTriggerRef = useRef(0);
   const handleTriggerCaptureRef = useRef(null);
   const pcRef = useRef(null);
@@ -1470,69 +1487,156 @@ export default function LiveCapture() {
         <div 
           className="w-full max-w-3xl max-h-full aspect-[4/3] rounded-2xl sm:rounded-3xl overflow-hidden bg-black/90 relative shadow-2xl border border-white/10 flex flex-col"
         >
-          {/* LDR layout — PIXEL fix: the partner feed fills the main area
-              (object-cover, w-full h-full) and our own camera is a small PiP
-              tile in the bottom-right corner, clear of the date stamp and
-              filmstrip. Previously both feeds were flex-1 halves of a
-              flex-col (mobile) 4:3 box → each video shrank to a sliver. */}
+          {/* LDR layout — 3 MODE SELEKTOR (Polaroid / Kembar / Landscape).
+              Both <video> elements stay permanently mounted with the same refs;
+              only their container classNames change per mode — no remount, no
+              srcObject double-attach. Tap-to-swap applies to Polaroid (pip) mode. */}
           {mode === 'ldr' ? (
-            <div className="relative flex-1 min-h-0 w-full h-full overflow-hidden bg-gray-950 flex items-center justify-center">
-              {/* Main: remote partner stream over WebRTC */}
-              <video
-                ref={remoteVideoRef}
-                autoPlay
-                playsInline
-                className={`absolute inset-0 w-full h-full object-cover ${peerConnected ? 'block' : 'hidden'}`}
-              />
-              {!peerConnected && (
-                <div className="flex flex-col items-center justify-center p-4 text-center text-gray-400 space-y-2">
-                  <div className="w-10 h-10 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center animate-pulse">
-                    <Heart size={20} className="fill-rose-400" />
-                  </div>
-                  <p className="text-xs font-bold text-gray-200">{remotePeerName}</p>
-                  <p className="text-[10px] text-gray-400 max-w-[200px] leading-tight">
-                    {roleParam === 'guest'
-                      ? 'Menghubungkan WebRTC real-time ke kamera Host...'
-                      : partnerOnline
-                      ? 'Pasangan terhubung! Mengaktifkan WebRTC real-time...'
-                      : 'Menunggu pasangan bergabung. Kirim tautan ruangan ke pasangan.'}
-                  </p>
-                  {roleParam !== 'guest' && (
-                    <button
-                      type="button"
-                      onClick={handleCopyLdrLink}
-                      className="px-3 py-1 bg-white/10 hover:bg-white/20 text-white rounded-full text-[10px] font-bold flex items-center gap-1 mt-1 transition-all"
+            <div
+              className={`relative flex-1 min-h-0 w-full h-full overflow-hidden bg-gray-950 items-stretch justify-stretch transition-all duration-200 motion-reduce:transition-none ${
+                layoutMode === 'split-v'
+                  ? 'grid grid-rows-2 grid-cols-1 gap-2 p-2'
+                  : layoutMode === 'split-h'
+                  ? 'grid grid-cols-2 grid-rows-1 gap-2 p-2'
+                  : 'flex'
+              }`}
+            >
+              {(() => {
+                const toggleSwap = () => setSwapped((s) => !s);
+                const swapProps = {
+                  role: 'button',
+                  tabIndex: 0,
+                  'aria-label': 'Tukar tampilan kamera',
+                  onClick: toggleSwap,
+                  onKeyDown: (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      toggleSwap();
+                    }
+                  },
+                };
+                const PIP_CLS = 'absolute bottom-10 right-3 z-20 w-24 h-32 sm:w-32 sm:h-40 rounded-xl overflow-hidden border-2 border-white/40 bg-black/70 shadow-lg shadow-black/50 transition-all duration-200 motion-reduce:transition-none';
+                const FULL_CLS = 'absolute inset-0 transition-all duration-200 motion-reduce:transition-none';
+                const isPip = layoutMode === 'pip';
+                // Polaroid mode: remote is main unless swapped
+                const remoteContainerCls = isPip
+                  ? `${swapped ? PIP_CLS : FULL_CLS} cursor-pointer ${peerConnected ? '' : 'pointer-events-none'}`
+                  : '';
+                const localContainerCls = isPip
+                  ? `${swapped ? FULL_CLS : PIP_CLS} cursor-pointer`
+                  : '';
+                // Split modes: grid cells, each framed like a twin polaroid card
+                const SPLIT_FRAME = 'relative overflow-hidden rounded-lg border-2 border-white/50 bg-black shadow-lg shadow-black/40 transition-all duration-200 motion-reduce:transition-none';
+                const remoteSplitCls = layoutMode === 'split-v'
+                  ? `${SPLIT_FRAME} row-span-1 min-h-0`
+                  : layoutMode === 'split-h'
+                  ? `${SPLIT_FRAME} col-span-1 min-w-0`
+                  : '';
+                const localSplitCls = remoteSplitCls;
+                const split = !isPip;
+                return (
+                  <>
+                    {/* Remote (partner) video — main slot in Polaroid, top/left cell in split */}
+                    <div
+                      {...(isPip ? swapProps : {})}
+                      className={split ? remoteSplitCls : remoteContainerCls}
                     >
-                      <Copy size={11} />
-                      <span>{copiedLink ? 'Link Tersalin!' : 'Salin Link Pasangan'}</span>
+                      <video
+                        ref={remoteVideoRef}
+                        autoPlay
+                        playsInline
+                        className={`absolute inset-0 w-full h-full object-cover ${peerConnected ? 'block' : 'hidden'}`}
+                      />
+                      {split && (
+                        <div className="absolute top-1 left-1 bg-black/60 px-1.5 py-0.5 rounded-full text-[9px] font-semibold flex items-center gap-1 pointer-events-none z-10">
+                          <span className={`w-1 h-1 rounded-full ${peerConnected ? 'bg-emerald-400' : 'bg-amber-400 animate-pulse'}`}></span>
+                          {remotePeerName}
+                        </div>
+                      )}
+                    </div>
+                    {!split && !peerConnected && (
+                      <div className="flex flex-col items-center justify-center p-4 text-center text-gray-400 space-y-2">
+                        <div className="w-10 h-10 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center animate-pulse">
+                          <Heart size={20} className="fill-rose-400" />
+                        </div>
+                        <p className="text-xs font-bold text-gray-200">{remotePeerName}</p>
+                        <p className="text-[10px] text-gray-400 max-w-[200px] leading-tight">
+                          {roleParam === 'guest'
+                            ? 'Menghubungkan WebRTC real-time ke kamera Host...'
+                            : partnerOnline
+                            ? 'Pasangan terhubung! Mengaktifkan WebRTC real-time...'
+                            : 'Menunggu pasangan bergabung. Kirim tautan ruangan ke pasangan.'}
+                        </p>
+                        {roleParam !== 'guest' && (
+                          <button
+                            type="button"
+                            onClick={handleCopyLdrLink}
+                            className="px-3 py-1 bg-white/10 hover:bg-white/20 text-white rounded-full text-[10px] font-bold flex items-center gap-1 mt-1 transition-all"
+                          >
+                            <Copy size={11} />
+                            <span>{copiedLink ? 'Link Tersalin!' : 'Salin Link Pasangan'}</span>
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Polaroid (pip) mode: partner status badge over main feed */}
+                    {isPip && (
+                      <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-full text-[11px] font-semibold flex items-center gap-1.5 z-10 pointer-events-none">
+                        <span className={`w-1.5 h-1.5 rounded-full ${peerConnected ? 'bg-emerald-400' : 'bg-amber-400 animate-pulse'}`}></span>
+                        {peerConnected
+                          ? `${remotePeerName} · WebRTC Real-Time`
+                          : `${remotePeerName} · Menghubungkan...`}
+                      </div>
+                    )}
+
+                    {/* Local (own) video — PiP in Polaroid mode, bottom/right cell in split */}
+                    <div
+                      {...(isPip ? swapProps : {})}
+                      className={split ? localSplitCls : localContainerCls}
+                    >
+                      <video
+                        ref={localVideoRef}
+                        autoPlay
+                        playsInline
+                        muted
+                        style={{ filter: activeFilter.css }}
+                        className={`absolute inset-0 w-full h-full object-cover transform transition-transform ${facingMode === 'user' && mirrorCam ? 'scale-x-[-1]' : 'scale-x-100'}`}
+                      />
+                      <div className="absolute top-1 left-1 bg-black/60 px-1.5 py-0.5 rounded-full text-[9px] font-semibold flex items-center gap-1 pointer-events-none z-10">
+                        <span className="w-1 h-1 rounded-full bg-emerald-400"></span>
+                        {userName}
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
+
+              {/* LDR layout mode selector — pill buttons below the video area */}
+              {mode === 'ldr' && (
+                <div className="absolute bottom-1 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1 bg-black/55 backdrop-blur-md rounded-full px-1.5 py-1 border border-white/10">
+                  {[
+                    { id: 'pip', label: 'Polaroid', aria: 'Mode tampilan Polaroid: video utama dengan PiP kecil' },
+                    { id: 'split-v', label: 'Kembar', aria: 'Mode tampilan Kembar: dua video bertumpuk atas dan bawah' },
+                    { id: 'split-h', label: 'Landscape', aria: 'Mode tampilan Landscape: dua video berdampingan kiri dan kanan' },
+                  ].map((m) => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      aria-label={m.aria}
+                      aria-pressed={layoutMode === m.id}
+                      onClick={() => setLayoutMode(m.id)}
+                      className={`px-2.5 py-1 rounded-full text-[10px] font-bold border transition-colors duration-200 motion-reduce:transition-none ${
+                        layoutMode === m.id
+                          ? 'bg-rose-film border-rose-film text-ivory'
+                          : 'border-rose-film/40 text-rose-film hover:bg-rose-film/15'
+                      }`}
+                    >
+                      {m.label}
                     </button>
-                  )}
+                  ))}
                 </div>
               )}
-
-              {/* Partner status badge */}
-              <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-full text-[11px] font-semibold flex items-center gap-1.5 z-10">
-                <span className={`w-1.5 h-1.5 rounded-full ${peerConnected ? 'bg-emerald-400' : 'bg-amber-400 animate-pulse'}`}></span>
-                {peerConnected
-                  ? `${remotePeerName} · WebRTC Real-Time`
-                  : `${remotePeerName} · Menghubungkan...`}
-              </div>
-
-              {/* PiP: own camera, bottom-right, above the date stamp */}
-              <div className="absolute bottom-10 right-3 z-20 w-24 h-32 sm:w-32 sm:h-40 rounded-xl overflow-hidden border-2 border-white/40 bg-black/70 shadow-lg shadow-black/50">
-                <video
-                  ref={localVideoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  style={{ filter: activeFilter.css }}
-                  className={`w-full h-full object-cover transform transition-transform ${facingMode === 'user' && mirrorCam ? 'scale-x-[-1]' : 'scale-x-100'}`}
-                />
-                <div className="absolute top-1 left-1 bg-black/60 px-1.5 py-0.5 rounded-full text-[9px] font-semibold flex items-center gap-1">
-                  <span className="w-1 h-1 rounded-full bg-emerald-400"></span>
-                  {userName}
-                </div>
-              </div>
             </div>
           ) : (
             <>
