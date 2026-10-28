@@ -73,6 +73,8 @@ export default function EditorPhotostrip() {
   const [customText, setCustomText] = useState('Long Distance Soulmate');
   const [showBadge, setShowBadge] = useState(true);
   const [showDate, setShowDate] = useState(true);
+  const [showStudio, setShowStudio] = useState(true);
+  const [showDateStamps, setShowDateStamps] = useState(true);
   const [textAlign, setTextAlign] = useState('center'); // 'left' | 'center' | 'right'
 
   // Frame Layout settings
@@ -819,8 +821,8 @@ export default function EditorPhotostrip() {
       ctx.drawImage(img, drawX, drawY, drawW, drawH);
       ctx.filter = 'none';
 
-      // Draw retro date stamp on high-res canvas if enabled
-      if (p?.dateStamp) {
+      // Retro date stamp on high-res canvas if enabled (master toggle showDateStamps)
+      if (p?.dateStamp && showDateStamps) {
         ctx.save();
         ctx.font = `bold ${Math.round(rect.w * 0.052)}px 'Courier New', monospace`;
         ctx.fillStyle = '#FF7A00';
@@ -913,11 +915,15 @@ export default function EditorPhotostrip() {
         ctx.fillText(customText, textX, canvas.height - 95);
       }
 
-      // Date & Studio (if showDate is true)
-      if (showDate) {
+      // Date & Studio (if showDate / showStudio is true)
+      const footerDateLine = [
+        showDate ? dateStr : null,
+        showStudio ? 'PHOTO STUDIO' : null
+      ].filter(Boolean).join(' • ');
+      if (footerDateLine) {
         ctx.font = "400 22px 'Inter', sans-serif";
         ctx.fillStyle = activeFrame.text === '#FFFFFF' ? '#A1A1AA' : '#6B7280';
-        ctx.fillText(`${dateStr} • PHOTO STUDIO`, textX, canvas.height - 50);
+        ctx.fillText(footerDateLine, textX, canvas.height - 50);
       }
       ctx.restore();
     }
@@ -2344,6 +2350,8 @@ export default function EditorPhotostrip() {
                         { key: 'brand', label: `Logo ${appConfig.website?.brandName || 'Snape.e'}`, on: showBadge, set: setShowBadge },
                         { key: 'caption', label: 'Caption', on: Boolean(customText), set: (v) => setCustomText(v ? 'Long Distance Soulmate' : '') },
                         { key: 'date', label: 'Tanggal', on: showDate, set: setShowDate },
+                        { key: 'studio', label: 'Studio', on: showStudio, set: setShowStudio },
+                        { key: 'stempel', label: 'Stempel Tanggal', on: showDateStamps, set: setShowDateStamps },
                       ].map((chip) => (
                         <button
                           key={chip.key}

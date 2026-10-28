@@ -266,6 +266,11 @@ export default function AdminDashboard() {
   const [webShowFaq, setWebShowFaq] = useState(appConfig.website?.showFaq ?? true);
   const [webShowFooter, setWebShowFooter] = useState(appConfig.website?.showFooter ?? true);
   const [webShowFloatingWhatsapp, setWebShowFloatingWhatsapp] = useState(appConfig.website?.showFloatingWhatsapp ?? true);
+  const [webFooterShowTagline, setWebFooterShowTagline] = useState(appConfig.website?.footerShowTagline ?? true);
+  const [webFooterShowAddress, setWebFooterShowAddress] = useState(appConfig.website?.footerShowAddress ?? true);
+  const [webFooterShowHours, setWebFooterShowHours] = useState(appConfig.website?.footerShowHours ?? true);
+  const [webFooterShowContact, setWebFooterShowContact] = useState(appConfig.website?.footerShowContact ?? true);
+  const [webFooterShowCopyright, setWebFooterShowCopyright] = useState(appConfig.website?.footerShowCopyright ?? true);
 
   const [webWhatsapp, setWebWhatsapp] = useState(appConfig.website?.whatsappNumber || '0812-3456-7890');
   const [webInstagram, setWebInstagram] = useState(appConfig.website?.instagramHandle || '@snape.photobooth');
@@ -304,6 +309,11 @@ export default function AdminDashboard() {
       setWebShowTestimonials(appConfig.website.showTestimonials ?? true);
       setWebShowFaq(appConfig.website.showFaq ?? true);
       setWebShowFooter(appConfig.website.showFooter ?? true);
+      setWebFooterShowTagline(appConfig.website.footerShowTagline ?? true);
+      setWebFooterShowAddress(appConfig.website.footerShowAddress ?? true);
+      setWebFooterShowHours(appConfig.website.footerShowHours ?? true);
+      setWebFooterShowContact(appConfig.website.footerShowContact ?? true);
+      setWebFooterShowCopyright(appConfig.website.footerShowCopyright ?? true);
       setWebShowFloatingWhatsapp(appConfig.website.showFloatingWhatsapp ?? true);
       setWebWhatsapp(appConfig.website.whatsappNumber || '');
       setWebInstagram(appConfig.website.instagramHandle || '');
@@ -469,6 +479,11 @@ export default function AdminDashboard() {
       showTestimonials: webShowTestimonials,
       showFaq: webShowFaq,
       showFooter: webShowFooter,
+      footerShowTagline: webFooterShowTagline,
+      footerShowAddress: webFooterShowAddress,
+      footerShowHours: webFooterShowHours,
+      footerShowContact: webFooterShowContact,
+      footerShowCopyright: webFooterShowCopyright,
       showFloatingWhatsapp: webShowFloatingWhatsapp,
       whatsappNumber: webWhatsapp.trim(),
       instagramHandle: webInstagram.trim(),
@@ -1751,6 +1766,11 @@ export default function AdminDashboard() {
                         { label: 'Panduan 4 Langkah Cara Kerja', checked: webShowHowItWorks, setter: setWebShowHowItWorks, desc: 'Edukasi langkah mudah berfoto bagi pengunjung baru' },
                         { label: 'Tanya Jawab Seputar Photobooth (FAQ)', checked: webShowFaq, setter: setWebShowFaq, desc: 'Informasi album 7 hari, LDR sync, dan QRIS' },
                         { label: 'Footer Studio & Info Operasional', checked: webShowFooter, setter: setWebShowFooter, desc: 'Alamat fisik, jam buka, dan tautan sosial media' },
+                        { label: 'Footer: Brand & Tagline', checked: webFooterShowTagline, setter: setWebFooterShowTagline, desc: 'Kolom nama brand, status buka/tutup, dan tagline' },
+                        { label: 'Footer: Alamat Studio', checked: webFooterShowAddress, setter: setWebFooterShowAddress, desc: 'Kolom alamat fisik studio' },
+                        { label: 'Footer: Jam Buka', checked: webFooterShowHours, setter: setWebFooterShowHours, desc: 'Kolom jam operasional studio' },
+                        { label: 'Footer: Kontak Admin (WA & IG)', checked: webFooterShowContact, setter: setWebFooterShowContact, desc: 'Tautan WhatsApp CS dan Instagram' },
+                        { label: 'Footer: Baris Hak Cipta', checked: webFooterShowCopyright, setter: setWebFooterShowCopyright, desc: 'Copyright tahun berjalan dan info Cloud Synced' },
                         { label: 'Tombol Chat WhatsApp Melayang (Floating)', checked: webShowFloatingWhatsapp, setter: setWebShowFloatingWhatsapp, desc: 'Akses cepat CS WhatsApp di pojok kanan bawah' },
                       ].map((item, idx) => (
                         <label

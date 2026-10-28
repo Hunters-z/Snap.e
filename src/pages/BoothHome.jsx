@@ -819,8 +819,16 @@ export default function BoothHome() {
       {appConfig.website?.showFooter !== false && (
         <footer className="border-t border-gray-200 bg-white py-8 mt-auto">
           <div className="max-w-5xl mx-auto px-4 sm:px-6 space-y-6">
+                          {(() => {
+              const f = appConfig.website || {};
+              const fTagline = f.footerShowTagline ?? true;
+              const fAddress = f.footerShowAddress ?? true;
+              const fHours = f.footerShowHours ?? true;
+              const fContact = f.footerShowContact ?? true;
+              return (fTagline || fAddress || fHours || fContact) && (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 text-xs text-gray-600">
               {/* Brand & Tagline */}
+              {fTagline && (
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
                   <span className="font-bold text-base text-gray-900 tracking-tight">
@@ -838,8 +846,10 @@ export default function BoothHome() {
                   {appConfig.website?.heroTagline || 'Momen berharga tanpa batasan jarak'}
                 </p>
               </div>
+              )}
 
               {/* Studio Address */}
+              {fAddress && (
               <div className="space-y-1.5">
                 <span className="font-bold text-gray-900 flex items-center gap-1.5">
                   <MapPin size={13} className="text-red-500" />
@@ -849,8 +859,10 @@ export default function BoothHome() {
                   {appConfig.website?.studioAddress || 'Jl. Senopati No. 88, Kebayoran Baru, Jakarta Selatan'}
                 </p>
               </div>
+              )}
 
               {/* Operational Hours */}
+              {fHours && (
               <div className="space-y-1.5">
                 <span className="font-bold text-gray-900 flex items-center gap-1.5">
                   <Clock size={13} className="text-indigo-500" />
@@ -860,8 +872,10 @@ export default function BoothHome() {
                   {appConfig.website?.openingHours || 'Setiap Hari: 10:00 - 22:00 WIB'}
                 </p>
               </div>
+              )}
 
               {/* Contact CS / WhatsApp & IG */}
+              {fContact && (
               <div className="space-y-2">
                 <span className="font-bold text-gray-900 block">Hubungi Admin</span>
                 <div className="flex flex-col gap-1.5 text-[11px]">
@@ -889,12 +903,17 @@ export default function BoothHome() {
                   )}
                 </div>
               </div>
+              )}
             </div>
+              );
+            })()}
 
+            {(appConfig.website?.footerShowCopyright ?? true) && (
             <div className="pt-4 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] text-gray-400">
               <p>© {new Date().getFullYear()} {appConfig.website?.brandName || 'Snape.e'} Studio. All rights reserved.</p>
               <p className="font-mono text-[10px]">Cloud Synced • Real-Time WebRTC</p>
             </div>
+            )}
           </div>
         </footer>
       )}
