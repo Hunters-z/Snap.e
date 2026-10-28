@@ -1468,113 +1468,72 @@ export default function LiveCapture() {
 
         {/* Video Wrapper (Center Cropped 4:3 Aspect Ratio) */}
         <div 
-          className={`w-full max-w-3xl max-h-full aspect-[4/3] rounded-2xl sm:rounded-3xl overflow-hidden bg-black/90 relative shadow-2xl border border-white/10 flex ${
-            mode === 'ldr' ? 'flex-col sm:flex-row' : 'flex-col'
-          }`}
+          className="w-full max-w-3xl max-h-full aspect-[4/3] rounded-2xl sm:rounded-3xl overflow-hidden bg-black/90 relative shadow-2xl border border-white/10 flex flex-col"
         >
-          {/* In LDR mode: Host on Left, Guest on Right via WebRTC */}
+          {/* LDR layout — PIXEL fix: the partner feed fills the main area
+              (object-cover, w-full h-full) and our own camera is a small PiP
+              tile in the bottom-right corner, clear of the date stamp and
+              filmstrip. Previously both feeds were flex-1 halves of a
+              flex-col (mobile) 4:3 box → each video shrank to a sliver. */}
           {mode === 'ldr' ? (
-            <>
-              {roleParam === 'guest' ? (
-                <>
-                  {/* Left: Remote Host Video Stream over WebRTC */}
-                  <div className="relative flex-1 h-full min-h-0 overflow-hidden bg-gray-950 flex items-center justify-center">
-                    <video
-                      ref={remoteVideoRef}
-                      autoPlay
-                      playsInline
-                      className={`w-full h-full object-cover ${peerConnected ? 'block' : 'hidden'}`}
-                    />
-                    {!peerConnected && (
-                      <div className="flex flex-col items-center justify-center p-4 text-center text-gray-400 space-y-2">
-                        <div className="w-10 h-10 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center animate-pulse">
-                          <Heart size={20} className="fill-rose-400" />
-                        </div>
-                        <p className="text-xs font-bold text-gray-200">{remotePeerName} (Host)</p>
-                        <p className="text-[10px] text-gray-400 max-w-[200px] leading-tight">
-                          Menghubungkan WebRTC real-time ke kamera Host...
-                        </p>
-                      </div>
-                    )}
-                    <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-full text-[11px] font-semibold flex items-center gap-1.5 z-10">
-                      <span className={`w-1.5 h-1.5 rounded-full ${peerConnected ? 'bg-emerald-400' : 'bg-amber-400 animate-pulse'}`}></span>
-                      {peerConnected ? `${remotePeerName} (Host) · WebRTC HD` : `${remotePeerName} · Menghubungkan...`}
-                    </div>
+            <div className="relative flex-1 min-h-0 w-full h-full overflow-hidden bg-gray-950 flex items-center justify-center">
+              {/* Main: remote partner stream over WebRTC */}
+              <video
+                ref={remoteVideoRef}
+                autoPlay
+                playsInline
+                className={`absolute inset-0 w-full h-full object-cover ${peerConnected ? 'block' : 'hidden'}`}
+              />
+              {!peerConnected && (
+                <div className="flex flex-col items-center justify-center p-4 text-center text-gray-400 space-y-2">
+                  <div className="w-10 h-10 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center animate-pulse">
+                    <Heart size={20} className="fill-rose-400" />
                   </div>
-
-                  {/* Right: Local Guest Video Stream */}
-                  <div className="relative flex-1 h-full min-h-0 overflow-hidden border-t sm:border-t-0 sm:border-l border-white/20">
-                    <video
-                      ref={localVideoRef}
-                      autoPlay
-                      playsInline
-                      muted
-                      style={{ filter: activeFilter.css }}
-                      className={`w-full h-full object-cover transform transition-transform ${facingMode === 'user' && mirrorCam ? 'scale-x-[-1]' : 'scale-x-100'}`}
-                    />
-                    <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-full text-[11px] font-semibold flex items-center gap-1.5 z-10">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                      {userName} (Kamera Anda · Pasangan)
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <>
-                  {/* Left: Local Host Video Stream */}
-                  <div className="relative flex-1 h-full min-h-0 overflow-hidden">
-                    <video
-                      ref={localVideoRef}
-                      autoPlay
-                      playsInline
-                      muted
-                      style={{ filter: activeFilter.css }}
-                      className={`w-full h-full object-cover transform transition-transform ${facingMode === 'user' && mirrorCam ? 'scale-x-[-1]' : 'scale-x-100'}`}
-                    />
-                    <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-full text-[11px] font-semibold flex items-center gap-1.5 z-10">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                      {userName} (Kamera Anda · Host)
-                    </div>
-                  </div>
-
-                  {/* Right: Remote Guest Video Stream over WebRTC */}
-                  <div className="relative flex-1 h-full min-h-0 overflow-hidden border-t sm:border-t-0 sm:border-l border-white/20 bg-gray-950 flex items-center justify-center">
-                    <video
-                      ref={remoteVideoRef}
-                      autoPlay
-                      playsInline
-                      className={`w-full h-full object-cover ${peerConnected ? 'block' : 'hidden'}`}
-                    />
-                    {!peerConnected && (
-                      <div className="flex flex-col items-center justify-center p-4 text-center text-gray-400 space-y-2">
-                        <div className="w-10 h-10 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center animate-pulse">
-                          <Heart size={20} className="fill-rose-400" />
-                        </div>
-                        <p className="text-xs font-bold text-gray-200">{remotePeerName}</p>
-                        <p className="text-[10px] text-gray-400 max-w-[200px] leading-tight">
-                          {partnerOnline 
-                            ? 'Pasangan terhubung! Mengaktifkan WebRTC real-time...' 
-                            : 'Menunggu pasangan bergabung. Klik "Salin Link" dan kirimkan ke pasangan.'}
-                        </p>
-                        <button
-                          type="button"
-                          onClick={handleCopyLdrLink}
-                          className="px-3 py-1 bg-white/10 hover:bg-white/20 text-white rounded-full text-[10px] font-bold flex items-center gap-1 mt-1 transition-all"
-                        >
-                          <Copy size={11} />
-                          <span>{copiedLink ? 'Link Tersalin!' : 'Salin Link Pasangan'}</span>
-                        </button>
-                      </div>
-                    )}
-                    <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-full text-[11px] font-semibold flex items-center gap-1.5 z-10">
-                      <span className={`w-1.5 h-1.5 rounded-full ${peerConnected ? 'bg-emerald-400' : 'bg-amber-400 animate-pulse'}`}></span>
-                      {peerConnected 
-                        ? `${remotePeerName} · WebRTC Real-Time` 
-                        : `${remotePeerName} · Menghubungkan WebRTC...`}
-                    </div>
-                  </div>
-                </>
+                  <p className="text-xs font-bold text-gray-200">{remotePeerName}</p>
+                  <p className="text-[10px] text-gray-400 max-w-[200px] leading-tight">
+                    {roleParam === 'guest'
+                      ? 'Menghubungkan WebRTC real-time ke kamera Host...'
+                      : partnerOnline
+                      ? 'Pasangan terhubung! Mengaktifkan WebRTC real-time...'
+                      : 'Menunggu pasangan bergabung. Kirim tautan ruangan ke pasangan.'}
+                  </p>
+                  {roleParam !== 'guest' && (
+                    <button
+                      type="button"
+                      onClick={handleCopyLdrLink}
+                      className="px-3 py-1 bg-white/10 hover:bg-white/20 text-white rounded-full text-[10px] font-bold flex items-center gap-1 mt-1 transition-all"
+                    >
+                      <Copy size={11} />
+                      <span>{copiedLink ? 'Link Tersalin!' : 'Salin Link Pasangan'}</span>
+                    </button>
+                  )}
+                </div>
               )}
-            </>
+
+              {/* Partner status badge */}
+              <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-full text-[11px] font-semibold flex items-center gap-1.5 z-10">
+                <span className={`w-1.5 h-1.5 rounded-full ${peerConnected ? 'bg-emerald-400' : 'bg-amber-400 animate-pulse'}`}></span>
+                {peerConnected
+                  ? `${remotePeerName} · WebRTC Real-Time`
+                  : `${remotePeerName} · Menghubungkan...`}
+              </div>
+
+              {/* PiP: own camera, bottom-right, above the date stamp */}
+              <div className="absolute bottom-10 right-3 z-20 w-24 h-32 sm:w-32 sm:h-40 rounded-xl overflow-hidden border-2 border-white/40 bg-black/70 shadow-lg shadow-black/50">
+                <video
+                  ref={localVideoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  style={{ filter: activeFilter.css }}
+                  className={`w-full h-full object-cover transform transition-transform ${facingMode === 'user' && mirrorCam ? 'scale-x-[-1]' : 'scale-x-100'}`}
+                />
+                <div className="absolute top-1 left-1 bg-black/60 px-1.5 py-0.5 rounded-full text-[9px] font-semibold flex items-center gap-1">
+                  <span className="w-1 h-1 rounded-full bg-emerald-400"></span>
+                  {userName}
+                </div>
+              </div>
+            </div>
           ) : (
             <>
               {/* Solo Mode: Simulated Canvas if camera blocked */}
@@ -1658,27 +1617,9 @@ export default function LiveCapture() {
             </div>
           )}
 
-          {/* Viewfinder Grid for LDR Mode: Each camera has its own centered framing */}
-          {showGrid && mode === 'ldr' && (
-            <div className="absolute inset-0 pointer-events-none z-30 flex flex-col sm:flex-row">
-              {/* Left feed guides */}
-              <div className="flex-1 relative h-full">
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-7 h-7 rounded-full border border-white/35 flex items-center justify-center">
-                  <div className="w-1 h-1 rounded-full bg-white/60" />
-                </div>
-                <div className="absolute top-2.5 left-2.5 w-4 h-4 border-t-2 border-l-2 border-white/50 rounded-tl-xs" />
-                <div className="absolute bottom-2.5 left-2.5 w-4 h-4 border-b-2 border-l-2 border-white/50 rounded-bl-xs" />
-              </div>
-              {/* Right feed guides */}
-              <div className="flex-1 relative h-full">
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-7 h-7 rounded-full border border-white/35 flex items-center justify-center">
-                  <div className="w-1 h-1 rounded-full bg-white/60" />
-                </div>
-                <div className="absolute top-2.5 right-2.5 w-4 h-4 border-t-2 border-r-2 border-white/50 rounded-tr-xs" />
-                <div className="absolute bottom-2.5 right-2.5 w-4 h-4 border-b-2 border-r-2 border-white/50 rounded-br-xs" />
-              </div>
-            </div>
-          )}
+          {/* NOTE: split-screen LDR viewfinder grid removed — LDR now uses a
+              main (partner) + PiP (own camera) layout, so the old two-half
+              framing guides no longer match the picture. */}
         </div>
       </div>
 
