@@ -75,7 +75,7 @@ export default function FrameGuideModal({ isOpen, onClose, onOpenAddFrame }) {
     ctx.fillText('FOOTER AREA (Branding, Tanggal, Caption)', 300, footerY + 90);
     ctx.font = '14px sans-serif';
     ctx.fillStyle = '#4B5563';
-    ctx.fillText('snap.e studio • 600 × 1800 px Blueprint Template', 300, footerY + 125);
+    ctx.fillText('Snape.e studio • 600 × 1800 px Blueprint Template', 300, footerY + 125);
 
     // Trigger download
     const link = document.createElement('a');
@@ -185,7 +185,7 @@ export default function FrameGuideModal({ isOpen, onClose, onOpenAddFrame }) {
               </li>
               <li className="flex items-start gap-2">
                 <CheckCircle2 size={15} className="text-amber-600 shrink-0 mt-0.5" />
-                <span><strong>Warna Teks & Logo Kontras:</strong> Warna untuk judul memori dan logo snap.e agar mudah terbaca (teks gelap untuk frame terang, teks putih untuk frame gelap).</span>
+                <span><strong>Warna Teks & Logo Kontras:</strong> Warna untuk judul memori dan logo Snape.e agar mudah terbaca (teks gelap untuk frame terang, teks putih untuk frame gelap).</span>
               </li>
               <li className="flex items-start gap-2">
                 <CheckCircle2 size={15} className="text-amber-600 shrink-0 mt-0.5" />
@@ -256,7 +256,7 @@ export default function FrameGuideModal({ isOpen, onClose, onOpenAddFrame }) {
               </div>
               <div className="p-2 bg-white/10 rounded-lg flex justify-between items-center border border-white/10">
                 <span>[05] Footer Typography (Y: 1300 - 1800 px)</span>
-                <span className="text-gray-400 text-[10px]">Teks custom, tanggal, logo snap.e</span>
+                <span className="text-gray-400 text-[10px]">Teks custom, tanggal, logo Snape.e</span>
               </div>
             </div>
 
@@ -267,7 +267,7 @@ export default function FrameGuideModal({ isOpen, onClose, onOpenAddFrame }) {
 
           {/* Section 4: Langkah Praktis Menambahkan */}
           <div className="space-y-2">
-            <h3 className="font-bold text-sm text-gray-900">3. Cara Menambahkan Frame ke snap.e</h3>
+            <h3 className="font-bold text-sm text-gray-900">3. Cara Menambahkan Frame ke Snape.e</h3>
             <ol className="list-decimal pl-5 space-y-1.5 text-xs text-gray-700">
               <li>Buat gambar desain bingkai Anda di <strong>Canva, Photoshop, Figma, atau Procreate</strong> menggunakan ukuran kanvas <strong>600 × 1800 px</strong> (atau 1200 × 3600 px untuk HD).</li>
               <li>Ekspor gambar dalam format <strong>PNG Transparan</strong> dengan lubang tembus pandang pada slot foto.</li>

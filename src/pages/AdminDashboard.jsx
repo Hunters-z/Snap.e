@@ -245,14 +245,14 @@ export default function AdminDashboard() {
   const [newFilterDesc, setNewFilterDesc] = useState('');
 
   // Website Editor states
-  const [webBrandName, setWebBrandName] = useState(appConfig.website?.brandName || 'snap.e');
+  const [webBrandName, setWebBrandName] = useState(appConfig.website?.brandName || 'Snape.e');
   const [webHeroTagline, setWebHeroTagline] = useState(appConfig.website?.heroTagline || 'Momen Berharga, Synchronized Distances');
   const [webTaglineGradient, setWebTaglineGradient] = useState(
     appConfig.website?.taglineGradient || 'from-rose-600 via-purple-600 to-indigo-600'
   );
   const [webHeroDesc, setWebHeroDesc] = useState(appConfig.website?.heroDescription || 'Foto bersama pasangan atau sahabat dari jarak jauh secara real-time, atau nikmati sesi solo dengan photostrip estetik gaya Korea.');
   const [webPromoBadge, setWebPromoBadge] = useState(appConfig.website?.promoBadge || 'PHOTO BOOTH ONLINE & LDR DUAL-STREAM');
-  const [webAnnouncement, setWebAnnouncement] = useState(appConfig.website?.announcement || '✨ Selamat datang di Studio snap.e! Cetak strip foto kualitas lab.');
+  const [webAnnouncement, setWebAnnouncement] = useState(appConfig.website?.announcement || '✨ Selamat datang di Studio Snape.e! Cetak strip foto kualitas lab.');
   const [webShowAnnouncement, setWebShowAnnouncement] = useState(appConfig.website?.showAnnouncement ?? true);
   
   // Section visibility toggles
@@ -277,7 +277,7 @@ export default function AdminDashboard() {
   // New CTA and SEO Metadata states
   const [webPrimaryCtaText, setWebPrimaryCtaText] = useState(appConfig.website?.primaryCtaText || 'Mulai Sesi Booth Sekarang');
   const [webSecondaryCtaText, setWebSecondaryCtaText] = useState(appConfig.website?.secondaryCtaText || 'Lihat Pilihan Frame');
-  const [webMetaTitle, setWebMetaTitle] = useState(appConfig.website?.metaTitle || 'snap.e - Tangible Memories, Synchronized Distances');
+  const [webMetaTitle, setWebMetaTitle] = useState(appConfig.website?.metaTitle || 'Snape.e - Tangible Memories, Synchronized Distances');
   const [webMetaDescription, setWebMetaDescription] = useState(
     appConfig.website?.metaDescription || 'Tangible Memories, Synchronized Distances - Online photobooth for solo and LDR couples with customizable photostrips and studio management.'
   );
@@ -288,7 +288,7 @@ export default function AdminDashboard() {
   // Synchronize local states when appConfig changes
   useEffect(() => {
     if (appConfig.website) {
-      setWebBrandName(appConfig.website.brandName || 'snap.e');
+      setWebBrandName(appConfig.website.brandName || 'Snape.e');
       setWebHeroTagline(appConfig.website.heroTagline || '');
       setWebTaglineGradient(appConfig.website.taglineGradient || 'from-rose-600 via-purple-600 to-indigo-600');
       setWebHeroDesc(appConfig.website.heroDescription || '');
@@ -313,7 +313,7 @@ export default function AdminDashboard() {
       setWebAccentColor(appConfig.website.accentColor || '#E11D48');
       setWebPrimaryCtaText(appConfig.website.primaryCtaText || 'Mulai Sesi Booth Sekarang');
       setWebSecondaryCtaText(appConfig.website.secondaryCtaText || 'Lihat Pilihan Frame');
-      setWebMetaTitle(appConfig.website.metaTitle || 'snap.e - Tangible Memories, Synchronized Distances');
+      setWebMetaTitle(appConfig.website.metaTitle || 'Snape.e - Tangible Memories, Synchronized Distances');
       setWebMetaDescription(
         appConfig.website.metaDescription || 'Tangible Memories, Synchronized Distances - Online photobooth for solo and LDR couples with customizable photostrips and studio management.'
       );
@@ -453,7 +453,7 @@ export default function AdminDashboard() {
   const handleSaveWebsiteEditor = (e) => {
     e.preventDefault();
     updateWebsiteConfig({
-      brandName: webBrandName.trim() || 'snap.e',
+      brandName: webBrandName.trim() || 'Snape.e',
       heroTagline: webHeroTagline.trim(),
       taglineGradient: webTaglineGradient,
       heroDescription: webHeroDesc.trim(),
@@ -478,7 +478,7 @@ export default function AdminDashboard() {
       accentColor: webAccentColor,
       primaryCtaText: webPrimaryCtaText.trim() || 'Mulai Sesi Booth Sekarang',
       secondaryCtaText: webSecondaryCtaText.trim() || 'Lihat Pilihan Frame',
-      metaTitle: webMetaTitle.trim() || 'snap.e - Tangible Memories, Synchronized Distances',
+      metaTitle: webMetaTitle.trim() || 'Snape.e - Tangible Memories, Synchronized Distances',
       metaDescription: webMetaDescription.trim(),
       metaKeywords: webMetaKeywords.trim()
     });
@@ -538,7 +538,7 @@ export default function AdminDashboard() {
             </div>
             <h1 className="text-xl font-bold tracking-tight">Studio Admin Console</h1>
             <p className="text-xs text-gray-400">
-              Akses khusus pengelola dan pemilik studio snap.e
+              Akses khusus pengelola dan pemilik studio Snape.e
             </p>
           </div>
 
@@ -624,7 +624,7 @@ export default function AdminDashboard() {
               s
             </div>
             <div>
-              <h2 className="font-bold text-sm text-gray-900">{appConfig.website?.brandName || 'snap.e'}</h2>
+              <h2 className="font-bold text-sm text-gray-900">{appConfig.website?.brandName || 'Snape.e'}</h2>
               <p className="text-[9px] text-gray-400 font-bold tracking-widest">STUDIO OWNER CONSOLE</p>
             </div>
           </div>
@@ -940,7 +940,7 @@ export default function AdminDashboard() {
                     <div>
                       <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
                         <Users size={16} className="text-blue-600" />
-                        Daftar Pengguna Studio snap.e ({registeredUsers?.length || 5} Akun)
+                        Daftar Pengguna Studio Snape.e ({registeredUsers?.length || 5} Akun)
                       </h3>
                       <p className="text-xs text-gray-500 mt-0.5">Pengguna yang telah login dan terdaftar dalam database studio.</p>
                     </div>
@@ -1785,7 +1785,7 @@ export default function AdminDashboard() {
                           type="text"
                           value={webBrandName}
                           onChange={(e) => setWebBrandName(e.target.value)}
-                          placeholder="snap.e"
+                          placeholder="Snape.e"
                           className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold outline-none focus:border-gray-900"
                         />
                       </div>
@@ -1837,7 +1837,7 @@ export default function AdminDashboard() {
                         type="text"
                         value={webAnnouncement}
                         onChange={(e) => setWebAnnouncement(e.target.value)}
-                        placeholder="✨ Selamat datang di Studio snap.e! Cetak strip foto kualitas lab."
+                        placeholder="✨ Selamat datang di Studio Snape.e! Cetak strip foto kualitas lab."
                         className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-gray-900"
                       />
                     </div>
@@ -1991,7 +1991,7 @@ export default function AdminDashboard() {
                           type="text"
                           value={webMetaTitle}
                           onChange={(e) => setWebMetaTitle(e.target.value)}
-                          placeholder="snap.e - Tangible Memories, Synchronized Distances"
+                          placeholder="Snape.e - Tangible Memories, Synchronized Distances"
                           className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-gray-900"
                         />
                         <span className="text-[10px] text-gray-400">Panjang ideal: 50-60 karakter. Saat ini: {webMetaTitle.length} karakter.</span>
@@ -2032,12 +2032,12 @@ export default function AdminDashboard() {
                           s
                         </div>
                         <div className="leading-tight">
-                          <p className="text-[12px] text-gray-800 font-semibold">{webBrandName || 'snap.e'} Photobooth</p>
+                          <p className="text-[12px] text-gray-800 font-semibold">{webBrandName || 'Snape.e'} Photobooth</p>
                           <p className="text-[10px] text-gray-500 font-mono">https://snape.studio &rsaquo; photobooth</p>
                         </div>
                       </div>
                       <h4 className="text-sm font-semibold text-blue-800 hover:underline cursor-pointer">
-                        {webMetaTitle || 'snap.e - Tangible Memories, Synchronized Distances'}
+                        {webMetaTitle || 'Snape.e - Tangible Memories, Synchronized Distances'}
                       </h4>
                       <p className="text-xs text-gray-600 line-clamp-2 leading-relaxed">
                         {webMetaDescription || 'Online photobooth for solo and LDR couples with customizable photostrips, real-time sync, and lab-quality printing.'}

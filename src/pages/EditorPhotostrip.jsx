@@ -901,10 +901,10 @@ export default function EditorPhotostrip() {
         ctx.textAlign = 'center';
       }
       
-      // Brand name (snap.e text)
+      // Brand name (Snape.e text)
       if (showBadge) {
         ctx.font = "bold 38px 'Inter', sans-serif";
-        ctx.fillText(appConfig.website?.brandName || 'snap.e', textX, canvas.height - 150);
+        ctx.fillText(appConfig.website?.brandName || 'Snape.e', textX, canvas.height - 150);
       }
 
       // Custom caption (teks bawah yang bisa diganti)
@@ -1090,7 +1090,7 @@ export default function EditorPhotostrip() {
           }
           if (showBadge) {
             ctx.font = "bold 10px 'Inter', sans-serif";
-            ctx.fillText(appConfig.website?.brandName || 'snap.e', gX, gifHeight - 32);
+            ctx.fillText(appConfig.website?.brandName || 'Snape.e', gX, gifHeight - 32);
           }
           if (customText) {
             ctx.font = "italic 9px 'Playfair Display', serif";
@@ -1139,7 +1139,7 @@ export default function EditorPhotostrip() {
     }
 
     const newOrder = addOrder({
-      customerName: customerName || 'Tamu snap.e',
+      customerName: customerName || 'Tamu Snape.e',
       phone: customerPhone,
       address: customerAddress,
       paperType: paperType,
@@ -2327,7 +2327,7 @@ export default function EditorPhotostrip() {
                   </div>
 
                   <div className="flex flex-col gap-2.5 pt-1">
-                    {/* Ganti tulisan tampilkan logo snap.e menjadi tampilkan teks snap.e */}
+                    {/* Ganti tulisan tampilkan logo Snape.e menjadi tampilkan teks Snape.e */}
                     <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-gray-700">
                       <input
                         type="checkbox"
@@ -2335,8 +2335,31 @@ export default function EditorPhotostrip() {
                         onChange={(e) => setShowBadge(e.target.checked)}
                         className="rounded text-gray-900 focus:ring-gray-900"
                       />
-                      <span>Tampilkan Teks {appConfig.website?.brandName || 'snap.e'}</span>
+                      <span>Tampilkan Teks {appConfig.website?.brandName || 'Snape.e'}</span>
                     </label>
+
+                    {/* Chip toggle footer: pilih-pilih mana yang tampil di bawah strip */}
+                    <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                      {[
+                        { key: 'brand', label: `Logo ${appConfig.website?.brandName || 'Snape.e'}`, on: showBadge, set: setShowBadge },
+                        { key: 'caption', label: 'Caption', on: Boolean(customText), set: (v) => setCustomText(v ? 'Long Distance Soulmate' : '') },
+                        { key: 'date', label: 'Tanggal', on: showDate, set: setShowDate },
+                      ].map((chip) => (
+                        <button
+                          key={chip.key}
+                          type="button"
+                          onClick={() => chip.set(!chip.on)}
+                          aria-pressed={chip.on}
+                          className={`px-2.5 py-1 rounded-full text-[10px] font-semibold border transition-all ${
+                            chip.on
+                              ? 'bg-gray-900 text-white border-gray-900 shadow-xs'
+                              : 'bg-white text-gray-400 border-gray-200 hover:border-gray-400'
+                          }`}
+                        >
+                          {chip.on ? '✓ ' : ''}{chip.label}
+                        </button>
+                      ))}
+                    </div>
 
                     {/* Hilangkan / tampilkan tanggal hanya ada pada tab teks */}
                     <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-gray-700">
@@ -2503,7 +2526,7 @@ export default function EditorPhotostrip() {
 
             {/* Strip Top Header - Fixed Reserved Height (NO Grid 4 or Grid 6 text inside frame) */}
             <div className="flex justify-between items-center h-4 px-1 text-[8px] sm:text-[8.5px] font-bold tracking-widest opacity-80 shrink-0">
-              <span>{activeFrame.overlayType === 'film' ? '► KODAK 400 35MM' : 'SNAP.E MEMORIES'}</span>
+              <span>{activeFrame.overlayType === 'film' ? '► KODAK 400 35MM' : 'SNAPE.E MEMORIES'}</span>
               <div className="flex items-center gap-1.5 pointer-events-auto">
                 <button
                   type="button"
@@ -2539,7 +2562,7 @@ export default function EditorPhotostrip() {
                   textAlign === 'left' ? 'text-left items-start' : textAlign === 'right' ? 'text-right items-end' : 'text-center items-center'
                 }`}>
                   {showBadge && (
-                    <p className="font-bold text-[9px] leading-tight truncate">{appConfig.website?.brandName || 'snap.e'}</p>
+                    <p className="font-bold text-[9px] leading-tight truncate">{appConfig.website?.brandName || 'Snape.e'}</p>
                   )}
                   {customText && (
                     <p className="font-serif italic text-[8px] opacity-90 truncate leading-tight">{customText}</p>
@@ -2565,7 +2588,7 @@ export default function EditorPhotostrip() {
                     textAlign === 'left' ? 'text-left items-start' : textAlign === 'right' ? 'text-right items-end' : 'text-center items-center'
                   }`}>
                     {showBadge && (
-                      <p className="font-bold text-[9px] leading-tight truncate">{appConfig.website?.brandName || 'snap.e'}</p>
+                      <p className="font-bold text-[9px] leading-tight truncate">{appConfig.website?.brandName || 'Snape.e'}</p>
                     )}
                     {customText && (
                       <p className="font-serif italic text-[8px] opacity-90 truncate leading-tight">{customText}</p>
@@ -2589,7 +2612,7 @@ export default function EditorPhotostrip() {
                     textAlign === 'left' ? 'text-left items-start' : textAlign === 'right' ? 'text-right items-end' : 'text-center items-center'
                   }`}>
                     {showBadge && (
-                      <p className="font-bold text-[9px] leading-tight truncate">{appConfig.website?.brandName || 'snap.e'}</p>
+                      <p className="font-bold text-[9px] leading-tight truncate">{appConfig.website?.brandName || 'Snape.e'}</p>
                     )}
                     {customText && (
                       <p className="font-serif italic text-[8px] opacity-90 truncate leading-tight">{customText}</p>
@@ -3170,10 +3193,10 @@ export default function EditorPhotostrip() {
       <footer className="border-t border-gray-200 bg-white py-6 mt-auto">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-gray-500">
           <div className="flex items-center gap-2">
-            <span className="font-bold text-gray-900">{appConfig.website?.brandName || 'snap.e'}</span>
+            <span className="font-bold text-gray-900">{appConfig.website?.brandName || 'Snape.e'}</span>
             <span>— {appConfig.website?.heroTagline || 'Tangible Memories, Synchronized Distances.'}</span>
           </div>
-          <p>© {new Date().getFullYear()} {appConfig.website?.brandName || 'snap.e'}. All rights reserved.</p>
+          <p>© {new Date().getFullYear()} {appConfig.website?.brandName || 'Snape.e'}. All rights reserved.</p>
         </div>
       </footer>
     </div>

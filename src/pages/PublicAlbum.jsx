@@ -42,7 +42,7 @@ function normalizePhoto(p, idx) {
       url: p,
       filterName: 'Natural',
       filterCss: 'none',
-      capturedAt: 'snap.e photo',
+      capturedAt: 'Snape.e photo',
       dateStamp: null,
       gifUrl: null
     };
@@ -55,7 +55,7 @@ function normalizePhoto(p, idx) {
     gifUrl: p.gifUrl || null,
     filterName: p.filterName || 'Natural',
     filterCss: p.filterCss || 'none',
-    capturedAt: p.capturedAt || 'snap.e photo',
+    capturedAt: p.capturedAt || 'Snape.e photo',
     dateStamp: p.dateStamp || null,
     createdAt: p.createdAt || null
   };
@@ -461,7 +461,7 @@ export default function PublicAlbum() {
               <div className="w-8 h-8 rounded-full overflow-hidden border border-gray-200 shadow-xs flex items-center justify-center bg-gray-900 group-hover:scale-105 transition-transform">
                 <img 
                   src="/logo.jpeg" 
-                  alt="snap.e logo" 
+                  alt="Snape.e logo" 
                   className="w-full h-full object-cover" 
                   onError={(e) => { 
                     e.currentTarget.style.display = 'none'; 
@@ -469,7 +469,7 @@ export default function PublicAlbum() {
                 />
               </div>
               <span className="font-extrabold text-base tracking-tight text-gray-950 flex items-center gap-1">
-                {appConfig?.website?.brandName || 'snap.e'}
+                {appConfig?.website?.brandName || 'Snape.e'}
                 <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
               </span>
             </Link>
@@ -534,7 +534,7 @@ export default function PublicAlbum() {
               </div>
 
               <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 tracking-tight">
-                Galeri Album Sesi snap.e
+                Galeri Album Sesi Snape.e
               </h1>
 
               <p className="text-xs sm:text-sm text-gray-600 max-w-2xl leading-relaxed">
@@ -741,7 +741,7 @@ export default function PublicAlbum() {
                   {/* Photo Info & Quick Actions Footer */}
                   <div className="p-3 flex items-center justify-between gap-2 border-t border-gray-100 bg-white mt-auto">
                     <span className="text-[10px] text-gray-500 font-mono">
-                      {item.capturedAt || 'snap.e photo'}
+                      {item.capturedAt || 'Snape.e photo'}
                     </span>
 
                     <div className="flex items-center gap-1">
@@ -890,17 +890,17 @@ export default function PublicAlbum() {
             <div className="w-5 h-5 rounded-full overflow-hidden border border-gray-200 flex items-center justify-center bg-gray-900">
               <img 
                 src="/logo.jpeg" 
-                alt="snap.e" 
+                alt="Snape.e" 
                 className="w-full h-full object-cover" 
                 onError={(e) => { 
                   e.currentTarget.style.display = 'none'; 
                 }} 
               />
             </div>
-            <span className="font-bold text-gray-900">{appConfig?.website?.brandName || 'snap.e'}</span>
+            <span className="font-bold text-gray-900">{appConfig?.website?.brandName || 'Snape.e'}</span>
             <span>— Photobooth Studio & Creative Strip Lab</span>
           </div>
-          <p>© {new Date().getFullYear()} {appConfig?.website?.brandName || 'snap.e'}. All rights reserved.</p>
+          <p>© {new Date().getFullYear()} {appConfig?.website?.brandName || 'Snape.e'}. All rights reserved.</p>
         </div>
       </footer>
     </div>

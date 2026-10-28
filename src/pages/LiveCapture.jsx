@@ -202,7 +202,7 @@ export default function LiveCapture() {
   const handleShareViaWa = () => {
     if (!roomParam) return;
     const shareUrl = `${window.location.origin}/capture?room=${encodeURIComponent(roomParam)}&role=guest`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(`Yuk foto bareng di snap.e photo booth! Buka tautan ini untuk masuk ke ruang foto kita: ${shareUrl}`)}`, '_blank');
+    window.open(`https://wa.me/?text=${encodeURIComponent(`Yuk foto bareng di Snape.e photo booth! Buka tautan ini untuk masuk ke ruang foto kita: ${shareUrl}`)}`, '_blank');
     setInviteDismissed(true);
   };
 
@@ -798,7 +798,7 @@ export default function LiveCapture() {
         if (pcRef.current.signalingState !== 'stable') return;
         if (!partnerOnlineRef.current) return;
         const snap = await getDoc(roomRef);
-        if (snap.exists() && !snap.data().hostOffer) {
+        if (Snape.exists() && !snap.data().hostOffer) {
           const offer = await pcRef.current.createOffer();
           await pcRef.current.setLocalDescription(offer);
           await setDoc(roomRef, {
@@ -928,7 +928,7 @@ export default function LiveCapture() {
         ctx.fillStyle = '#fff';
         ctx.font = 'bold 32px sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText(`SNAP.E POSE #${activeSlotIndex + 1}`, canvas.width / 2, canvas.height / 2);
+        ctx.fillText(`SNAPE.E POSE #${activeSlotIndex + 1}`, canvas.width / 2, canvas.height / 2);
       }
     } else {
       const hasRemoteVideo = peerConnected && remoteEl && remoteEl.videoWidth > 0;
@@ -1187,7 +1187,7 @@ export default function LiveCapture() {
             <div className="w-5 h-5 rounded-full bg-red-600 flex items-center justify-center font-bold text-[10px]">
               s
             </div>
-            <span className="font-bold text-xs tracking-tight">snap.e booth</span>
+            <span className="font-bold text-xs tracking-tight">Snape.e booth</span>
           </div>
         </div>
 
@@ -1487,7 +1487,7 @@ export default function LiveCapture() {
         <div 
           className="w-full max-w-3xl max-h-full aspect-[4/3] rounded-2xl sm:rounded-3xl overflow-hidden bg-black/90 relative shadow-2xl border border-white/10 flex flex-col"
         >
-          {/* LDR layout — 3 MODE SELEKTOR (Polaroid / Kembar / Landscape).
+          {/* LDR layout — 3 MODE SELEKTOR (Polaroid / Potrait / Landscape).
               Both <video> elements stay permanently mounted with the same refs;
               only their container classNames change per mode — no remount, no
               srcObject double-attach. Tap-to-swap applies to Polaroid (pip) mode. */}
@@ -1617,7 +1617,7 @@ export default function LiveCapture() {
                 <div className="absolute bottom-1 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1 bg-black/55 backdrop-blur-md rounded-full px-1.5 py-1 border border-white/10">
                   {[
                     { id: 'pip', label: 'Polaroid', aria: 'Mode tampilan Polaroid: video utama dengan PiP kecil' },
-                    { id: 'split-v', label: 'Kembar', aria: 'Mode tampilan Kembar: dua video bertumpuk atas dan bawah' },
+                    { id: 'split-v', label: 'Potrait', aria: 'Mode tampilan Potrait: dua video bertumpuk atas dan bawah' },
                     { id: 'split-h', label: 'Landscape', aria: 'Mode tampilan Landscape: dua video berdampingan kiri dan kanan' },
                   ].map((m) => (
                     <button

@@ -71,7 +71,7 @@ const DEFAULT_STICKERS = [
 ];
 
 const DEFAULT_CONFIG = {
-  title: 'snap.e',
+  title: 'Snape.e',
   subtitle: 'Tangible Memories, Synchronized Distances',
   payment: {
     price: 15000,
@@ -95,11 +95,11 @@ const DEFAULT_CONFIG = {
   customFilters: CAMERA_PRESETS,
   customStickers: DEFAULT_STICKERS,
   website: {
-    brandName: 'snap.e',
+    brandName: 'Snape.e',
     heroTagline: 'Momen Berharga, Synchronized Distances',
     taglineGradient: 'from-rose-600 via-purple-600 to-indigo-600',
     heroDescription: 'Foto bersama pasangan atau sahabat dari jarak jauh secara real-time, atau nikmati sesi solo dengan photostrip estetik gaya Korea.',
-    announcement: '✨ Selamat datang di Studio snap.e! Cetak strip foto kualitas lab dan simpan live photo memori Anda.',
+    announcement: '✨ Selamat datang di Studio Snape.e! Cetak strip foto kualitas lab dan simpan live photo memori Anda.',
     showAnnouncement: true,
     showHero: true,
     showSetupCard: true,
@@ -120,7 +120,7 @@ const DEFAULT_CONFIG = {
     promoBadge: 'PHOTO BOOTH ONLINE & LDR DUAL-STREAM',
     primaryCtaText: 'Mulai Sesi Booth Sekarang',
     secondaryCtaText: 'Lihat Pilihan Frame',
-    metaTitle: 'snap.e - Tangible Memories, Synchronized Distances',
+    metaTitle: 'Snape.e - Tangible Memories, Synchronized Distances',
     metaDescription: 'Tangible Memories, Synchronized Distances - Online photobooth for solo and LDR couples with customizable photostrips and studio management.',
     metaKeywords: 'photobooth online, ldr photobooth, photo strip korea, cetak foto lab'
   }
@@ -421,7 +421,7 @@ const syncAlbumToCloud = useCallback(async (sessionId, photosList) => {
           return {
             id: photoId,
             sessionId: cleanSessionId,
-            capturedAt: p.capturedAt || 'snap.e photo',
+            capturedAt: p.capturedAt || 'Snape.e photo',
             dataUrl: compressedUrl || rawUrl,
             thumbUrl: compressedUrl || rawUrl,
             gifUrl: p.gifUrl || null,
@@ -643,7 +643,7 @@ const syncAlbumToCloud = useCallback(async (sessionId, photosList) => {
             } else {
               const albumRef = collection(db, 'cloud_albums', sessId, 'photos');
               const snap = await getDocs(albumRef);
-              if (!snap.empty && isMounted) {
+              if (!Snape.empty && isMounted) {
                 const cloudPhotos = [];
                 snap.forEach(d => {
                   const data = d.data();
@@ -774,7 +774,7 @@ const syncAlbumToCloud = useCallback(async (sessionId, photosList) => {
       try {
         const { getDoc: fsGetDoc } = await import('firebase/firestore');
         const snap = await fsGetDoc(fsDoc(db, 'ldr_rooms', ldrRoomPathRef.current));
-        if (snap.exists() && snap.data()?.albumId) return;
+        if (Snape.exists() && snap.data()?.albumId) return;
         fsSetDoc(fsDoc(db, 'ldr_rooms', ldrRoomPathRef.current), { albumId: currentSessionId }, { merge: true }).catch(() => {});
       } catch { /* best effort */ }
     })();

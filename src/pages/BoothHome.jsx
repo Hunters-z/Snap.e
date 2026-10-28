@@ -180,7 +180,7 @@ export default function BoothHome() {
               <span>{appConfig.website?.promoBadge || 'PHOTO BOOTH ONLINE & LDR DUAL-STREAM'}</span>
             </div>
             <h1 className="text-3xl sm:text-4xl md:text-5xl font-display tracking-tight leading-tight text-ink">
-              {appConfig.website?.heroTagline || 'Momen Berharga, Synchronized Distances'}
+              {appConfig.website?.heroTagline || 'Momen berharga tanpa batasan jarak'}
             </h1>
             <p className="text-sm sm:text-base text-ink/70 max-w-lg mx-auto leading-relaxed">
               {appConfig.website?.heroDescription || 'Dua kamera, satu jepretan bersamaan — foto bareng walau 1.000 km terpisah, atau sesi solo gaya photostrip Korea.'}
@@ -382,7 +382,7 @@ export default function BoothHome() {
             <div className="p-3.5 bg-red-50/80 border border-red-200/80 rounded-xl flex items-center justify-between gap-3 text-xs text-red-800">
               <div className="flex items-center gap-2">
                 <ShieldCheck size={18} className="text-red-600 shrink-0" />
-                <span>Silakan login terlebih dahulu untuk mengakses bilik kamera snap.e.</span>
+                <span>Silakan login terlebih dahulu untuk mengakses bilik kamera Snape.e.</span>
               </div>
               <button
                 type="button"
@@ -476,7 +476,7 @@ export default function BoothHome() {
                     className="w-full aspect-[2/3] rounded-xl flex flex-col justify-between p-2.5 relative overflow-hidden transition-transform group-hover:scale-102"
                     style={{ backgroundColor: frame.bg, color: frame.text }}
                   >
-                    <div className="text-[8px] font-bold tracking-widest opacity-60">SNAP.E</div>
+                    <div className="text-[8px] font-bold tracking-widest opacity-60">SNAPE.E</div>
                     <div className="space-y-1 my-auto">
                       <div className="w-full h-8 bg-black/10 rounded"></div>
                       <div className="w-full h-8 bg-black/10 rounded"></div>
@@ -667,7 +667,7 @@ export default function BoothHome() {
       {/* Floating WhatsApp Button */}
       {appConfig.website?.showFloatingWhatsapp !== false && appConfig.website?.whatsappNumber && (
         <a
-          href={`https://wa.me/${appConfig.website.whatsappNumber.replace(/[^0-9]/g, '')}?text=${encodeURIComponent('Halo ' + (appConfig.website?.brandName || 'snap.e') + ', saya ingin bertanya mengenai sesi photobooth.')}`}
+          href={`https://wa.me/${appConfig.website.whatsappNumber.replace(/[^0-9]/g, '')}?text=${encodeURIComponent('Halo ' + (appConfig.website?.brandName || 'Snape.e') + ', saya ingin bertanya mengenai sesi photobooth.')}`}
           target="_blank"
           rel="noreferrer"
           className="fixed bottom-6 right-6 z-40 bg-emerald-600 hover:bg-emerald-700 text-white p-3.5 rounded-full shadow-xl shadow-emerald-600/30 flex items-center gap-2 font-bold text-xs transition-transform hover:scale-105"
@@ -824,7 +824,7 @@ export default function BoothHome() {
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
                   <span className="font-bold text-base text-gray-900 tracking-tight">
-                    {appConfig.website?.brandName || 'snap.e'}
+                    {appConfig.website?.brandName || 'Snape.e'}
                   </span>
                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
                     appConfig.website?.isOpen !== false 
@@ -835,7 +835,7 @@ export default function BoothHome() {
                   </span>
                 </div>
                 <p className="text-gray-500 text-[11px] leading-relaxed">
-                  {appConfig.website?.heroTagline || 'Tangible Memories, Synchronized Distances.'}
+                  {appConfig.website?.heroTagline || 'Momen berharga tanpa batasan jarak'}
                 </p>
               </div>
 
@@ -892,7 +892,7 @@ export default function BoothHome() {
             </div>
 
             <div className="pt-4 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] text-gray-400">
-              <p>© {new Date().getFullYear()} {appConfig.website?.brandName || 'snap.e'} Studio. All rights reserved.</p>
+              <p>© {new Date().getFullYear()} {appConfig.website?.brandName || 'Snape.e'} Studio. All rights reserved.</p>
               <p className="font-mono text-[10px]">Cloud Synced • Real-Time WebRTC</p>
             </div>
           </div>

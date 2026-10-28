@@ -319,7 +319,7 @@ export default function AddFrameModal({ isOpen, onClose, onOpenGuide }) {
             >
               {/* Header */}
               <div className="flex justify-between items-center text-[8px] font-bold tracking-widest opacity-70 mb-2">
-                <span>SNAP.E</span>
+                <span>SNAPE.E</span>
               </div>
 
               {/* Photos simulation */}
@@ -389,7 +389,7 @@ export default function AddFrameModal({ isOpen, onClose, onOpenGuide }) {
 
               {/* Footer */}
               <div className="mt-3 pt-1 text-left space-y-0.5">
-                <p className="font-bold text-[10px] leading-tight">snap.e</p>
+                <p className="font-bold text-[10px] leading-tight">Snape.e</p>
                 <p className="italic text-[8px] opacity-80 truncate">{frameName || 'Judul Memori Anda'}</p>
               </div>
             </div>

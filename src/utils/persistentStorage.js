@@ -1,5 +1,5 @@
 /**
- * Robust Client & Local Persistence for snap.e Photobooth
+ * Robust Client & Local Persistence for Snape.e Photobooth
  * Uses IndexedDB to bypass the 5MB browser localStorage limit so photos,
  * motion GIFs, and live captures NEVER disappear on page reload or refresh.
  */

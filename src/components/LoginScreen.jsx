@@ -142,14 +142,14 @@ export default function LoginScreen({ redirectPath = null, isModal = false, onCl
         <div className="w-16 h-16 rounded-2xl overflow-hidden border border-gray-200 shadow-sm mx-auto flex items-center justify-center bg-gray-900">
           <img 
             src="/logo.jpeg" 
-            alt="snap.e logo" 
+            alt="Snape.e logo" 
             className="w-full h-full object-cover" 
             onError={(e) => { e.currentTarget.style.display = 'none'; }} 
           />
         </div>
         <div>
           <h1 className="text-2xl font-black text-gray-900 tracking-tight flex items-center justify-center gap-1.5">
-            {appConfig?.website?.brandName || 'snap.e'}
+            {appConfig?.website?.brandName || 'Snape.e'}
             <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
           </h1>
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mt-0.5">

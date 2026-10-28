@@ -27,11 +27,11 @@ export default function Topbar() {
         {/* Brand Logo */}
         <Link to="/" className="flex items-center gap-2.5 group">
           <div className="w-8 h-8 rounded-full overflow-hidden border border-gray-200 shadow-xs flex items-center justify-center bg-gray-900 group-hover:scale-105 transition-transform">
-            <img src="/logo.jpeg" alt="snap.e logo" className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+            <img src="/logo.jpeg" alt="Snape.e logo" className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
           </div>
           <div className="flex flex-col">
             <span className="font-bold text-lg tracking-tight text-gray-900 flex items-center gap-1">
-              {appConfig.website?.brandName || 'snap.e'} <span className="w-1.5 h-1.5 rounded-full bg-rose-film"></span>
+              {appConfig.website?.brandName || 'Snape.e'} <span className="w-1.5 h-1.5 rounded-full bg-rose-film"></span>
             </span>
           </div>
         </Link>
@@ -142,7 +142,7 @@ export default function Topbar() {
             <div className="p-3 bg-gray-50 border border-gray-200/80 rounded-xl space-y-1">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-gray-900 truncate">
-                  {currentUser.displayName || 'Pengguna snap.e'}
+                  {currentUser.displayName || 'Pengguna Snape.e'}
                 </span>
                 {isAdmin && (
                   <span className="text-[9px] bg-amber-500 text-white font-extrabold px-1.5 py-0.5 rounded-full">

@@ -42,7 +42,7 @@ export default function ProtectedRoute({ children, requireAdmin = false }) {
               Akses Ditolak
             </h1>
             <p className="text-xs sm:text-sm text-gray-600">
-              Akun Anda (<strong className="text-gray-900">{currentUser.email || currentUser.displayName}</strong>) bukan merupakan akun Administrator Studio snap.e.
+              Akun Anda (<strong className="text-gray-900">{currentUser.email || currentUser.displayName}</strong>) bukan merupakan akun Administrator Studio Snape.e.
             </p>
           </div>
 
