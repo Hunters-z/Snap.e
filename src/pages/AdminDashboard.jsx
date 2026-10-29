@@ -221,9 +221,10 @@ export default function AdminDashboard() {
 
   // QRIS & Payment Gateway API States
   const [gwProvider, setGwProvider] = useState(appConfig.paymentGateway?.provider || 'doku');
-  const [gwMerchantId, setGwMerchantId] = useState(appConfig.paymentGateway?.merchantId || 'MALL-DOKU-882190');
-  const [gwClientKey, setGwClientKey] = useState(appConfig.paymentGateway?.clientKey || 'pk_live_doku_a89123bc891');
-  const [gwSecretKey, setGwSecretKey] = useState(appConfig.paymentGateway?.secretKey || 'sk_live_doku_993821736152');
+  const [gwMerchantId, setGwMerchantId] = useState(appConfig.paymentGateway?.merchantId || import.meta.env.VITE_DOKU_MERCHANT_ID || '');
+  const [gwClientKey, setGwClientKey] = useState(appConfig.paymentGateway?.clientKey || import.meta.env.VITE_DOKU_CLIENT_KEY || '');
+  // SECURITY: no hardcoded secret fallback — server-side secret only.
+  const [gwSecretKey, setGwSecretKey] = useState(appConfig.paymentGateway?.secretKey || '');
   const [gwWebhookUrl, setGwWebhookUrl] = useState(
     appConfig.paymentGateway?.webhookUrl || (typeof window !== 'undefined' ? `${window.location.origin}/api/qris-webhook` : '')
   );
@@ -429,7 +430,9 @@ export default function AdminDashboard() {
       provider: gwProvider,
       merchantId: gwMerchantId.trim(),
       clientKey: gwClientKey.trim(),
-      secretKey: gwSecretKey.trim(),
+      // SECURITY: secretKey never stored client-side / Firestore — it belongs
+      // in the server environment only. Stripped before any persistence.
+      secretKey: '',
       webhookUrl: gwWebhookUrl.trim(),
       environment: gwEnvironment,
       activeMethods: gwMethods

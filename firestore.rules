@@ -55,47 +55,58 @@ service cloud.firestore {
         && data.layout is string && data.layout.size() <= 20;
     }
 
-    // 0. Users Collection
+    // 0. Users Collection — each user reads/writes only their own doc;
+    // admins can read all (admin dashboard user list) and delete.
     match /users/{userId} {
-      allow get, list: if true;
-      allow create, update: if isValidId(userId);
+      allow get, list: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow create, update: if isSignedIn() && request.auth.uid == userId && isValidId(userId);
       allow delete: if isAdmin();
     }
 
-    // 1. Print Orders Collection
+    // 1. Print Orders Collection — customers create pending orders and read
+    // their own; only admins read all / update / delete.
     match /print_orders/{orderId} {
-      allow get, list: if true;
-      allow create: if isValidId(orderId) && isValidPrintOrder(incoming());
-      allow update: if isValidId(orderId) && isValidPrintOrder(incoming());
-      allow delete: if isValidId(orderId);
+      allow create: if isSignedIn() && isValidId(orderId) && isValidPrintOrder(incoming())
+        && incoming().status == 'pending'
+        && (!('uid' in incoming()) || incoming().uid == request.auth.uid);
+      allow get, list: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow update: if isAdmin() && isValidId(orderId) && isValidPrintOrder(incoming());
+      allow delete: if isAdmin();
     }
 
-    // 2. Studio Config Collection
+    // 2. Studio Config Collection — public pricing/config read; admin-only write.
     match /studio_config/{configId} {
       allow get, list: if true;
-      allow create, update: if isValidId(configId) && isValidStudioConfig(incoming());
-      allow delete: if isValidId(configId);
+      allow create, update, delete: if isAdmin() && isValidId(configId) && isValidStudioConfig(incoming());
     }
 
-    // 3. Photostrip Shared Sessions
+    // 3. Photostrip Shared Sessions — public read; signed-in create/update.
     match /photostrips/{sessionId} {
       allow get, list: if true;
-      allow create: if isValidId(sessionId) && isValidPhotostrip(incoming());
-      allow update: if isValidId(sessionId) && isValidPhotostrip(incoming());
-      allow delete: if isValidId(sessionId);
+      allow create: if isSignedIn() && isValidId(sessionId) && isValidPhotostrip(incoming());
+      allow update: if isSignedIn() && isValidId(sessionId) && isValidPhotostrip(incoming());
+      allow delete: if isAdmin();
     }
 
     // 4. LDR Realtime Signaling & Rooms (WebRTC peer-to-peer exchange)
+    // Hosts stamp hostId = auth.uid on first write; any signed-in session
+    // (anonymous auth) may join/relay signaling for the room.
     match /ldr_rooms/{roomId} {
-      allow read, write: if true;
+      // Per SPECTRE patch: any signed-in session (anonymous auth) may relay
+      // signaling — both host and guest must write presence/album pointers.
+      allow read, write: if isSignedIn();
     }
 
     // 5. Cloud Albums Collection (Retained for 7 days in cloud)
+    // Owner-scoped: ownerId = auth.uid is stamped by the client on create.
     match /cloud_albums/{sessionId} {
-      allow read, write: if true;
+      allow get, list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
+      allow update, delete: if isSignedIn() && resource.data.ownerId == request.auth.uid;
 
       match /photos/{photoId} {
-        allow read, write: if true;
+        allow read, write: if isSignedIn() &&
+          get(/databases/$(database)/documents/cloud_albums/$(sessionId)).data.ownerId == request.auth.uid;
       }
     }
   }

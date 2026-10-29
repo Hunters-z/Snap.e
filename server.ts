@@ -84,7 +84,9 @@ function isExpired(album: any): boolean {
 // was issued when the session started — prevents anyone overwriting others' albums.
 // Tokens are derived with HMAC(secret, albumId) so the server stays stateless.
 import crypto from 'crypto';
-const ALBUM_SECRET = process.env.ALBUM_SECRET || process.env.JWT_SECRET || 'snap-e-dev-secret-change-me';
+const ALBUM_SECRET: string = process.env.ALBUM_SECRET || process.env.JWT_SECRET || (() => {
+  throw new Error('ALBUM_SECRET env var is required (no insecure fallback allowed).');
+})();
 function albumToken(id: string): string {
   return crypto.createHmac('sha256', ALBUM_SECRET).update(id).digest('hex').slice(0, 32);
 }

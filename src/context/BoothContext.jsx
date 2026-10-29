@@ -81,9 +81,11 @@ const DEFAULT_CONFIG = {
   },
   paymentGateway: {
     provider: 'doku', // 'doku' | 'midtrans' | 'xendit' | 'manual'
-    merchantId: 'MALL-DOKU-882190',
-    clientKey: 'pk_live_doku_a89123bc891',
-    secretKey: 'sk_live_doku_993821736152',
+    merchantId: import.meta.env.VITE_DOKU_MERCHANT_ID || '',
+    clientKey: import.meta.env.VITE_DOKU_CLIENT_KEY || '',
+    // SECURITY: secretKey must NEVER live in client code or VITE_* env vars.
+    // Payment secrets are server-side only.
+    secretKey: '',
     webhookUrl: typeof window !== 'undefined' ? `${window.location.origin}/api/qris-webhook` : '',
     environment: 'sandbox', // 'sandbox' | 'production'
     activeMethods: ['qris_bca', 'qris_gopay', 'qris_shopeepay', 'qris_dana', 'qris_ovo'],
@@ -482,6 +484,7 @@ const syncAlbumToCloud = useCallback(async (sessionId, photosList) => {
           Promise.race([
             setDoc(doc(db, 'cloud_albums', cleanSessionId), {
               sessionId: cleanSessionId,
+              ownerId: auth.currentUser?.uid || null,
               isPublic: true,
               updatedAt: new Date().toISOString(),
               expiresAt: new Date(now + SEVEN_DAYS_MS).toISOString(),
@@ -741,9 +744,10 @@ const syncAlbumToCloud = useCallback(async (sessionId, photosList) => {
     const roomRef = fsDoc(db, 'ldr_rooms', target.room);
     const onlineField = target.role === 'host' ? { hostOnline: true } : { guestOnline: true };
     const offlineField = target.role === 'host' ? { hostOnline: false } : { guestOnline: false };
+    const setupField = { hostId: auth.currentUser?.uid || null, lastPing: Date.now() };
     const ping = () => {
       if (!ldrRoleRef.current) return;
-      fsSetDoc(roomRef, { ...onlineField, lastPing: Date.now() }, { merge: true }).catch(() => {});
+      fsSetDoc(roomRef, { ...setupField, ...onlineField }, { merge: true }).catch(() => {});
     };
     ping();
     const iv = setInterval(ping, 8000);
@@ -787,7 +791,7 @@ const syncAlbumToCloud = useCallback(async (sessionId, photosList) => {
         const { getDoc: fsGetDoc } = await import('firebase/firestore');
         const snap = await fsGetDoc(fsDoc(db, 'ldr_rooms', ldrRoomPathRef.current));
         if (Snape.exists() && snap.data()?.albumId) return;
-        fsSetDoc(fsDoc(db, 'ldr_rooms', ldrRoomPathRef.current), { albumId: currentSessionId }, { merge: true }).catch(() => {});
+        fsSetDoc(fsDoc(db, 'ldr_rooms', ldrRoomPathRef.current), { albumId: currentSessionId, hostId: auth.currentUser?.uid || null }, { merge: true }).catch(() => {});
       } catch { /* best effort */ }
     })();
   }, [currentSessionId]);

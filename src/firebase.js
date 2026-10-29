@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import { getAuth, signInAnonymously } from 'firebase/auth';
 import { initializeFirestore } from 'firebase/firestore';
 
 // Firebase config — from environment variables (see .env.example).
@@ -24,6 +24,13 @@ export const db = initializeFirestore(app, {
   experimentalForceLongPolling: true
 });
 export const auth = getAuth(app);
+
+// Anonymous auth: app is browsable without login, but Firestore rules require
+// request.auth to exist. Sign in anonymously at startup so every client gets a
+// uid (used as ownerId on cloud_albums / ldr_rooms writes).
+signInAnonymously(auth).catch((err) => {
+  console.warn('Anonymous auth failed (Firestore writes will be denied):', err?.code || err);
+});
 
 // Standard error handler for Firestore operations
 export function handleFirestoreError(error, operationType, path) {
