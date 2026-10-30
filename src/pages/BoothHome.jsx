@@ -432,7 +432,7 @@ export default function BoothHome() {
               <div className="w-10 h-10 mx-auto rounded-full bg-red-50 text-red-600 flex items-center justify-center mb-3">
                 <Zap size={20} />
               </div>
-              <h3 className="font-bold text-sm text-gray-900 mb-1">Instant Shutter Sync</h3>
+              <h3 className="font-bold text-sm text-gray-900 mb-1">Sinkron Shutter Instan</h3>
               <p className="text-xs text-gray-500 leading-relaxed">
                 Jepretan kamera terkoordinasi dalam hitungan milidetik melalui WebRTC stream.
               </p>

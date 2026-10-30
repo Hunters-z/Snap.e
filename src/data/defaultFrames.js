@@ -212,7 +212,7 @@ export function drawFrameGraphicDecorations(ctx, frame, canvasWidth, canvasHeigh
     
     // Top & bottom edge text
     ctx.fillText('► KODAK PORTRA 400', canvasWidth / 2, 28);
-    ctx.fillText('SAFETY FILM • 35MM • EXP 24', canvasWidth / 2, canvasHeight - 16);
+    ctx.fillText('FILM ASLI • 35MM • EXP 24', canvasWidth / 2, canvasHeight - 16);
 
     // Frame markers near each photo
     photoRects.forEach((rect, idx) => {
@@ -242,7 +242,7 @@ export function drawFrameGraphicDecorations(ctx, frame, canvasWidth, canvasHeigh
     // Japanese aesthetic text in header
     ctx.font = "bold 13px 'Playfair Display', serif";
     ctx.fillStyle = '#BE123C';
-    ctx.fillText('✿ 桜の花 • SAKURA MEMORIES ✿', canvasWidth / 2, 32);
+    ctx.fillText('✿ 桜の花 • KENANGAN SAKURA ✿', canvasWidth / 2, 32);
     ctx.restore();
   } else if (type === 'y2k') {
     // Chrome stars & cyber sparkles
@@ -258,7 +258,7 @@ export function drawFrameGraphicDecorations(ctx, frame, canvasWidth, canvasHeigh
 
     ctx.font = "bold 12px 'Inter', sans-serif";
     ctx.fillStyle = '#6D28D9';
-    ctx.fillText('★ 2000s CYBER FLASH ★', canvasWidth / 2, 32);
+    ctx.fillText('★ KILAT SIBER 2000-an ★', canvasWidth / 2, 32);
 
     // Sparkles on side gutters
     photoRects.forEach((rect, idx) => {
@@ -283,7 +283,7 @@ export function drawFrameGraphicDecorations(ctx, frame, canvasWidth, canvasHeigh
 
     ctx.font = "italic bold 12px 'Playfair Display', serif";
     ctx.fillStyle = '#9D174D';
-    ctx.fillText('~ with endless love ~', canvasWidth / 2, 60);
+    ctx.fillText('~ dengan cinta tanpa batas ~', canvasWidth / 2, 60);
 
     // Side ribbons & hearts
     photoRects.forEach((rect) => {
@@ -304,7 +304,7 @@ export function drawFrameGraphicDecorations(ctx, frame, canvasWidth, canvasHeigh
 
     ctx.font = "500 13px 'Inter', sans-serif";
     ctx.fillStyle = '#78350F';
-    ctx.fillText('daily moments in seoul ☕', canvasWidth / 2, 36);
+    ctx.fillText('momen harian di seoul ☕', canvasWidth / 2, 36);
 
     photoRects.forEach((rect, idx) => {
       const doodle = ['🐾', '🥐', '✨', '🤍'][idx % 4];
@@ -329,10 +329,10 @@ export function drawFrameGraphicDecorations(ctx, frame, canvasWidth, canvasHeigh
     ctx.font = "bold 18px 'Playfair Display', serif";
     ctx.fillStyle = '#292524';
     ctx.textAlign = 'center';
-    ctx.fillText('THE PHOTO TIMES', canvasWidth / 2, 36);
+    ctx.fillText('WARTA FOTO', canvasWidth / 2, 36);
 
     ctx.font = "italic 11px 'Playfair Display', serif";
-    ctx.fillText('VOL. XXIV • SPECIAL PHOTO EDITION', canvasWidth / 2, 50);
+    ctx.fillText('EDISI FOTO SPESIAL • VOL. XXIV', canvasWidth / 2, 50);
     ctx.restore();
   } else if (type === 'cat_cafe') {
     // Aesthetic Cat & Coffee illustrations
@@ -346,7 +346,7 @@ export function drawFrameGraphicDecorations(ctx, frame, canvasWidth, canvasHeigh
 
     ctx.font = "bold 13px 'Inter', sans-serif";
     ctx.fillStyle = '#5B3A29';
-    ctx.fillText('🐾 CAT & COFFEE MEMORIES ☕', canvasWidth / 2, 36);
+    ctx.fillText('🐾 KENANGAN KUCING & KOPI ☕', canvasWidth / 2, 36);
 
     photoRects.forEach((rect, idx) => {
       const catEmoji = ['🐈', '🐾', '🧶', '🐟'][idx % 4];
@@ -370,7 +370,7 @@ export function drawFrameGraphicDecorations(ctx, frame, canvasWidth, canvasHeigh
 
     ctx.font = "italic bold 13px 'Playfair Display', serif";
     ctx.fillStyle = '#1C3A27';
-    ctx.fillText('~ Botanical & Wildflowers ~', canvasWidth / 2, 36);
+    ctx.fillText('~ Bunga-Bunga & Taman Liar ~', canvasWidth / 2, 36);
 
     photoRects.forEach((rect, idx) => {
       const flora = idx % 2 === 0 ? '🍃' : '🌱';
@@ -391,7 +391,7 @@ export function drawFrameGraphicDecorations(ctx, frame, canvasWidth, canvasHeigh
 
     ctx.font = "bold 14px 'Inter', sans-serif";
     ctx.fillStyle = '#C2410C';
-    ctx.fillText('🎉 HAPPY CELEBRATION 🎂', canvasWidth / 2, 34);
+    ctx.fillText('🎉 SELAMAT BERGEMBIRA 🎂', canvasWidth / 2, 34);
 
     photoRects.forEach((rect, idx) => {
       const party = ['✨', '🎊', '🎁', '⭐'][idx % 4];

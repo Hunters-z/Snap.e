@@ -247,7 +247,7 @@ export default function AdminDashboard() {
 
   // Website Editor states
   const [webBrandName, setWebBrandName] = useState(appConfig.website?.brandName || 'Snape.e');
-  const [webHeroTagline, setWebHeroTagline] = useState(appConfig.website?.heroTagline || 'Momen Berharga, Synchronized Distances');
+  const [webHeroTagline, setWebHeroTagline] = useState(appConfig.website?.heroTagline || 'Momen Berharga, Walau Terpisah Jarak');
   const [webTaglineGradient, setWebTaglineGradient] = useState(
     appConfig.website?.taglineGradient || 'from-rose-600 via-purple-600 to-indigo-600'
   );
@@ -297,9 +297,9 @@ export default function AdminDashboard() {
   // New CTA and SEO Metadata states
   const [webPrimaryCtaText, setWebPrimaryCtaText] = useState(appConfig.website?.primaryCtaText || 'Mulai Sesi Booth Sekarang');
   const [webSecondaryCtaText, setWebSecondaryCtaText] = useState(appConfig.website?.secondaryCtaText || 'Lihat Pilihan Frame');
-  const [webMetaTitle, setWebMetaTitle] = useState(appConfig.website?.metaTitle || 'Snape.e - Tangible Memories, Synchronized Distances');
+  const [webMetaTitle, setWebMetaTitle] = useState(appConfig.website?.metaTitle || 'Snape.e — Foto Bareng Walau Jauh, Photobooth Online LDR');
   const [webMetaDescription, setWebMetaDescription] = useState(
-    appConfig.website?.metaDescription || 'Tangible Memories, Synchronized Distances - Online photobooth for solo and LDR couples with customizable photostrips and studio management.'
+    appConfig.website?.metaDescription || 'Photobooth online untuk solo dan pasangan LDR dengan photostrip kustom, sinkron real-time, dan cetak kualitas lab.'
   );
   const [webMetaKeywords, setWebMetaKeywords] = useState(
     appConfig.website?.metaKeywords || 'photobooth online, ldr photobooth, photo strip korea, cetak foto lab'
@@ -346,9 +346,9 @@ export default function AdminDashboard() {
       setWebAccentColor(appConfig.website.accentColor || '#E11D48');
       setWebPrimaryCtaText(appConfig.website.primaryCtaText || 'Mulai Sesi Booth Sekarang');
       setWebSecondaryCtaText(appConfig.website.secondaryCtaText || 'Lihat Pilihan Frame');
-      setWebMetaTitle(appConfig.website.metaTitle || 'Snape.e - Tangible Memories, Synchronized Distances');
+      setWebMetaTitle(appConfig.website.metaTitle || 'Snape.e — Foto Bareng Walau Jauh, Photobooth Online LDR');
       setWebMetaDescription(
-        appConfig.website.metaDescription || 'Tangible Memories, Synchronized Distances - Online photobooth for solo and LDR couples with customizable photostrips and studio management.'
+        appConfig.website.metaDescription || 'Photobooth online untuk solo dan pasangan LDR dengan photostrip kustom, sinkron real-time, dan cetak kualitas lab.'
       );
       setWebMetaKeywords(appConfig.website.metaKeywords || 'photobooth online, ldr photobooth, photo strip korea, cetak foto lab');
     }
@@ -526,7 +526,7 @@ export default function AdminDashboard() {
       accentColor: webAccentColor,
       primaryCtaText: webPrimaryCtaText.trim() || 'Mulai Sesi Booth Sekarang',
       secondaryCtaText: webSecondaryCtaText.trim() || 'Lihat Pilihan Frame',
-      metaTitle: webMetaTitle.trim() || 'Snape.e - Tangible Memories, Synchronized Distances',
+      metaTitle: webMetaTitle.trim() || 'Snape.e — Foto Bareng Walau Jauh, Photobooth Online LDR',
       metaDescription: webMetaDescription.trim(),
       metaKeywords: webMetaKeywords.trim()
     });
@@ -1740,7 +1740,7 @@ export default function AdminDashboard() {
                         type="text"
                         value={webHeroTagline}
                         onChange={(e) => setWebHeroTagline(e.target.value)}
-                        placeholder="Momen Berharga, Synchronized Distances"
+                        placeholder="Momen Berharga, Walau Terpisah Jarak"
                         className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-gray-900"
                       />
                     </div>
@@ -1772,7 +1772,7 @@ export default function AdminDashboard() {
                       <span className="text-[9px] font-mono text-gray-400 uppercase tracking-widest block">Live Preview Gradasi Tagline:</span>
                       <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight">
                         <span className={`text-transparent bg-clip-text bg-gradient-to-r ${webTaglineGradient}`}>
-                          {webHeroTagline || 'Momen Berharga, Synchronized Distances'}
+                          {webHeroTagline || 'Momen Berharga, Walau Terpisah Jarak'}
                         </span>
                       </h2>
                     </div>
@@ -1793,7 +1793,7 @@ export default function AdminDashboard() {
                         { label: 'Header Hero & Tagline Gradasi', checked: webShowHero, setter: setWebShowHero, desc: 'Judul besar, badge promo, dan deskripsi' },
                         { label: 'Form Setup Bilik & Pilihan Shutter', checked: webShowSetupCard, setter: setWebShowSetupCard, desc: 'Pilihan mode solo/LDR dan strip 3-cut / grid 4-cut' },
                         { label: 'Banner Pengumuman Promo Berjalan', checked: webShowAnnouncement, setter: setWebShowAnnouncement, desc: 'Pita pengumuman promo di bagian paling atas' },
-                        { label: 'Fitur Unggulan Studio (Highlights)', checked: webShowFeatures, setter: setWebShowFeatures, desc: 'Instant Shutter Sync, Stiker Estetik, 300 DPI' },
+                        { label: 'Fitur Unggulan Studio (Highlights)', checked: webShowFeatures, setter: setWebShowFeatures, desc: 'Sinkron Shutter Instan, Stiker Estetik, 300 DPI' },
                         { label: 'Galeri Showcase Template Frame', checked: webShowFramesShowcase, setter: setWebShowFramesShowcase, desc: 'Katalog pratinjau bingkai photostrip' },
                         { label: 'Daftar Paket Tarif & Layanan Cetak', checked: webShowPricing, setter: setWebShowPricing, desc: 'Paket sesi digital dan add-on cetak lab fisik' },
                         { label: 'Panduan 4 Langkah Cara Kerja', checked: webShowHowItWorks, setter: setWebShowHowItWorks, desc: 'Edukasi langkah mudah berfoto bagi pengunjung baru' },
@@ -2197,7 +2197,7 @@ export default function AdminDashboard() {
                           type="text"
                           value={webMetaTitle}
                           onChange={(e) => setWebMetaTitle(e.target.value)}
-                          placeholder="Snape.e - Tangible Memories, Synchronized Distances"
+                          placeholder="Snape.e — Foto Bareng Walau Jauh, Photobooth Online LDR"
                           className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-gray-900"
                         />
                         <span className="text-[10px] text-gray-400">Panjang ideal: 50-60 karakter. Saat ini: {webMetaTitle.length} karakter.</span>
@@ -2243,10 +2243,10 @@ export default function AdminDashboard() {
                         </div>
                       </div>
                       <h4 className="text-sm font-semibold text-blue-800 hover:underline cursor-pointer">
-                        {webMetaTitle || 'Snape.e - Tangible Memories, Synchronized Distances'}
+                        {webMetaTitle || 'Snape.e — Foto Bareng Walau Jauh, Photobooth Online LDR'}
                       </h4>
                       <p className="text-xs text-gray-600 line-clamp-2 leading-relaxed">
-                        {webMetaDescription || 'Online photobooth for solo and LDR couples with customizable photostrips, real-time sync, and lab-quality printing.'}
+                        {webMetaDescription || 'Photobooth online untuk solo dan pasangan LDR dengan photostrip kustom, sinkron real-time, dan cetak kualitas lab.'}
                       </p>
                     </div>
                   </div>

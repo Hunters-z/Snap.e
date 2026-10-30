@@ -72,7 +72,7 @@ const DEFAULT_STICKERS = [
 
 const DEFAULT_CONFIG = {
   title: 'Snape.e',
-  subtitle: 'Tangible Memories, Synchronized Distances',
+  subtitle: 'Kenangan yang Nyata, Walau Jarak Memisahkan',
   payment: {
     price: 15000,
     sessionDurationMinutes: 15,
@@ -98,7 +98,7 @@ const DEFAULT_CONFIG = {
   customStickers: DEFAULT_STICKERS,
   website: {
     brandName: 'Snape.e',
-    heroTagline: 'Momen Berharga, Synchronized Distances',
+    heroTagline: 'Momen Berharga, Walau Terpisah Jarak',
     taglineGradient: 'from-rose-600 via-purple-600 to-indigo-600',
     heroDescription: 'Foto bersama pasangan atau sahabat dari jarak jauh secara real-time, atau nikmati sesi solo dengan photostrip estetik gaya Korea.',
     announcement: '✨ Selamat datang di Studio Snape.e! Cetak strip foto kualitas lab dan simpan live photo memori Anda.',
@@ -134,8 +134,8 @@ const DEFAULT_CONFIG = {
     promoBadge: 'PHOTO BOOTH ONLINE & LDR DUAL-STREAM',
     primaryCtaText: 'Mulai Sesi Booth Sekarang',
     secondaryCtaText: 'Lihat Pilihan Frame',
-    metaTitle: 'Snape.e - Tangible Memories, Synchronized Distances',
-    metaDescription: 'Tangible Memories, Synchronized Distances - Online photobooth for solo and LDR couples with customizable photostrips and studio management.',
+    metaTitle: 'Snape.e — Foto Bareng Walau Jauh, Photobooth Online LDR',
+    metaDescription: 'Photobooth online untuk solo dan pasangan LDR dengan photostrip kustom, sinkron real-time, dan cetak kualitas lab.',
     metaKeywords: 'photobooth online, ldr photobooth, photo strip korea, cetak foto lab'
   }
 };

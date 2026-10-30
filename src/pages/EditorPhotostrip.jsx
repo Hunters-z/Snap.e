@@ -70,7 +70,7 @@ export default function EditorPhotostrip() {
   const [isGeneratingStripGif, setIsGeneratingStripGif] = useState(false);
 
   // Bottom text & styling
-  const [customText, setCustomText] = useState('Long Distance Soulmate');
+  const [customText, setCustomText] = useState('Jodoh Jarak Jauh');
   const [showBadge, setShowBadge] = useState(true);
   const [showDate, setShowDate] = useState(true);
   const [showStudio, setShowStudio] = useState(true);
@@ -918,7 +918,7 @@ export default function EditorPhotostrip() {
       // Date & Studio (if showDate / showStudio is true)
       const footerDateLine = [
         showDate ? dateStr : null,
-        showStudio ? 'PHOTO STUDIO' : null
+        showStudio ? 'STUDIO FOTO' : null
       ].filter(Boolean).join(' • ');
       if (footerDateLine) {
         ctx.font = "400 22px 'Inter', sans-serif";
@@ -2348,7 +2348,7 @@ export default function EditorPhotostrip() {
                     <div className="flex flex-wrap items-center gap-1.5 pt-1">
                       {[
                         { key: 'brand', label: `Logo ${appConfig.website?.brandName || 'Snape.e'}`, on: showBadge, set: setShowBadge },
-                        { key: 'caption', label: 'Caption', on: Boolean(customText), set: (v) => setCustomText(v ? 'Long Distance Soulmate' : '') },
+                        { key: 'caption', label: 'Caption', on: Boolean(customText), set: (v) => setCustomText(v ? 'Jodoh Jarak Jauh' : '') },
                         { key: 'date', label: 'Tanggal', on: showDate, set: setShowDate },
                         { key: 'studio', label: 'Studio', on: showStudio, set: setShowStudio },
                         { key: 'stempel', label: 'Stempel Tanggal', on: showDateStamps, set: setShowDateStamps },
@@ -2534,7 +2534,7 @@ export default function EditorPhotostrip() {
 
             {/* Strip Top Header - Fixed Reserved Height (NO Grid 4 or Grid 6 text inside frame) */}
             <div className="flex justify-between items-center h-4 px-1 text-[8px] sm:text-[8.5px] font-bold tracking-widest opacity-80 shrink-0">
-              <span>{activeFrame.overlayType === 'film' ? '► KODAK 400 35MM' : 'SNAPE.E MEMORIES'}</span>
+              <span>{activeFrame.overlayType === 'film' ? '► KODAK 400 35MM' : 'KENANGAN SNAPE.E'}</span>
               <div className="flex items-center gap-1.5 pointer-events-auto">
                 <button
                   type="button"
@@ -3008,7 +3008,7 @@ export default function EditorPhotostrip() {
                   >
                     <img
                       src={activePhoto.dataUrl}
-                      alt="Full Original Photo Uncropped"
+                      alt="Foto Asli Utuh Tanpa Potong"
                       className="max-w-none select-none opacity-35 filter brightness-75 contrast-75"
                       style={{
                         width: `${uncroppedPhotoW}px`,
@@ -3034,7 +3034,7 @@ export default function EditorPhotostrip() {
                   >
                     <img
                       src={activePhoto.dataUrl}
-                      alt="Framed Photo Inside Area"
+                      alt="Foto Pas di Dalam Bingkai"
                       className="max-w-none select-none"
                       style={{
                         width: `${uncroppedPhotoW}px`,
@@ -3202,7 +3202,7 @@ export default function EditorPhotostrip() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-gray-500">
           <div className="flex items-center gap-2">
             <span className="font-bold text-gray-900">{appConfig.website?.brandName || 'Snape.e'}</span>
-            <span>— {appConfig.website?.heroTagline || 'Tangible Memories, Synchronized Distances.'}</span>
+            <span>— {appConfig.website?.heroTagline || 'Kenangan yang Nyata, Walau Jarak Memisahkan'}</span>
           </div>
           <p>© {new Date().getFullYear()} {appConfig.website?.brandName || 'Snape.e'}. All rights reserved.</p>
         </div>

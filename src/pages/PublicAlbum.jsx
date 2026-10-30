@@ -898,7 +898,7 @@ export default function PublicAlbum() {
               />
             </div>
             <span className="font-bold text-gray-900">{appConfig?.website?.brandName || 'Snape.e'}</span>
-            <span>— Photobooth Studio & Creative Strip Lab</span>
+            <span>— Studio Photobooth & Lab Strip Kreatif</span>
           </div>
           <p>© {new Date().getFullYear()} {appConfig?.website?.brandName || 'Snape.e'}. All rights reserved.</p>
         </div>
